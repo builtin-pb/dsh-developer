@@ -1,0 +1,7 @@
+import './creator-export.test.js'
+import './doctor.test.js'
+import './files.test.js'
+import './native-plugin.test.js'
+import './promotion.test.js'
+import './runtime.test.js'
+import './runtime-tree.integration.test.js'

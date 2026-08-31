@@ -1,0 +1,21 @@
+{
+  "format": "dsh-creator-export",
+  "schemaVersion": 1,
+  "sourceFingerprint": "sha256:b36bd4cc44dda4dc0b950caba5d68a206dc8ea737f7b2eccb27fc786bd24bb86",
+  "name": "hello-dsh",
+  "packageName": "hello-dsh",
+  "author": "DSH Developer contributors",
+  "description": "A tiny native DSH plugin that teaches a repeatable greeting workflow.",
+  "goal": "Help a user create a concise greeting that matches the named audience and requested tone.",
+  "instructions": "Ask for an audience and tone when either is missing. Produce one greeting, keep it under forty words, and do not invent personal facts.",
+  "compatibilityTarget": "0.1.1-rc.2",
+  "decisions": [
+    "Use one canonical Agent Skill for DSH and Codex.",
+    "Keep the example dependency-free."
+  ],
+  "unresolvedRisks": [
+    "Different DSH surfaces may render skill invocation hints differently."
+  ],
+  "tools": [],
+  "resources": []
+}

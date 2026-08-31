@@ -1,0 +1,46 @@
+{
+  "name": "dsh-developer",
+  "version": "0.1.0",
+  "description": "The single plugin you need for DSH",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./doctor": "./lib/doctor.js",
+    "./promote": "./lib/promote.js"
+  },
+  "bin": {
+    "dsh-developer": "./bin/dsh-developer.js"
+  },
+  "files": [
+    ".codex-plugin",
+    "bin",
+    "cordis.patch.yml",
+    "index.js",
+    "lib",
+    "LICENSE",
+    "README.md",
+    "skills"
+  ],
+  "scripts": {
+    "check": "node --check index.js && node --check bin/dsh-developer.js",
+    "test": "node test/run.js",
+    "validate": "npm run check && npm test"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "keywords": [
+    "deepseek",
+    "dsh",
+    "plugin",
+    "agent-skill",
+    "developer-tools"
+  ],
+  "license": "MIT"
+}

@@ -1,0 +1,4 @@
+# Native DSH bundle entry. The relative module is anchored to this patch.
+- insert:
+    - id: dsh-developer
+      name: './index.js'

@@ -1,0 +1,4 @@
+interface:
+  display_name: "DSH Developer"
+  short_description: "Develop, test, and ship DSH plugins"
+  default_prompt: "Use $dsh-developer to develop, audit, test, or package this DSH plugin."

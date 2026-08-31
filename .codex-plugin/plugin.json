@@ -1,0 +1,18 @@
+{
+  "name": "dsh-developer",
+  "version": "0.1.0",
+  "description": "The single plugin you need for DSH",
+  "author": {
+    "name": "MetaFlow contributors"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "DSH Developer",
+    "shortDescription": "Develop, test, and ship DSH plugins",
+    "longDescription": "Develop, inspect, test, harden, and package DSH plugins through one native DSH and Codex workflow.",
+    "developerName": "MetaFlow contributors",
+    "category": "Developer Tools",
+    "capabilities": [],
+    "defaultPrompt": "Use $dsh-developer to develop, audit, test, or package this DSH plugin."
+  }
+}
