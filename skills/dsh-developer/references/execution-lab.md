@@ -1,34 +1,19 @@
 # Local execution-lab gate
 
-Use this before execution-bearing core incubation. It runs fixed keyless fixtures only—never a repository, plugin, build script, model, or caller command.
-
-## Run
+Use before execution-bearing core incubation. It runs fixed keyless fixtures only—never source, a build script, model, or caller command.
 
 DSH Web:
 
     /dsh-developer-lab {"distro":"Ubuntu-22.04"}
 
-CLI from the plugin root:
+CLI:
 
     node bin/dsh-developer.js lab --wsl-distro Ubuntu-22.04
 
-The distro is optional. This authorizes only private WSL fixtures and transient user units. Use `--json` for durable evidence.
+PASS binds the host, WSL distro/kernel, Bubblewrap/`prlimit`, mounts, policy, checks, and digest. It proves a private workspace; denied host state, Windows integration, credentials, network, and runtime writes; fixed environment and private namespaces; bounded memory, tasks, CPU, files, output, and time; cgroup termination of byte and entry growth; cancellation, heartbeat expiry, orphan scans, cleanup, and fresh-controller recovery.
 
-## Accept only measured guarantees
+The provider shares the WSL2 kernel and claims neither project seccomp nor a microVM. Re-run after host, runtime, mount, or policy change.
 
-PASS binds the Windows host, WSL distro/kernel, Bubblewrap/`prlimit` versions, mounts, policy, checks, and digest. It proves:
+Require Windows, WSL2, a non-root `/home` user, Bubblewrap, `prlimit`, systemd user scopes, and covered Windows mounts. Missing tools, unfamiliar mounts, failed checks, cancellation, or uncertain cleanup yields FAIL with no fallback.
 
-- one private workspace; read-only `/usr`; denied `/etc`, `/var`, homes, Windows mounts/integration, runtime writes, and credential canaries;
-- a fixed non-credential environment, private network/PID/IPC/UTS/user namespaces, and fresh devices;
-- systemd/`prlimit` bounds on memory, swap, tasks, CPU, file size, descriptors, output, and time;
-- external byte/entry watchdog and direct cgroup freeze/kill, exercised by blocking byte and zero-byte-entry growth inside observed ceilings;
-- exit-137 heartbeat expiry, cancellation without delayed effects, forced orphan scans, and verified cleanup;
-- a killed outer controller leaves a lease that a fresh controller reaps with its scope and root.
-
-The provider shares the WSL2 kernel and claims neither project seccomp nor a microVM. Re-run after relevant host, runtime, mount, or policy change.
-
-## Fail closed
-
-Require Windows, WSL2, a non-root `/home` user, Bubblewrap, `prlimit`, systemd user scopes, and covered Windows mounts. Missing tools, unfamiliar mounts, failed checks, cancellation, or uncertain cleanup yields FAIL. No ACL, direct, or remote fallback.
-
-PASS proves a boundary, not a feature. Return to core-gap rules; execution needs separate Adapt/Incubate admission. Otherwise stop at Native or Unsupported.
+PASS proves a boundary, not a feature. Also require the core gate's harm, corroboration, upstream-gap, bounded-replacement, authority, and retirement conditions. Admit only Adapt or Incubate; otherwise stop at Native or Unsupported.
