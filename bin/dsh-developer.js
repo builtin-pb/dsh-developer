@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { formatCellAdmissionReport, inspectIsolatedCellAdmission } from '../lib/cell-admission.js'
 import { formatCapabilityReport, inspectDshCapabilities } from '../lib/capabilities.js'
 import { formatCompatibilityMatrix, inspectCompatibilityMatrix } from '../lib/compatibility.js'
-import { parseCliArguments } from '../lib/cli-options.js'
+import { assertCliCommandOptions, parseCliArguments } from '../lib/cli-options.js'
 import { doctorSource } from '../lib/doctor.js'
 import {
   readStableCreatorExport,
@@ -58,13 +58,11 @@ async function main(argv) {
     process.stdout.write(USAGE + '\n')
     return
   }
+  assertCliCommandOptions(command, options)
   const controller = new AbortController()
   process.once('SIGINT', () => controller.abort())
 
   if (command === 'admit-cell') {
-    if (options.source || options.output || options.releaseDsh || options.previewDsh || options.skipRuntime) {
-      throw new DshDeveloperError('CLI_USAGE', 'admit-cell accepts only --dsh, --wsl-distro, and --json.')
-    }
     const report = await inspectIsolatedCellAdmission(options.dsh, {
       distro: options.wslDistro,
       signal: controller.signal,
@@ -74,21 +72,12 @@ async function main(argv) {
     return
   }
   if (command === 'capabilities') {
-    if (options.source || options.output || options.releaseDsh || options.previewDsh || options.skipRuntime || options.wslDistro) {
-      throw new DshDeveloperError('CLI_USAGE', 'capabilities accepts only --dsh and --json.')
-    }
     const report = await inspectDshCapabilities(options.dsh, { signal: controller.signal })
     process.stdout.write(options.json ? JSON.stringify(report, null, 2) + '\n' : formatCapabilityReport(report) + '\n')
     if (!report.ok) process.exitCode = 1
     return
   }
   if (command === 'compatibility') {
-    if (options.output || options.dsh || options.skipRuntime || options.wslDistro) {
-      throw new DshDeveloperError(
-        'CLI_USAGE',
-        'compatibility accepts only --source, --release-dsh, --preview-dsh, and --json.',
-      )
-    }
     const report = await inspectCompatibilityMatrix(required(options, 'source'), {
       releaseDsh: required(options, 'releaseDsh'),
       previewDsh: required(options, 'previewDsh'),
@@ -99,9 +88,6 @@ async function main(argv) {
     return
   }
   if (command === 'lab') {
-    if (options.source || options.output || options.dsh || options.releaseDsh || options.previewDsh || options.skipRuntime) {
-      throw new DshDeveloperError('CLI_USAGE', 'lab accepts only --wsl-distro and --json.')
-    }
     const report = await conformExecutionLab({
       distro: options.wslDistro,
       signal: controller.signal,
@@ -111,12 +97,6 @@ async function main(argv) {
     return
   }
   if (command === 'impact') {
-    if (options.output || options.dsh || options.skipRuntime || options.wslDistro) {
-      throw new DshDeveloperError(
-        'CLI_USAGE',
-        'impact accepts only --source, --release-dsh, --preview-dsh, and --json.',
-      )
-    }
     const report = await inspectUpstreamImpact(required(options, 'source'), {
       releaseDsh: required(options, 'releaseDsh'),
       previewDsh: required(options, 'previewDsh'),
@@ -127,12 +107,6 @@ async function main(argv) {
     return
   }
   if (command === 'preflight') {
-    if (options.output || options.releaseDsh || options.previewDsh || options.skipRuntime || options.wslDistro) {
-      throw new DshDeveloperError(
-        'CLI_USAGE',
-        'preflight accepts only --source, --profile, --dsh, and --json.',
-      )
-    }
     const report = await inspectProfilePreflight(required(options, 'source'), {
       dshPath: options.dsh,
       profile: options.profile ?? 'headless',
@@ -143,9 +117,6 @@ async function main(argv) {
     return
   }
   if (command === 'doctor') {
-    if (options.output || options.releaseDsh || options.previewDsh || options.wslDistro) {
-      throw new DshDeveloperError('CLI_USAGE', 'doctor does not accept --output or --wsl-distro.')
-    }
     const report = await doctorSource(required(options, 'source'), {
       dshPath: options.dsh,
       runtime: options.skipRuntime ? 'skip' : 'required',
@@ -156,13 +127,6 @@ async function main(argv) {
     return
   }
   if (command === 'promote') {
-    if (options.releaseDsh || options.previewDsh) {
-      throw new DshDeveloperError('CLI_USAGE', 'promote does not accept --release-dsh or --preview-dsh.')
-    }
-    if (options.wslDistro) throw new DshDeveloperError('CLI_USAGE', 'promote does not accept --wsl-distro.')
-    if (options.skipRuntime) {
-      throw new DshDeveloperError('CLI_USAGE', '--skip-runtime is never allowed for promotion.')
-    }
     const result = await promoteCreatorExport(
       required(options, 'source'),
       required(options, 'output'),
@@ -182,9 +146,6 @@ async function main(argv) {
     return
   }
   if (command === 'fingerprint') {
-    if (options.output || options.dsh || options.releaseDsh || options.previewDsh || options.skipRuntime || options.wslDistro) {
-      throw new DshDeveloperError('CLI_USAGE', 'fingerprint accepts only --source and --json.')
-    }
     const snapshot = await readStableCreatorExport(required(options, 'source'), { requireFingerprint: false })
     const value = withCreatorFingerprint(snapshot.value)
     if (options.json) {
