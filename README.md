@@ -90,7 +90,7 @@ A plugin can be valid yet still wait forever for a service absent from its targe
 node bin/dsh-developer.js preflight --source C:\path\to\plugin --profile headless --dsh D:\path\to\dsh.cmd
 ```
 
-The selected official DSH lane runs only its config-dump path; the plugin repository is neither installed nor loaded, the child environment excludes credentials, and the disposable profile is removed afterward. Preflight fails closed on dynamic `inject` assignments and rejects required service-owner packages placed in `dependencies` or `optionalDependencies`, where a profile-local copy can shadow DSH's host instance. PASS means the clean composition unconditionally mounts at least one installed owner for each required service. It is composition evidence—not activation proof, plugin behavior, or a claim about a customized user's full stack.
+The selected official DSH lane runs only its config-dump path; the plugin repository is neither installed nor loaded, the child environment excludes credentials, and the disposable profile is removed afterward. Preflight fails closed on dynamic `inject` assignments, reports optional injections without treating them as boot requirements, and rejects required service-owner packages placed in `dependencies` or `optionalDependencies`, where a profile-local copy can shadow DSH's host instance. PASS means the clean composition unconditionally mounts at least one installed owner for each required service. It is composition evidence—not activation proof, plugin behavior, or a claim about a customized user's full stack.
 
 CI records this contract for both `headless` and `web`: release failures block, while preview failures remain visible advisory evidence.
 

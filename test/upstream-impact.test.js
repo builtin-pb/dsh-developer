@@ -84,6 +84,11 @@ test('discovers declared packages, injected services, static imports, and the ba
     ])
     assert.deepEqual(references.packages.find((value) => value.package === '@deepseek-ai/dsh-skill').subpaths, ['./invariant'])
     assert.deepEqual(references.services.map((value) => value.service), ['appExit', 'commands', 'remote.workspace', 'skills'])
+    assert.equal(
+      references.services.find((value) => value.service === 'remote.workspace')
+        .evidence.find((value) => value.kind === 'inject').requirement,
+      'required',
+    )
     assert.deepEqual(references.coverage.undeclaredPackages, ['@deepseek-ai/dsh-shell-env'])
     assert.deepEqual(references.coverage.undeclaredServices, ['appExit'])
   } finally {

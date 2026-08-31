@@ -82,6 +82,43 @@ test('proves dotted required services with clean-profile composition evidence', 
   }
 })
 
+test('reports optional inject services without making them profile requirements', async () => {
+  const root = await fixture()
+  await writeFile(join(root, 'index.js'), [
+    "export const inject = { required: ['skills'], optional: ['remote.workspace'] }",
+    'export function apply() {}',
+    '',
+  ].join('\n'), 'utf8')
+  let composedServices
+  try {
+    const report = await inspectProfilePreflightInternal(root, {
+      dshPath: 'fake-dsh',
+      profile: 'headless',
+    }, runtimeDependencies(async (_invocation, profile, services, owners) => {
+      composedServices = services
+      return {
+        profile,
+        requiredServices: services,
+        mappings: services.map((service) => ({
+          service,
+          owners: owners.get(service),
+          mountedOwners: owners.get(service),
+          conditionalOwners: [],
+        })),
+        confidence: 'composition',
+        profileActivated: false,
+        repositoryCodeExecuted: false,
+      }
+    }))
+    assert.equal(report.ok, true)
+    assert.deepEqual(report.requiredServices, ['skills'])
+    assert.deepEqual(report.optionalServices, ['remote.workspace'])
+    assert.deepEqual(composedServices, ['skills'])
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('fails closed when an inject assignment cannot be reduced to literal services', async () => {
   const root = await fixture()
   await writeFile(join(root, 'index.js'), [
