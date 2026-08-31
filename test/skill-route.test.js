@@ -16,6 +16,7 @@ test('keeps every routed skill instruction set within the repository budget', as
     'core-with-untrusted-source': ['references/core-incubation.md', 'references/safety.md'],
     'execution-bearing-core': ['references/execution-lab.md', 'references/safety.md'],
     'isolated-cell': ['references/isolated-cell.md', 'references/safety.md'],
+    ui: ['references/agent-native-ui.md'],
   }
 
   for (const [name, references] of Object.entries(routes)) {

@@ -41,9 +41,10 @@ test('keeps operation-specific argument surfaces closed before execution', () =>
 
 test('forwards cancellation and returns canonical evidence with compact native rendering', async () => {
   const signal = new AbortController().signal
+  const agent = { id: 'agent-under-test' }
   let received
   const definition = createNativeToolDefinition(async (input, options) => {
-    received = { input, signal: options.signal }
+    received = { input, signal: options.signal, agent: options.agent }
     return {
       operation: 'doctor',
       ok: true,
@@ -52,13 +53,30 @@ test('forwards cancellation and returns canonical evidence with compact native r
   })
   const value = await definition.execute(
     { operation: 'doctor', source: 'plugin' },
-    { signal },
+    { signal, agent },
   )
   assert.deepEqual(received.input, { operation: 'doctor', source: 'plugin' })
   assert.equal(received.signal, signal)
+  assert.equal(received.agent, agent)
   assert.equal(value.report.fingerprint, 'sha256:test')
   assert.deepEqual(definition.output.render({}, value), [{
     type: 'text',
     text: 'PASS Doctor plugin\nFingerprint: sha256:test',
   }])
+})
+
+test('renders scoped UI admission evidence without adding another tool schema', async () => {
+  const definition = createNativeToolDefinition(async () => ({
+    operation: 'ui',
+    ok: false,
+    report: {
+      ok: false,
+      selected: null,
+      checks: [{ id: 'semantic-provider', status: 'FAIL', message: 'missing' }],
+      evidenceDigest: 'sha256:test',
+    },
+  }))
+  const value = await definition.execute({ operation: 'ui' }, { signal: new AbortController().signal })
+  assert.equal(value.operation, 'ui')
+  assert.match(definition.output.render({}, value)[0].text, /^FAIL UI capabilities/u)
 })

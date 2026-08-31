@@ -7,6 +7,7 @@ test('registers the canonical skill through the native DSH service', async () =>
   const commands = new Map()
   let shellContribution
   let nativeTool
+  let nativeGuard
   await apply({
     skills: {
       register(value) {
@@ -31,6 +32,13 @@ test('registers the canonical skill through the native DSH service', async () =>
         nativeTool = value
         return () => {}
       },
+      guard(value) {
+        nativeGuard = value
+        return () => {}
+      },
+      schemas() {
+        return []
+      },
     },
   })
   assert.equal(name, 'dsh-developer')
@@ -49,10 +57,13 @@ test('registers the canonical skill through the native DSH service', async () =>
     'dsh-developer-preflight',
     'dsh-developer-doctor',
     'dsh-developer-promote',
+    'dsh-developer-ui',
   ])
   assert.equal(shellContribution.name, 'dsh-developer')
   assert.match(shellContribution.resolve().DSH_DEVELOPER_BIN, /bin[\\/]dsh-developer\.js$/u)
+  assert.match(shellContribution.resolve().DSH_DEVELOPER_UI_PATCH, /presets[\\/]playwright-mcp\.cordis\.yml$/u)
   assert.equal(nativeTool.name, 'dsh_developer')
+  assert.equal(typeof nativeGuard, 'function')
   assert.deepEqual(nativeTool.parameters.required, ['operation'])
   assert.equal(nativeTool.output.schema.additionalProperties, false)
   const result = await commands.get('dsh-developer-doctor').handler({

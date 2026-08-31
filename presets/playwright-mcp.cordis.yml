@@ -1,0 +1,15 @@
+# Opt-in, compute-bounded semantic UI provider for dsh-developer. Install the
+# pinned @playwright/mcp version first and set PLAYWRIGHT_MCP_ENTRY to its
+# absolute cli.js path. The dsh_ui namespace activates dsh-developer's
+# monotonic guard; another namespace is intentionally not treated as protected.
+- insert:
+    - id: dsh-developer-ui-playwright
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: dsh_ui
+        transport: stdio
+        command: !!js process.execPath
+        args: !!js >-
+          (() => { const path = process.getBuiltinModule('node:path'); const entry = process.env.PLAYWRIGHT_MCP_ENTRY?.trim(); if (!entry || !path.isAbsolute(entry)) throw new Error('PLAYWRIGHT_MCP_ENTRY must name the absolute @playwright/mcp cli.js path'); return [entry, '--headless', '--isolated', '--sandbox', '--block-service-workers', '--codegen', 'none', '--snapshot-mode', 'none', '--console-level', 'error', '--allowed-origins', 'localhost:*;127.0.0.1:*', '--proxy-server', 'http://127.0.0.1:9', '--proxy-bypass', 'localhost,127.0.0.1,[::1]', '--image-responses', process.env.DSH_DEVELOPER_UI_IMAGES === 'allow' ? 'allow' : 'omit', '--output-dir', process.env.DSH_DEVELOPER_UI_OUTPUT?.trim() || path.join(process.getBuiltinModule('node:os').tmpdir(), 'dsh-developer-ui'), '--output-max-size', '8388608', ...(process.env.PLAYWRIGHT_MCP_EXECUTABLE_PATH?.trim() ? ['--executable-path', process.env.PLAYWRIGHT_MCP_EXECUTABLE_PATH.trim()] : [])] })()
+        cwd: !!js process.cwd()
+        failOnStartupError: true

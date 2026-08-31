@@ -3,12 +3,14 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { registerNativeCommands } from './lib/native-commands.js'
 import { hasNativeTool, registerNativeTool } from './lib/native-tool.js'
+import { registerUiSafetyGuard } from './lib/ui-policy.js'
 
 export const name = 'dsh-developer'
 export const inject = ['skills', 'commands', 'shellEnv', 'tools']
 
 const skillDirectory = dirname(fileURLToPath(new URL('./skills/dsh-developer/SKILL.md', import.meta.url)))
 const cliPath = fileURLToPath(new URL('./bin/dsh-developer.js', import.meta.url))
+const uiPatchPath = fileURLToPath(new URL('./presets/playwright-mcp.cordis.yml', import.meta.url))
 const LOAD_WITNESS_FILENAME = '.dsh-developer-load-witness'
 
 function parseSkill(markdown) {
@@ -53,12 +55,16 @@ export async function apply(ctx) {
       DSH_DEVELOPER_BIN: {
         description: 'Absolute path to the installed dsh-developer CLI entry.',
       },
+      DSH_DEVELOPER_UI_PATCH: {
+        description: 'Absolute path to the opt-in, protected Playwright MCP Cordis patch.',
+      },
     },
     resolve() {
-      return { DSH_DEVELOPER_BIN: cliPath }
+      return { DSH_DEVELOPER_BIN: cliPath, DSH_DEVELOPER_UI_PATCH: uiPatchPath }
     },
   })
   registerNativeTool(ctx)
+  registerUiSafetyGuard(ctx)
   registerNativeCommands(ctx)
   await completeLoadProbe(ctx)
 }
