@@ -3,6 +3,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { registerNativeCommands } from './lib/native-commands.js'
 import { hasNativeTool, registerNativeTool } from './lib/native-tool.js'
+import { registerUiCliTool } from './lib/ui-cli-tool.js'
 import { registerUiSafetyGuard } from './lib/ui-policy.js'
 
 export const name = 'dsh-developer'
@@ -65,6 +66,7 @@ export async function apply(ctx) {
   })
   registerNativeTool(ctx)
   registerUiSafetyGuard(ctx)
+  await registerUiCliTool(ctx)
   registerNativeCommands(ctx)
   await completeLoadProbe(ctx)
 }

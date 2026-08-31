@@ -14,6 +14,7 @@ import { asDiagnostic, DshDeveloperError } from '../lib/errors.js'
 import { conformExecutionLab, formatExecutionLabReport } from '../lib/execution-lab.js'
 import { formatProfilePreflightReport, inspectProfilePreflight } from '../lib/profile-preflight.js'
 import { promoteCreatorExport } from '../lib/promote.js'
+import { executeUiCliAction, formatUiCliReport } from '../lib/ui-cli.js'
 import { formatUpstreamImpactReport, inspectUpstreamImpact } from '../lib/upstream-impact.js'
 
 const USAGE = [
@@ -29,6 +30,7 @@ const USAGE = [
   '  dsh-developer doctor --source <creator.json|plugin-dir> [--dsh <path>] [--skip-runtime] [--json]',
   '  dsh-developer promote --source <creator.json> --output <new-dir> [--dsh <path>] [--json]',
   '  dsh-developer fingerprint --source <creator-draft.json> [--json]',
+  '  dsh-developer ui --session <name> --action <operation> [operation options] [--json]',
   '',
   'Promotion only creates a new, absent destination and requires public DSH 0.1.1-rc.2.',
 ].join('\n')
@@ -37,6 +39,22 @@ function required(options, key) {
   const optionName = key.replace(/[A-Z]/gu, (letter) => '-' + letter.toLowerCase())
   if (!options[key]) throw new DshDeveloperError('CLI_USAGE', '--' + optionName + ' is required.')
   return resolve(options[key])
+}
+
+function requiredValue(options, key) {
+  const optionName = key.replace(/[A-Z]/gu, (letter) => '-' + letter.toLowerCase())
+  if (!options[key]) throw new DshDeveloperError('CLI_USAGE', '--' + optionName + ' is required.')
+  return options[key]
+}
+
+function integerOption(options, key) {
+  if (options[key] === undefined) return undefined
+  if (!/^-?[0-9]+$/u.test(options[key])) {
+    throw new DshDeveloperError('CLI_USAGE', '--' + key.replace(/[A-Z]/gu, (letter) => '-' + letter.toLowerCase()) + ' must be an integer.')
+  }
+  const value = Number(options[key])
+  if (!Number.isSafeInteger(value)) throw new DshDeveloperError('CLI_USAGE', 'Numeric UI option is outside the safe integer range.')
+  return value
 }
 
 function printReport(report, asJson) {
@@ -153,6 +171,26 @@ async function main(argv) {
     } else {
       process.stdout.write(value.sourceFingerprint + '\n')
     }
+    return
+  }
+  if (command === 'ui') {
+    const input = {
+      operation: requiredValue(options, 'action'),
+      ...(options.url === undefined ? {} : { url: options.url }),
+      ...(options.target === undefined ? {} : { target: options.target }),
+      ...(options.text === undefined ? {} : { text: options.text }),
+      ...(options.key === undefined ? {} : { key: options.key }),
+      ...(options.depth === undefined ? {} : { depth: integerOption(options, 'depth') }),
+      ...(options.timeoutMs === undefined ? {} : { timeoutMs: integerOption(options, 'timeoutMs') }),
+      ...(options.width === undefined ? {} : { width: integerOption(options, 'width') }),
+      ...(options.height === undefined ? {} : { height: integerOption(options, 'height') }),
+    }
+    const report = await executeUiCliAction(
+      requiredValue(options, 'session'),
+      input,
+      { signal: controller.signal },
+    )
+    process.stdout.write(options.json ? JSON.stringify(report, null, 2) + '\n' : formatUiCliReport(report) + '\n')
     return
   }
   throw new DshDeveloperError('CLI_USAGE', 'Unknown command "' + command + '".\n\n' + USAGE)

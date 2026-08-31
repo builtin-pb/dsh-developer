@@ -26,6 +26,37 @@ test('normalizes dashed value and flag options to the CLI option vocabulary', ()
   })
 })
 
+test('parses the closed agent-native UI command surface', () => {
+  assert.deepEqual(parseCliArguments([
+    'ui',
+    '--session', 'codex-preview',
+    '--action', 'wait',
+    '--text', 'Ready',
+    '--timeout-ms', '1500',
+    '--json',
+  ]), {
+    command: 'ui',
+    options: {
+      session: 'codex-preview',
+      action: 'wait',
+      text: 'Ready',
+      timeoutMs: '1500',
+      json: true,
+    },
+  })
+  assert.doesNotThrow(() => assertCliCommandOptions('ui', {
+    session: 'codex-preview',
+    action: 'snapshot',
+    target: 'e12',
+    depth: '4',
+  }))
+  assert.throws(
+    () => assertCliCommandOptions('ui', { source: 'plugin' }),
+    (error) => error.code === 'CLI_USAGE'
+      && error.message === 'ui does not accept --source.',
+  )
+})
+
 test('rejects unknown options and missing values', () => {
   assert.throws(
     () => parseCliArguments(['doctor', '--source']),

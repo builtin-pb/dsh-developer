@@ -4,7 +4,7 @@
 
 Proudly designed and implemented by [MetaFlow](https://github.com/builtin-pb/metaflow), **dsh-developer** is an unofficial community plugin that fixes the dangerous last mile of DSH plugin development: a plugin can look finished in its checkout and still fail to register, load, survive the next DSH lane, or cross a release boundary safely.
 
-One native workflow inspects the exact DSH installation, audits Creator exports and existing repositories, deterministically builds a new plugin bundle, and exercises trusted bytes across exact release and preview lanes. DSH agents get the same evidence through one structured model tool—not a shell transcript or a Web-only command. The workflow also admits scoped browser providers for semantic, compute-bounded UI verification while DSH policy contains their dangerous authority. It witnesses clean-profile install, load, discovery, and uninstall, classifies capability drift, and emits stable evidence before handoff. Caller-supplied repositories stay read-only and are not executed; generated bundles run only after their bytes reproduce from fingerprinted provenance.
+One native workflow inspects the exact DSH installation, audits Creator exports and existing repositories, deterministically builds a new plugin bundle, and exercises trusted bytes across exact release and preview lanes. DSH agents get the same evidence through one structured model tool—not a shell transcript or a Web-only command. An opt-in second tool gives each agent its own compact, protected browser session for compute-efficient local UI verification. The workflow witnesses clean-profile install, load, discovery, and uninstall, classifies capability drift, and emits stable evidence before handoff. Caller-supplied repositories stay read-only and are not executed; generated bundles run only after their bytes reproduce from fingerprinted provenance.
 
 [![CI](https://github.com/builtin-pb/dsh-developer/actions/workflows/ci.yml/badge.svg)](https://github.com/builtin-pb/dsh-developer/actions/workflows/ci.yml) [![Node.js 22.18+](https://img.shields.io/badge/Node.js-22.18%2B-339933?logo=nodedotjs&logoColor=white)](package.json) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -14,7 +14,7 @@ Existing plugin ->  read-only Doctor report           ->  concrete fixes to make
 Trusted bundle  ->  release + preview matrix          ->  classified drift + stable digest
 Plugin + profile -> exact clean-profile composition   ->  service-owner evidence, no repo execution
 DSH agent        -> one native structured tool         ->  canonical evidence, every model surface
-Local plugin UI  -> protected semantic browser route   ->  assertions + bounded visual evidence
+Local plugin UI  -> one agent-owned semantic session   ->  assertions + bounded visual evidence
 ```
 
 No provider key is needed for capability inspection, profile preflight, Doctor, deterministic promotion, upstream impact analysis, the compatibility matrix, or the execution-lab checks.
@@ -69,7 +69,7 @@ dsh --profile headless --dump-config
 | A plugin facing a DSH upgrade | `impact` | The exact package, public declaration, entry, dependency, and injected-service surfaces that changed |
 | This product source or a reproducible promoted bundle | `compatibility` | Witnessed behavior on exact release and preview DSH lanes, plus classified revalidation triggers |
 | A Windows host that needs stronger execution isolation | `lab`, then `admit-cell` | Evidence for a bounded WSL2/Bubblewrap boundary before the isolated-cell API is exposed |
-| A local plugin UI that needs agent verification | `dsh_developer {"operation":"ui"}` | Scoped provider admission, exact operation names, authority containment, and visible catalog cost |
+| A local plugin UI that needs agent verification | Configure `dsh_ui`, then run `dsh_developer {"operation":"ui"}` | One agent-owned semantic session, authority containment, exact operations, and visible catalog cost |
 | A model-guided development task | `$dsh-developer` | The same accountable Agent Skill in DSH and Codex, backed by a native structured DSH tool |
 
 ## What Doctor checks
@@ -123,45 +123,61 @@ node bin/dsh-developer.js compatibility --source C:\path\to\plugin --release-dsh
 
 The matrix first runs non-runtime Doctor, accepts only package-declared official DSH 0.1.1-rc.2 and 0.1.2-alpha.2 entries, and reruns each lane's capability and self-lifecycle evidence. It exercises the target plugin lifecycle only for dsh-developer itself or byte-for-byte reproducible promoted output—never an arbitrary repository. Release failure is blocking; preview failure remains visible but advisory. A report also requires an unchanged final source fingerprint, classifies each drift trigger as `contract` or `package-version`, and ends with a stable digest.
 
-## Give DSH agents a safe, efficient UI path
+## Give DSH and Codex agents a safe, efficient UI path
 
-dsh-developer does not ship another browser engine. It composes the official DSH MCP bridge with upstream Playwright or Chrome DevTools providers, then owns the missing harness-level pieces: scoped admission, operation mapping, authority containment, catalogue-cost evidence, and a snapshot-first verification contract.
-
-For ordinary coding work, use the official [Playwright CLI](https://github.com/microsoft/playwright-cli) when it is already installed; Microsoft recommends its skill-oriented route for lower model-context cost. Use persistent MCP tools when exploration benefits from a live browser session. The bundled Playwright MCP preset is opt-in and pins the currently exercised provider contract:
+dsh-developer does not ship another browser engine. Its preferred coding route wraps the official pinned [Playwright CLI](https://github.com/microsoft/playwright-cli) behind one compact DSH tool, instead of permanently exposing a large browser-tool catalogue to every model turn. Install the provider without downloading another browser, point at a reviewed system Chrome or Edge executable, and set an absolute state root before DSH starts:
 
 ```powershell
-npm install --prefix D:\dsh-ui --ignore-scripts --no-audit --no-fund @playwright/mcp@0.0.79
-$env:PLAYWRIGHT_MCP_ENTRY='D:\dsh-ui\node_modules\@playwright\mcp\cli.js'
-$env:PLAYWRIGHT_MCP_EXECUTABLE_PATH='C:\Program Files\Google\Chrome\Application\chrome.exe'
-$env:DSH_DEVELOPER_UI_OUTPUT='D:\dsh-ui\evidence'
-dsh web --patch .\presets\playwright-mcp.cordis.yml
+npm install --prefix D:\dsh-ui --ignore-scripts --no-audit --no-fund @playwright/cli@0.1.18
+$env:DSH_DEVELOPER_PLAYWRIGHT_CLI_ENTRY='D:\dsh-ui\node_modules\@playwright\cli\playwright-cli.js'
+$env:DSH_DEVELOPER_BROWSER_EXECUTABLE='C:\Program Files\Google\Chrome\Application\chrome.exe'
+$env:DSH_DEVELOPER_UI_CLI_ROOT='D:\dsh-ui\state'
+dsh web
 ```
 
-`--ignore-scripts` avoids an implicit browser download; omit it only when you deliberately want the provider's install behavior. DSH starts the provider through its own Node executable and the absolute JavaScript entry, avoiding platform-specific command shims. On another platform, point the environment variables at the corresponding paths. Then, from the DSH agent that will perform the work:
+The plugin validates the exact provider package before registering `dsh_ui`. Each calling DSH agent gets an opaque, serialized session; the browser is headless, sandboxed, isolated in memory, credential-free, limited to explicit loopback URLs, and forced through a closed-loopback proxy for remote HTTP(S). Arbitrary code, uploads, storage, persistent profiles, CDP attachment, and unrestricted selectors are not in the schema. Snapshots are bounded, screenshots use CSS pixels, and each session has a 64-file/8 MiB evidence budget.
+
+Ask the calling agent to admit its scoped route, then use refs from snapshot or find:
 
 ```text
 dsh_developer {"operation":"ui"}
+dsh_ui {"operation":"open","url":"http://127.0.0.1:4173/"}
+dsh_ui {"operation":"snapshot","depth":6}
+dsh_ui {"operation":"fill","target":"e5","text":"Ada"}
+dsh_ui {"operation":"click","target":"e6"}
+dsh_ui {"operation":"wait","text":"Saved"}
+dsh_ui {"operation":"close"}
 ```
 
-PASS means the calling agent—not merely the global host—can see a complete semantic interaction surface and that dangerous tools are absent or protected. The report returns exact tool names and the approximate JSON characters their schemas add to the model catalogue. The `dsh_ui` guard admits only a closed set of semantic operations and denies credential-bearing or non-loopback navigation. The preset adds an isolated in-memory profile, browser sandbox, loopback request filter, loopback-only proxy sink for remote HTTP(S), no automatic action snapshots, no code generation, and an 8 MiB output cap.
+PASS identifies the selected route, exact operation map, authority boundary, provider version, evidence digest, and model-catalog cost. Page text is always untrusted data. Use semantic snapshots for action, wait on concrete DOM state, inspect error-level console and relevant requests, and take a screenshot only at a meaningful visual checkpoint.
 
-The default omits image responses. Set `DSH_DEVELOPER_UI_IMAGES=allow` before DSH starts only when the task needs a deliberate visual checkpoint. Use accessibility snapshots or targeted find for actions, wait on concrete DOM state, inspect error-level console output, and take CSS-scale screenshots only at meaningful states. Page content is untrusted data; a browser is not a security boundary. See the full [agent-native UI contract](skills/dsh-developer/references/agent-native-ui.md).
+Codex and other shell-capable agents can use the same protected controller without DSH; keep one non-sensitive session label and always close it:
 
-## One native tool for every DSH agent surface
+```powershell
+node bin/dsh-developer.js ui --session codex-task --action open --url http://127.0.0.1:4173/ --json
+node bin/dsh-developer.js ui --session codex-task --action snapshot --depth 6 --json
+node bin/dsh-developer.js ui --session codex-task --action close --json
+```
 
-DSH's public tool registry is the canonical model-facing extension seam. dsh-developer registers one global `dsh_developer` tool, so its evidence operations reach headless agents, DSH Web agents, Code Mode programs, and the preview ACP automation profile without teaching each transport a private protocol.
+For persistent exploratory work, the larger MCP route remains available. Install `@playwright/mcp@0.0.79`, set `PLAYWRIGHT_MCP_ENTRY`, `PLAYWRIGHT_MCP_EXECUTABLE_PATH`, and `DSH_DEVELOPER_UI_OUTPUT`, then start DSH with `--patch .\presets\playwright-mcp.cordis.yml`. The `dsh_ui` MCP namespace receives the same loopback-only, fail-closed guard; other namespaces are untouched. Do not enable both routes unless their extra visible schemas are worth the context cost. See the full [agent-native UI contract](skills/dsh-developer/references/agent-native-ui.md).
+
+## One evidence tool for every DSH agent surface
+
+DSH's public tool registry is the canonical model-facing extension seam. dsh-developer always registers one global `dsh_developer` evidence tool, so inspection reaches headless agents, DSH Web agents, Code Mode programs, and the preview ACP automation profile without teaching each transport a private protocol.
 
 ```json
 {"operation":"doctor","source":"C:/path/to/plugin","skipRuntime":true}
 ```
 
-The operation is one of `capabilities`, `doctor`, `preflight`, `impact`, `compatibility`, or `ui`. Operation-specific arguments are closed and validated before work begins; cancellation flows through the DSH tool pipeline. Native presentation stays compact, while Code Mode receives the canonical JSON report. `ui` inspects the calling agent's visible tool registry but never launches or controls a browser. Promotion, repository edits, UI control, package publication, and isolation executors are deliberately absent because they need stronger authority or a separate admission path.
+The operation is one of `capabilities`, `doctor`, `preflight`, `impact`, `compatibility`, or `ui`. Operation-specific arguments are closed and validated before work begins; cancellation flows through the DSH tool pipeline. Native presentation stays compact, while Code Mode receives canonical JSON. `ui` only inspects the calling agent's visible registry and selects an admitted route.
 
-Using one operation-discriminated tool instead of five independent schemas keeps the model-visible catalog small. The plugin imports no private DSH internals and no profile-local copy of the tool runtime; exact release and preview preflight proves that `tools` comes from the host. The controlled lifecycle witness now fails unless DSH can register and resolve the tool definition. See DSH's official [tool authoring reference](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/cookbook/adding-a-tool.md).
+When the pinned CLI paths are configured, the plugin separately registers one compact `dsh_ui` action tool. That boundary is deliberately distinct from evidence: its closed operation enum is `status`, `open`, `navigate`, `snapshot`, `find`, `fill`, `click`, `press`, `select`, `check`, `uncheck`, `hover`, `resize`, `wait`, `screenshot`, `console`, `requests`, or `close`. Promotion, repository edits, publication, real-profile installation, and general execution remain absent.
+
+Using one operation-discriminated evidence tool instead of five independent schemas keeps the model-visible catalog small; the optional UI route adds only one more schema. The plugin imports no private DSH internals and no profile-local copy of the tool runtime; exact release and preview preflight proves that `tools` comes from the host. The controlled lifecycle witness fails unless DSH can register and resolve the definition. See DSH's official [tool authoring reference](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/cookbook/adding-a-tool.md).
 
 ## Why the rest is also native DSH
 
-Installing dsh-developer loads its real `index.js` entry through DSH. The plugin registers one model- and user-invocable Agent Skill, the structured model tool above, absolute CLI and UI-preset paths for DSH shell environments, and nine direct DSH Web commands:
+Installing dsh-developer loads its real `index.js` entry through DSH. The plugin registers one model- and user-invocable Agent Skill, the evidence tool above, the optional UI tool when configured, absolute CLI and UI-preset paths for DSH shell environments, and nine direct DSH Web commands:
 
 ```text
 /dsh-developer-capabilities {}
@@ -189,6 +205,7 @@ node bin/dsh-developer.js impact --source C:\path\to\plugin --release-dsh D:\rel
 node bin/dsh-developer.js preflight --source C:\path\to\plugin --profile headless --dsh D:\path\to\dsh.cmd
 node bin/dsh-developer.js promote --source C:\path\to\export.json --output C:\path\to\new-plugin --dsh D:\path\to\dsh.cmd
 node bin/dsh-developer.js fingerprint --source C:\path\to\creator-draft.json
+node bin/dsh-developer.js ui --session codex-task --action status --json
 ```
 
 Try the bundled export without risking an existing destination:
@@ -225,8 +242,8 @@ The checkout already contains `.codex-plugin/plugin.json` and exposes the same c
 - **Compatibility execution:** the matrix executes only exact product source or reproducible promoted bytes; arbitrary repositories receive no behavior claim.
 - **Untrusted repositories:** Doctor reads bounded text snapshots and does not execute arbitrary repository code. Controlled execution is reserved for reproducible generated output and this product's own lifecycle proof.
 - **Profile preflight:** only DSH's config-dump path runs in a disposable credential-free profile; the repository is not installed or loaded, and PASS is not a behavior claim.
-- **Native model tool:** exposes read/evidence operations only, including scoped UI-provider admission. It does not promote, edit, publish, install into real profiles, control a browser, or open an isolation executor.
-- **Protected UI namespace:** `dsh_ui` is restricted to a closed semantic allowlist and loopback verification; unknown future tools fail closed. Other MCP namespaces remain untouched and are not claimed as protected.
+- **Native evidence tool:** exposes read/evidence operations only, including scoped UI-route admission. It does not promote, edit, publish, install into real profiles, control a browser, or open an isolation executor.
+- **Protected UI tool:** the optional native `dsh_ui` route is agent-owned, serialized, credential-free, loopback-only, and closed to arbitrary code, files, storage, attachment, and unknown operations. The MCP `dsh_ui` namespace receives an equivalent fail-closed semantic guard; other namespaces remain untouched.
 - **Destinations:** promotion creates one absent sibling directory through private staging and a probed no-replace rename. It never merges or overwrites.
 - **Credentials:** deterministic paths do not need a model or provider key, and credentials must not enter Creator exports, plugin trees, child environments, reports, or bundles.
 - **Windows sandboxing:** DSH's ACL backend is reported as partial rather than presented as whole-environment containment. Use the admitted WSL2/Bubblewrap route when that stronger boundary is required.

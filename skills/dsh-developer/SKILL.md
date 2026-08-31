@@ -18,12 +18,12 @@ Own one attempt from stable snapshot through handoff. Return verified results or
 - Exact release-to-preview behavior: run compatibility only on this product or reproducible promoted bytes.
 - DSH upgrade: run impact before compatibility; declare attached packages and services when static inference is incomplete.
 - Target profile: run preflight before installation.
-- Local UI or visual quality: load [the agent-native UI route](references/agent-native-ui.md); admit DSH MCP tools before use.
+- Local UI or visual quality: load [the agent-native UI route](references/agent-native-ui.md); configure and admit the chosen route before use.
 - Unstructured idea: shape it in Creator and stop at a canonical export.
 
 Load [the safety boundary](references/safety.md) before untrusted source. For repository-plus-core work, inspect capabilities before Doctor, audit before edits, and keep one authorized change-set.
 
-In DSH agents, prefer `dsh_developer` for six evidence operations; it cannot promote or control a browser. Otherwise use `bin/dsh-developer.js` (`DSH_DEVELOPER_BIN` in DSH shells).
+In DSH agents, prefer `dsh_developer` for evidence and the optional `dsh_ui` for protected local UI action. Otherwise use `bin/dsh-developer.js` (`DSH_DEVELOPER_BIN` in DSH shells).
 
 ## Inspect and compose
 

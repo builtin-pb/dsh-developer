@@ -103,3 +103,35 @@ test('does not infer a live guard from a provider namespace alone', () => {
   assert.equal(report.providers[0].ready, true)
   assert.equal(report.providers[0].policy, 'external')
 })
+
+test('prefers one active native CLI schema over the persistent MCP catalog', () => {
+  const nativeSchema = {
+    name: 'dsh_ui',
+    description: 'native',
+    parameters: { type: 'object', properties: { operation: { type: 'string' } } },
+  }
+  const report = inspectUiCapabilities([
+    nativeSchema,
+    ...schemas('dsh_ui'),
+  ], {
+    ...GUARDED,
+    nativeCliActive: true,
+  })
+  assert.equal(report.ok, true)
+  assert.equal(report.selected.adapter, 'playwright-cli-native')
+  assert.equal(report.selected.policy, 'dsh-developer-native')
+  assert.equal(report.selected.catalogTools, 1)
+  assert.equal(report.selected.operations.snapshot, 'dsh_ui')
+  assert.ok(report.selected.catalogSchemaChars < report.providers[1].catalogSchemaChars)
+  assert.ok(report.catalog.tools > report.selected.catalogTools)
+  assert.ok(report.catalog.schemaChars > report.selected.catalogSchemaChars)
+  assert.match(formatUiCapabilityReport(report), /All recognized UI providers/u)
+})
+
+test('fails native admission when the configured tool is absent from the calling agent scope', () => {
+  const report = inspectUiCapabilities([], { nativeCliActive: true })
+  assert.equal(report.ok, false)
+  assert.equal(report.selected.adapter, 'playwright-cli-native')
+  assert.equal(report.providers[0].ready, false)
+  assert.match(report.checks[0].message, /missing/u)
+})
