@@ -175,6 +175,31 @@ test('fails closed when a literal-looking inject prefix has a dynamic tail', asy
   }
 })
 
+test('fails closed when a quoted inject value is not a valid Cordis service name', async () => {
+  const root = await fixture()
+  await writeFile(join(root, 'index.js'), [
+    "export const inject = ['skills..invalid']",
+    'export function apply() {}',
+    '',
+  ].join('\n'), 'utf8')
+  let composed = false
+  try {
+    const report = await inspectProfilePreflightInternal(root, {
+      dshPath: 'fake-dsh',
+      profile: 'headless',
+    }, runtimeDependencies(async () => {
+      composed = true
+    }))
+    assert.equal(report.ok, false)
+    assert.deepEqual(report.requiredServices, [])
+    assert.equal(report.checks.find((value) => value.id === 'source.inject-contract').status, 'FAIL')
+    assert.equal(report.checks.find((value) => value.id === 'profile.service-contract').status, 'SKIP')
+    assert.equal(composed, false)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('keeps a profile composition failure actionable without executing repository code', async () => {
   const root = await fixture()
   try {
