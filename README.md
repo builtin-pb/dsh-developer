@@ -12,9 +12,10 @@ One native workflow inspects the exact DSH installation, audits Creator exports 
 Creator export  ->  Doctor  ->  deterministic bundle  ->  real DSH lifecycle proof
 Existing plugin ->  read-only Doctor report           ->  concrete fixes to make
 Trusted bundle  ->  release + preview matrix          ->  classified drift + stable digest
+Plugin + profile -> exact clean-profile composition   ->  service-owner evidence, no repo execution
 ```
 
-No provider key is needed for capability inspection, Doctor, deterministic promotion, upstream impact analysis, the compatibility matrix, or the execution-lab checks.
+No provider key is needed for capability inspection, profile preflight, Doctor, deterministic promotion, upstream impact analysis, the compatibility matrix, or the execution-lab checks.
 
 ## Get a useful result in five minutes
 
@@ -62,6 +63,7 @@ dsh --profile headless --dump-config
 | A DSH Creator JSON export | `promote` | A new deterministic DSH + Codex plugin bundle, or a retained staging directory with the blocking failure |
 | An existing plugin repository | `doctor` | A read-only audit of structure, safety, compatibility, documentation, and native lifecycle eligibility |
 | An unfamiliar DSH installation | `capabilities` | Exact runtime, package, lane, evidence-strength, and digest information |
+| A plugin intended for a specific profile | `preflight` | Clean-profile composition evidence for every statically required Cordis service, without installing or loading repository code |
 | A plugin facing a DSH upgrade | `impact` | The exact package, public declaration, entry, dependency, and injected-service surfaces that changed |
 | This product source or a reproducible promoted bundle | `compatibility` | Witnessed behavior on exact release and preview DSH lanes, plus classified revalidation triggers |
 | A Windows host that needs stronger execution isolation | `lab`, then `admit-cell` | Evidence for a bounded WSL2/Bubblewrap boundary before the isolated-cell API is exposed |
@@ -79,6 +81,16 @@ Doctor is more than a manifest linter. Its release catalogue covers:
 - a fresh final tree fingerprint so a passing report cannot silently describe earlier bytes.
 
 `--skip-runtime` is useful while exploring a repository, but it is never release evidence and cannot be used during promotion.
+
+## Catch profile failures before boot
+
+A plugin can be valid yet still wait forever for a service absent from its target profile. Preflight derives required `inject` services from a stable, read-only source snapshot, maps those services to declarations in the exact installed DSH graph, and asks DSH itself to compose a disposable clean profile:
+
+```powershell
+node bin/dsh-developer.js preflight --source C:\path\to\plugin --profile headless --dsh D:\path\to\dsh.cmd
+```
+
+The selected official DSH lane runs only its config-dump path; the plugin repository is neither installed nor loaded, the child environment excludes credentials, and the disposable profile is removed afterward. PASS means the clean composition unconditionally mounts at least one installed owner for each required service. It is composition evidence—not activation proof, plugin behavior, or a claim about a customized user's full stack.
 
 ## Keep shipping as DSH moves
 
@@ -108,13 +120,14 @@ The matrix first runs non-runtime Doctor, accepts only package-declared official
 
 ## Why it is a native DSH plugin
 
-Installing dsh-developer loads its real `index.js` entry through DSH. The plugin registers one model- and user-invocable Agent Skill, injects the absolute CLI path into DSH shell environments, and adds seven direct DSH Web commands:
+Installing dsh-developer loads its real `index.js` entry through DSH. The plugin registers one model- and user-invocable Agent Skill, injects the absolute CLI path into DSH shell environments, and adds eight direct DSH Web commands:
 
 ```text
 /dsh-developer-capabilities {}
 /dsh-developer-compatibility {"source":"C:/path/to/plugin","previewDsh":"D:/preview/dsh.cmd"}
 /dsh-developer-doctor {"source":"C:/path/to/plugin","skipRuntime":false}
 /dsh-developer-impact {"source":"C:/path/to/plugin","previewDsh":"D:/preview/dsh.cmd"}
+/dsh-developer-preflight {"source":"C:/path/to/plugin","profile":"headless"}
 /dsh-developer-promote {"source":"C:/path/export.json","output":"C:/path/new-plugin"}
 /dsh-developer-lab {"distro":"Ubuntu-22.04"}
 /dsh-developer-admit-cell {"distro":"Ubuntu-22.04"}
@@ -131,6 +144,7 @@ node bin/dsh-developer.js capabilities --dsh D:\path\to\dsh.cmd
 node bin/dsh-developer.js compatibility --source C:\path\to\plugin --release-dsh D:\release\dsh.cmd --preview-dsh D:\preview\dsh.cmd
 node bin/dsh-developer.js doctor --source C:\path\to\plugin --dsh D:\path\to\dsh.cmd
 node bin/dsh-developer.js impact --source C:\path\to\plugin --release-dsh D:\release\dsh.cmd --preview-dsh D:\preview\dsh.cmd
+node bin/dsh-developer.js preflight --source C:\path\to\plugin --profile headless --dsh D:\path\to\dsh.cmd
 node bin/dsh-developer.js promote --source C:\path\to\export.json --output C:\path\to\new-plugin --dsh D:\path\to\dsh.cmd
 node bin/dsh-developer.js fingerprint --source C:\path\to\creator-draft.json
 ```
@@ -168,6 +182,7 @@ The checkout already contains `.codex-plugin/plugin.json` and exposes the same c
 - **Other versions:** capabilities remain inspectable, but dsh-developer makes no compatibility claim.
 - **Compatibility execution:** the matrix executes only exact product source or reproducible promoted bytes; arbitrary repositories receive no behavior claim.
 - **Untrusted repositories:** Doctor reads bounded text snapshots and does not execute arbitrary repository code. Controlled execution is reserved for reproducible generated output and this product's own lifecycle proof.
+- **Profile preflight:** only DSH's config-dump path runs in a disposable credential-free profile; the repository is not installed or loaded, and PASS is not a behavior claim.
 - **Destinations:** promotion creates one absent sibling directory through private staging and a probed no-replace rename. It never merges or overwrites.
 - **Credentials:** deterministic paths do not need a model or provider key, and credentials must not enter Creator exports, plugin trees, child environments, reports, or bundles.
 - **Windows sandboxing:** DSH's ACL backend is reported as partial rather than presented as whole-environment containment. Use the admitted WSL2/Bubblewrap route when that stronger boundary is required.

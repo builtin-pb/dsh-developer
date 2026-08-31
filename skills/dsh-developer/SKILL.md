@@ -16,6 +16,7 @@ Own one accountable workflow from source snapshot through handoff. Never claim a
 - DSH runtime or core-level feature: inspect capabilities, then use [the core-gap rules](references/core-incubation.md).
 - Exact release-to-preview compatibility: run the compatibility matrix; behavior execution is limited to product source or reproducible promoted bytes.
 - DSH upgrade scoping: run upstream impact before compatibility; declare attachment packages and Cordis services in `package.json` when inference is incomplete.
+- Target profile: run preflight; derive required `inject` services and compose only a disposable clean profile.
 - Execution-bearing core incubation: also use [the local lab gate](references/execution-lab.md). PASS proves a boundary, not feature admission or permission to execute caller code.
 - Isolated child workspace or whole-environment isolation: run [the isolated-cell admission](references/isolated-cell.md) after both gates.
 - Unstructured idea: shape it in Creator and stop at a canonical export.
@@ -39,6 +40,12 @@ CLI:
 This inspects the installed DSH without loading an arbitrary repository. Record exact DSH, Node, platform, lane, package identity, and digest. `behavior` means exercised; `inventory` means installed only. Absence does not cover other profiles. Prefer adequate native behavior; never promote preview or inventory evidence to a blocking claim.
 
 ## Exercise compatibility
+
+Before installing an unfamiliar plugin into a profile, preflight its service contract without loading or installing repository code:
+
+    node bin/dsh-developer.js preflight --source <plugin-directory> --profile headless --dsh <path>
+
+PASS is clean-profile composition evidence, not activation, plugin behavior, or custom-profile compatibility.
 
 First locate changed upstream surfaces without executing either DSH lane:
 

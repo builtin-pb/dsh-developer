@@ -12,6 +12,7 @@ import {
 } from '../lib/creator-export.js'
 import { asDiagnostic, DshDeveloperError } from '../lib/errors.js'
 import { conformExecutionLab, formatExecutionLabReport } from '../lib/execution-lab.js'
+import { formatProfilePreflightReport, inspectProfilePreflight } from '../lib/profile-preflight.js'
 import { promoteCreatorExport } from '../lib/promote.js'
 import { formatUpstreamImpactReport, inspectUpstreamImpact } from '../lib/upstream-impact.js'
 
@@ -24,6 +25,7 @@ const USAGE = [
   '  dsh-developer compatibility --source <plugin-dir> --release-dsh <path> --preview-dsh <path> [--json]',
   '  dsh-developer impact --source <plugin-dir> --release-dsh <path> --preview-dsh <path> [--json]',
   '  dsh-developer lab [--wsl-distro <name>] [--json]',
+  '  dsh-developer preflight --source <plugin-dir> [--profile <name>] [--dsh <path>] [--json]',
   '  dsh-developer doctor --source <creator.json|plugin-dir> [--dsh <path>] [--skip-runtime] [--json]',
   '  dsh-developer promote --source <creator.json> --output <new-dir> [--dsh <path>] [--json]',
   '  dsh-developer fingerprint --source <creator-draft.json> [--json]',
@@ -121,6 +123,22 @@ async function main(argv) {
       signal: controller.signal,
     })
     process.stdout.write(options.json ? JSON.stringify(report, null, 2) + '\n' : formatUpstreamImpactReport(report) + '\n')
+    if (!report.ok) process.exitCode = 1
+    return
+  }
+  if (command === 'preflight') {
+    if (options.output || options.releaseDsh || options.previewDsh || options.skipRuntime || options.wslDistro) {
+      throw new DshDeveloperError(
+        'CLI_USAGE',
+        'preflight accepts only --source, --profile, --dsh, and --json.',
+      )
+    }
+    const report = await inspectProfilePreflight(required(options, 'source'), {
+      dshPath: options.dsh,
+      profile: options.profile ?? 'headless',
+      signal: controller.signal,
+    })
+    process.stdout.write(options.json ? JSON.stringify(report, null, 2) + '\n' : formatProfilePreflightReport(report) + '\n')
     if (!report.ok) process.exitCode = 1
     return
   }

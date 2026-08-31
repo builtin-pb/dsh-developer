@@ -71,7 +71,7 @@ test('discovers declared packages, injected services, static imports, and the ba
     })
     await writeFile(join(root, 'index.js'), [
       "import '@deepseek-ai/dsh-shell-env'",
-      "export const inject = { required: ['skills', 'commands'] }",
+      "export const inject = { required: ['skills', 'commands', 'remote.workspace'] }",
       "export async function apply(ctx) { ctx.commands.register({}); ctx.get('appExit') }",
       '',
     ].join('\n'), 'utf8')
@@ -83,7 +83,7 @@ test('discovers declared packages, injected services, static imports, and the ba
       '@deepseek-ai/dsh-skill',
     ])
     assert.deepEqual(references.packages.find((value) => value.package === '@deepseek-ai/dsh-skill').subpaths, ['./invariant'])
-    assert.deepEqual(references.services.map((value) => value.service), ['appExit', 'commands', 'skills'])
+    assert.deepEqual(references.services.map((value) => value.service), ['appExit', 'commands', 'remote.workspace', 'skills'])
     assert.deepEqual(references.coverage.undeclaredPackages, ['@deepseek-ai/dsh-shell-env'])
     assert.deepEqual(references.coverage.undeclaredServices, ['appExit'])
   } finally {

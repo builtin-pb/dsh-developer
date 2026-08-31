@@ -39,6 +39,7 @@ test('registers the canonical skill through the native DSH service', async () =>
     'dsh-developer-compatibility',
     'dsh-developer-lab',
     'dsh-developer-impact',
+    'dsh-developer-preflight',
     'dsh-developer-doctor',
     'dsh-developer-promote',
   ])
