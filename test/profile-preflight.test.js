@@ -11,7 +11,7 @@ import {
   inspectProfileComposition,
 } from '../lib/profile-preflight-internal.js'
 
-async function fixture() {
+async function fixture(extra = {}) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-developer-preflight-source-'))
   await writeFile(join(root, 'package.json'), JSON.stringify({
     name: 'preflight-fixture',
@@ -20,6 +20,7 @@ async function fixture() {
     main: './index.js',
     dsh: { bundle: { patch: './cordis.patch.yml' } },
     dshDeveloper: { upstream: { services: ['skills', 'remote.workspace'] } },
+    ...extra,
   }, null, 2) + '\n', 'utf8')
   await writeFile(join(root, 'index.js'), [
     "export const inject = ['skills', 'remote.workspace']",
@@ -98,6 +99,41 @@ test('keeps a profile composition failure actionable without executing repositor
     assert.equal(failed.status, 'FAIL')
     assert.equal(failed.evidence.stage, 'composition')
     assert.deepEqual(failed.evidence.missingServices, ['remote.workspace'])
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('rejects runtime copies of required DSH service-owner packages', async () => {
+  const root = await fixture({
+    dependencies: { '@deepseek-ai/dsh-skill': '^0.1.1' },
+  })
+  try {
+    const report = await inspectProfilePreflightInternal(root, {
+      dshPath: 'fake-dsh',
+      profile: 'headless',
+    }, runtimeDependencies(async (_invocation, profile, services, owners) => ({
+      profile,
+      requiredServices: services,
+      mappings: services.map((service) => ({
+        service,
+        owners: owners.get(service),
+        mountedOwners: owners.get(service),
+        conditionalOwners: [],
+      })),
+      confidence: 'composition',
+      profileActivated: false,
+      repositoryCodeExecuted: false,
+    })))
+    assert.equal(report.ok, false)
+    const failed = report.checks.find((value) => value.id === 'source.host-package-placement')
+    assert.equal(failed.status, 'FAIL')
+    assert.deepEqual(failed.evidence.misplaced, [{
+      package: '@deepseek-ai/dsh-skill',
+      services: ['skills'],
+      fields: ['dependencies'],
+    }])
+    assert.equal(report.checks.find((value) => value.id === 'profile.service-contract').status, 'PASS')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
