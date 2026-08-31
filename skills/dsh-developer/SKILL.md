@@ -15,6 +15,7 @@ Own one accountable workflow from source snapshot through handoff. Never claim a
 - Existing repository: run **Audit**, then propose a bounded change; edit only with separate user authorization.
 - DSH runtime or core-level feature: inspect capabilities, then use [the core-gap rules](references/core-incubation.md).
 - Execution-bearing core incubation: also use [the local lab gate](references/execution-lab.md). PASS proves a boundary, not feature admission or permission to execute caller code.
+- Isolated child workspace or whole-environment isolation: run [the isolated-cell admission](references/isolated-cell.md) after both gates.
 - Unstructured idea: shape it in Creator and stop at a canonical export.
 
 If repository work and a core feature overlap, inspect capabilities before Doctor, audit before edits, and propose one bounded change-set. New evidence or a materially broader effect needs new approval.

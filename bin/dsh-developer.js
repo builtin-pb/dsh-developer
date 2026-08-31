@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { resolve } from 'node:path'
+import { formatCellAdmissionReport, inspectIsolatedCellAdmission } from '../lib/cell-admission.js'
 import { formatCapabilityReport, inspectDshCapabilities } from '../lib/capabilities.js'
 import { doctorSource } from '../lib/doctor.js'
 import {
@@ -15,6 +16,7 @@ const USAGE = [
   'dsh-developer — The single plugin you need for DSH',
   '',
   'Usage:',
+  '  dsh-developer admit-cell [--dsh <path>] [--wsl-distro <name>] [--json]',
   '  dsh-developer capabilities [--dsh <path>] [--json]',
   '  dsh-developer lab [--wsl-distro <name>] [--json]',
   '  dsh-developer doctor --source <creator.json|plugin-dir> [--dsh <path>] [--skip-runtime] [--json]',
@@ -79,6 +81,18 @@ async function main(argv) {
   const controller = new AbortController()
   process.once('SIGINT', () => controller.abort())
 
+  if (command === 'admit-cell') {
+    if (options.source || options.output || options.skipRuntime) {
+      throw new DshDeveloperError('CLI_USAGE', 'admit-cell accepts only --dsh, --wsl-distro, and --json.')
+    }
+    const report = await inspectIsolatedCellAdmission(options.dsh, {
+      distro: options.wslDistro,
+      signal: controller.signal,
+    })
+    process.stdout.write(options.json ? JSON.stringify(report, null, 2) + '\n' : formatCellAdmissionReport(report) + '\n')
+    if (!report.ok) process.exitCode = 1
+    return
+  }
   if (command === 'capabilities') {
     if (options.source || options.output || options.skipRuntime || options.wslDistro) {
       throw new DshDeveloperError('CLI_USAGE', 'capabilities accepts only --dsh and --json.')

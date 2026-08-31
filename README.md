@@ -11,6 +11,7 @@ Develop, inspect, test, harden, and ship DSH plugins from one native workflow. d
 - Guides Creator exports and existing repositories through one accountable development workflow
 - Registers natively with DSH and shares one Agent Skill with Codex
 - Reports exact DSH release or preview capability evidence without executing an audited repository
+- Runs a dated admission gate for the isolated-agent-cell gap against exact installed DSH behavior and public evidence
 - Proves a keyless WSL2/Bubblewrap execution-lab policy without executing user source
 - Audits manifests, references, paths, binary content, size bounds, credentials, licensing, and compatibility with Doctor
 - Produces deterministic scaffolding with fingerprinted provenance and byte-for-byte reproducibility evidence
@@ -32,6 +33,7 @@ From this repository:
 
     npm test
     node bin/dsh-developer.js capabilities --dsh D:\path\to\dsh.cmd
+    node bin/dsh-developer.js admit-cell --dsh D:\path\to\dsh.cmd --wsl-distro Ubuntu-22.04
     node bin/dsh-developer.js doctor --source examples/hello-dsh.creator.json
     node bin/dsh-developer.js promote --source examples/hello-dsh.creator.json --output ..\hello-dsh
     cd ..\hello-dsh
@@ -57,8 +59,9 @@ Install this repository itself into the DSH Web profile for direct slash command
     dsh plugin --profile web add .
     dsh web
 
-The bundle patch loads the package entry (`index.js`), whose named apply export registers `skills/dsh-developer/SKILL.md` through the native skills service plus four direct user commands:
+The bundle patch loads the package entry (`index.js`), whose named apply export registers `skills/dsh-developer/SKILL.md` through the native skills service plus five direct user commands:
 
+    /dsh-developer-admit-cell {"distro":"Ubuntu-22.04"}
     /dsh-developer-capabilities {}
     /dsh-developer-lab {"distro":"Ubuntu-22.04"}
     /dsh-developer-doctor {"source":"C:/path/plugin","skipRuntime":false}
@@ -73,6 +76,10 @@ Invoke the dsh-developer skill for the guided workflow and decision checks aroun
 Install this directory as a Codex plugin and invoke $dsh-developer. Codex reads the same skills/dsh-developer/SKILL.md instructions as DSH; there is no second workflow implementation.
 
 ## CLI
+
+Run the evidence gate for the isolated-agent-cell candidate:
+
+    node bin/dsh-developer.js admit-cell [--dsh <path-to-dsh>] [--wsl-distro <name>]
 
 Inspect the exact installed DSH runtime and its capability inventory:
 
@@ -105,6 +112,14 @@ An installed package is not automatically a complete security boundary. In parti
 `behavior` evidence means the named contract was exercised. `inventory` evidence means matching packages are installed; it does not claim that a service is active in every profile. Missing optional or experimental packages are observations, not report failures. Package semantics are classified only for reviewed exact DSH/package versions; other installed versions remain `present-unclassified`.
 
 DSH 0.1.1-rc.2 remains the blocking release lane. DSH 0.1.2-alpha.2 is recognized as preview evidence only. Other versions remain inspectable but receive no compatibility claim.
+
+## Isolated-cell admission evidence
+
+`admit-cell` executes DSH's installed `childSessionMeta` contract twice and confirms that representative children inherit one parent workspace and alias the same write target. It also reads the exact public sandbox contract, reruns capability and local-lab conformance, and binds the result to dated public DSH and cross-harness reports. It never runs a model, repository, build script, or caller-supplied workload.
+
+The selected `--dsh` installation is trusted executable input, not a sandboxed subject: review how it was installed before running the gate. Admission first requires the selected entry to resolve to the public package's declared `@deepseek-ai/dsh` CLI entry, but local manifest identity is not registry-integrity or provenance proof.
+
+The current reviewed release and preview lanes return `Incubate`: DSH's native subagent lifecycle remains authoritative, experimental Team remains out of scope, and only the missing disposable workspace plus whole-environment boundary is admitted. The report explicitly excludes roster, mailbox, task-board, ordinary child-lifecycle, and generic orchestration replacements. Unknown lanes, failed containment, or unclassified behavior return `Unsupported` and wire no executor.
 
 ## Execution-lab evidence
 

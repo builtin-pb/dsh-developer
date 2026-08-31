@@ -1,3 +1,4 @@
+import './cell-admission.test.js'
 import './capabilities.test.js'
 import './creator-export.test.js'
 import './doctor.test.js'

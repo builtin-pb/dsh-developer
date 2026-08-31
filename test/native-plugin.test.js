@@ -34,6 +34,7 @@ test('registers the canonical skill through the native DSH service', async () =>
   assert.match(registration.content, /Promote/u)
   assert.equal(registration.resourceBase.kind, 'directory')
   assert.deepEqual([...commands.keys()], [
+    'dsh-developer-admit-cell',
     'dsh-developer-capabilities',
     'dsh-developer-lab',
     'dsh-developer-doctor',
