@@ -87,3 +87,23 @@ test('requires the declared package entry on the matching DSH row', async () => 
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('blocks an incomplete upstream attachment claim for dynamic inject source', async () => {
+  const root = await generatedFixture()
+  try {
+    await writeFile(join(root, 'index.js'), [
+      "export const name = 'doctor-fixture'",
+      "const required = ['skills']",
+      'export const inject = Object.freeze(required)',
+      'export async function apply() {}',
+      '',
+    ].join('\n'), 'utf8')
+    const report = await doctorPlugin(root, { runtime: 'skip' })
+    const failed = report.checks.find((value) => value.id === 'compatibility.upstream-attachments')
+    assert.equal(failed.status, 'FAIL')
+    assert.equal(failed.evidence.code, 'UNSCOPED_INJECT_CONTRACT')
+    assert.deepEqual(failed.evidence.paths, ['index.js'])
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
