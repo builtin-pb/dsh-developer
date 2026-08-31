@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
-import { resolveDshInvocation, secretFreeEnvironment, smokeDshInstall } from '../lib/runtime.js'
+import { resolveDshInvocation, runBounded, secretFreeEnvironment, smokeDshInstall } from '../lib/runtime.js'
 
 test('passes only an explicit non-credential host environment allowlist', () => {
   const previousSecret = process.env.DEEPSEEK_API_KEY
@@ -22,6 +22,31 @@ test('passes only an explicit non-credential host environment allowlist', () => 
     if (previousNodeOptions === undefined) delete process.env.NODE_OPTIONS
     else process.env.NODE_OPTIONS = previousNodeOptions
   }
+})
+
+test('passes bounded stdin and preserves binary stdout when requested', {
+  skip: process.env.DSH_DEVELOPER_PROCESS_TEST !== '1',
+}, async () => {
+  const input = Buffer.from([0, 1, 2, 10, 13, 255])
+  const result = await runBounded(process.execPath, [
+    '-e',
+    "const chunks=[];process.stdin.on('data',c=>chunks.push(c));process.stdin.on('end',()=>process.stdout.write(Buffer.concat(chunks)))",
+  ], {
+    input,
+    encoding: null,
+    timeoutMs: 5_000,
+    outputLimit: 1_024,
+  })
+  assert.deepEqual(result.stdout, input)
+  assert.deepEqual(result.stderr, Buffer.alloc(0))
+  assert.equal(result.exitCode, 0)
+})
+
+test('rejects oversized command input before spawning', async () => {
+  await assert.rejects(
+    runBounded(process.execPath, ['-e', ''], { input: Buffer.alloc(5), inputLimit: 4 }),
+    (error) => error.code === 'COMMAND_INPUT_LIMIT',
+  )
 })
 
 test('uses offline script-disabled install and a flag-compatible uninstall', async () => {

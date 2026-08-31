@@ -6,7 +6,7 @@ import { runBounded } from '../lib/runtime.js'
 
 test('conforms the real WSL2 Bubblewrap execution lab', {
   skip: process.env.DSH_DEVELOPER_WSL_LAB_TEST !== '1',
-  timeout: 90_000,
+  timeout: 150_000,
 }, async () => {
   const report = await conformExecutionLab({
     distro: process.env.DSH_DEVELOPER_WSL_DISTRO || 'Ubuntu-22.04',
@@ -23,6 +23,7 @@ test('conforms the real WSL2 Bubblewrap execution lab', {
     'lab.resources-and-heartbeat',
     'lab.controller-crash-recovery',
     'lab.cancellation',
+    'lab.workspace-storage',
     'lab.cleanup',
   ]) {
     assert.equal(report.checks.find((value) => value.id === id)?.status, 'PASS', id)

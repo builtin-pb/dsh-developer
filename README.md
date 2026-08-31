@@ -13,6 +13,7 @@ Develop, inspect, test, harden, and ship DSH plugins from one native workflow. d
 - Reports exact DSH release or preview capability evidence without executing an audited repository
 - Runs a dated admission gate for the isolated-agent-cell gap against exact installed DSH behavior and public evidence
 - Proves a keyless WSL2/Bubblewrap execution-lab policy without executing user source
+- Opens an admitted disposable command workspace, stages a sealed full result separately, and leaves the source untouched
 - Audits manifests, references, paths, binary content, size bounds, credentials, licensing, and compatibility with Doctor
 - Produces deterministic scaffolding with fingerprinted provenance and byte-for-byte reproducibility evidence
 - Tests native registration and witnessed clean-profile DSH install, load, discovery, and uninstall with package installation offline and lifecycle scripts disabled
@@ -120,6 +121,38 @@ DSH 0.1.1-rc.2 remains the blocking release lane. DSH 0.1.2-alpha.2 is recognize
 The selected `--dsh` installation is trusted executable input, not a sandboxed subject: review how it was installed before running the gate. Admission first requires the selected entry to resolve to the public package's declared `@deepseek-ai/dsh` CLI entry, but local manifest identity is not registry-integrity or provenance proof.
 
 The current reviewed release and preview lanes return `Incubate`: DSH's native subagent lifecycle remains authoritative, experimental Team remains out of scope, and only the missing disposable workspace plus whole-environment boundary is admitted. The report explicitly excludes roster, mailbox, task-board, ordinary child-lifecycle, and generic orchestration replacements. Unknown lanes, failed containment, or unclassified behavior return `Unsupported` and wire no executor.
+
+### Use the admitted isolated-cell API
+
+The public executor requires the exact report object returned by `inspectIsolatedCellAdmission()` in the same process. A copied, parsed, fabricated, unsupported, or provider-less report is not a grant. The admitted provider and distro are taken from that report; callers cannot substitute either at cell-open time.
+
+    import { rm } from 'node:fs/promises'
+    import { inspectIsolatedCellAdmission } from 'dsh-developer/cell-admission'
+    import { openIsolatedCell } from 'dsh-developer/isolated-cell'
+
+    const admission = await inspectIsolatedCellAdmission('D:/path/to/dsh.cmd', {
+      distro: 'Ubuntu-22.04',
+    })
+    const cell = await openIsolatedCell('D:/path/to/plugin', { admission })
+    let result
+    try {
+      const command = await cell.exec('/usr/bin/find . -type f -print')
+      result = await cell.stageResult()
+      // Review or copy result.staging. It is a complete result tree, not a patch.
+    } finally {
+      await cell.dispose()
+    }
+    if (result?.stagingRoot) {
+      await rm(result.stagingRoot, { recursive: true, force: true })
+    }
+
+One public cell may be active per plugin process, and one operation may be active in that cell. `stageResult()` is single-use: it acquires two matching bounded snapshots, seals the cell, and returns created, modified, and deleted path lists. A changed result is materialized in a new private host temporary directory; it never overwrites the source. Cell disposal verifies removal of the WSL workspace but deliberately preserves the staged host result. The caller owns the exact `stagingRoot` returned and must remove it after review, copy, or promotion. If staging and its cleanup both fail, the error identifies the retained root.
+
+Transfer accepts bounded ordinary UTF-8 text trees only. Binary files, links, special files, dependency trees, credential-shaped paths or content, nonportable names, case collisions, mutation during capture, and tar omissions fail closed. Cell-wide and per-operation cancellation signals are combined. Aborting the cell-wide signal starts disposal automatically; awaiting the interrupted operation or `dispose()` also waits for verified cleanup. Disposal stops admission of new work, cancels and settles an in-flight command or snapshot, reaps its process scope, and releases capacity only after cleanup is verified.
+
+The current provider admits an 8 MiB or 2,048-entry workspace-growth threshold and proves termination within conservative 16 MiB and 4,096-entry observed ceilings. A controller outside the private PID namespace monitors logical size and entries, freezes and kills the complete systemd cgroup directly, and fails the admission lab if either stop ceiling is exceeded. The same scope also enforces a 512 KiB per-file limit, 256 MiB memory ceiling, zero swap, 32 tasks, fixed CPU quota, and systemd write bandwidth and IOPS controls. Byte-growth and zero-byte entry-growth fixtures are part of blocking conformance, followed by verified root removal.
+
+DSH remains responsible for model inference and its provider connection. The isolated cell is the credential-free, network-free boundary for model-visible plugin files and commands; provider credentials are never copied into it.
 
 ## Execution-lab evidence
 
