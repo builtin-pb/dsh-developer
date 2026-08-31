@@ -17,8 +17,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '22.18.0'
       - run: npm run validate
@@ -38,13 +38,14 @@ jobs:
           - dsh: 0.1.2-alpha.2
             claim: preview
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '22.18.0'
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/setup@v2
         with:
           version: '11.7.0'
+          install: false
       - name: Install exact DSH lane without lifecycle scripts
         shell: pwsh
         run: |
@@ -63,7 +64,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Upload capability evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dsh-capabilities-${{ matrix.dsh }}
           path: ${{ runner.temp }}/dsh-capabilities-${{ matrix.dsh }}.json
@@ -75,13 +76,14 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '22.18.0'
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/setup@v2
         with:
           version: '11.7.0'
+          install: false
       - name: Install exact release and preview lanes
         shell: pwsh
         run: |
@@ -126,7 +128,7 @@ jobs:
           if (-not $preview.ok) { Write-Output '::warning::The advisory DSH preview lifecycle failed; inspect the uploaded matrix.' }
       - name: Upload compatibility evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dsh-compatibility-matrix
           path: |
