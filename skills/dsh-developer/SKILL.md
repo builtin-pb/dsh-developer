@@ -22,13 +22,17 @@ Own one attempt from stable snapshot through handoff. Return verified results or
 
 Load [the safety boundary](references/safety.md) before untrusted source. For repository-plus-core work, inspect capabilities before Doctor, audit before edits, and keep one authorized change-set. Broader effects need new approval.
 
-For Codex CLI use, resolve the plugin root two levels above this skill and run `bin/dsh-developer.js` with Node. In DSH shells, use `DSH_DEVELOPER_BIN` under the surface's sandbox and approval policy.
+In DSH agents, prefer `dsh_developer` for the five evidence operations; it cannot promote. Otherwise run the plugin's `bin/dsh-developer.js`; DSH shells expose it as `DSH_DEVELOPER_BIN` under their normal policy.
 
 ## Inspect and compose
 
 DSH Web:
 
     /dsh-developer-capabilities {}
+
+DSH agent:
+
+    dsh_developer {"operation":"capabilities"}
 
 CLI:
 
@@ -50,7 +54,7 @@ Treat changed exports, declarations, entries, dependency contracts, metadata, an
 
     node bin/dsh-developer.js compatibility --source <plugin-directory> --release-dsh <path> --preview-dsh <path>
 
-The matrix verifies official entries, reruns capability evidence, and witnesses clean-profile install/load/discovery/uninstall. DSH 0.1.1-rc.2 is blocking; 0.1.2-alpha.2 is advisory. Keep preview failure visible without turning it into release failure. Finish with an unchanged source fingerprint, drift classification, and matrix digest.
+The matrix verifies official entries, capabilities, and clean-profile install/load/discovery/uninstall. DSH 0.1.1-rc.2 is blocking; 0.1.2-alpha.2 is advisory. Keep preview failure visible without making it release failure. Finish with source fingerprint, drift, and digest.
 
 ## Promote
 

@@ -38,7 +38,7 @@
     "skills"
   ],
   "scripts": {
-    "check": "node --check index.js && node --check bin/dsh-developer.js && node --check lib/cell-admission.js && node --check lib/cell-admission-grant.js && node --check lib/cell-admission-internal.js && node --check lib/cli-options.js && node --check lib/compatibility.js && node --check lib/compatibility-internal.js && node --check lib/dsh-installation.js && node --check lib/isolated-cell.js && node --check lib/isolated-cell-internal.js && node --check lib/lab/wsl-bubblewrap.js && node --check lib/lab/crash-controller.js && node --check lib/lab/text-tar.js && node --check lib/profile-preflight.js && node --check lib/profile-preflight-internal.js && node --check lib/upstream-impact.js && node --check lib/upstream-impact-internal.js",
+    "check": "node --check index.js && node --check bin/dsh-developer.js && node --check lib/cell-admission.js && node --check lib/cell-admission-grant.js && node --check lib/cell-admission-internal.js && node --check lib/cli-options.js && node --check lib/compatibility.js && node --check lib/compatibility-internal.js && node --check lib/dsh-installation.js && node --check lib/isolated-cell.js && node --check lib/isolated-cell-internal.js && node --check lib/lab/wsl-bubblewrap.js && node --check lib/lab/crash-controller.js && node --check lib/lab/text-tar.js && node --check lib/native-tool.js && node --check lib/native-tool-internal.js && node --check lib/profile-preflight.js && node --check lib/profile-preflight-internal.js && node --check lib/upstream-impact.js && node --check lib/upstream-impact-internal.js",
     "test": "node test/run.js",
     "validate": "npm run check && npm test"
   },
@@ -53,7 +53,8 @@
         "appExit",
         "commands",
         "shellEnv",
-        "skills"
+        "skills",
+        "tools"
       ]
     }
   },

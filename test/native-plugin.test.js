@@ -6,6 +6,7 @@ test('registers the canonical skill through the native DSH service', async () =>
   let registration
   const commands = new Map()
   let shellContribution
+  let nativeTool
   await apply({
     skills: {
       register(value) {
@@ -25,9 +26,15 @@ test('registers the canonical skill through the native DSH service', async () =>
         return () => {}
       },
     },
+    tools: {
+      register(value) {
+        nativeTool = value
+        return () => {}
+      },
+    },
   })
   assert.equal(name, 'dsh-developer')
-  assert.deepEqual(inject, ['skills', 'commands', 'shellEnv'])
+  assert.deepEqual(inject, ['skills', 'commands', 'shellEnv', 'tools'])
   assert.equal(registration.name, 'dsh-developer')
   assert.equal(registration.source, 'bundled')
   assert.equal(registration.invocation.modelInvocable, true)
@@ -45,6 +52,9 @@ test('registers the canonical skill through the native DSH service', async () =>
   ])
   assert.equal(shellContribution.name, 'dsh-developer')
   assert.match(shellContribution.resolve().DSH_DEVELOPER_BIN, /bin[\\/]dsh-developer\.js$/u)
+  assert.equal(nativeTool.name, 'dsh_developer')
+  assert.deepEqual(nativeTool.parameters.required, ['operation'])
+  assert.equal(nativeTool.output.schema.additionalProperties, false)
   const result = await commands.get('dsh-developer-doctor').handler({
     rawInput: JSON.stringify({
       source: 'examples/hello-dsh.creator.json',

@@ -2,9 +2,10 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { registerNativeCommands } from './lib/native-commands.js'
+import { hasNativeTool, registerNativeTool } from './lib/native-tool.js'
 
 export const name = 'dsh-developer'
-export const inject = ['skills', 'commands', 'shellEnv']
+export const inject = ['skills', 'commands', 'shellEnv', 'tools']
 
 const skillDirectory = dirname(fileURLToPath(new URL('./skills/dsh-developer/SKILL.md', import.meta.url)))
 const cliPath = fileURLToPath(new URL('./bin/dsh-developer.js', import.meta.url))
@@ -28,6 +29,7 @@ async function completeLoadProbe(ctx) {
   if (typeof home !== 'string' || home.length === 0) throw new Error('dsh-developer: load probe requires DSH_HOME')
   const requestExit = typeof ctx.get === 'function' ? ctx.get('appExit') : undefined
   if (typeof requestExit !== 'function') throw new Error('dsh-developer: load probe requires the DSH app-exit service')
+  if (!hasNativeTool(ctx)) throw new Error('dsh-developer: native model tool registration was not visible')
   await writeFile(join(resolve(home), LOAD_WITNESS_FILENAME), token + '\n', {
     encoding: 'utf8',
     flag: 'wx',
@@ -56,6 +58,7 @@ export async function apply(ctx) {
       return { DSH_DEVELOPER_BIN: cliPath }
     },
   })
+  registerNativeTool(ctx)
   registerNativeCommands(ctx)
   await completeLoadProbe(ctx)
 }

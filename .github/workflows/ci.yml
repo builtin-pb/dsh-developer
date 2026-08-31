@@ -106,7 +106,8 @@ jobs:
             @{ Lane = 'release'; Profile = 'headless'; Dsh = $releaseDsh; Blocking = $true },
             @{ Lane = 'release'; Profile = 'web'; Dsh = $releaseDsh; Blocking = $true },
             @{ Lane = 'preview'; Profile = 'headless'; Dsh = $previewDsh; Blocking = $false },
-            @{ Lane = 'preview'; Profile = 'web'; Dsh = $previewDsh; Blocking = $false }
+            @{ Lane = 'preview'; Profile = 'web'; Dsh = $previewDsh; Blocking = $false },
+            @{ Lane = 'preview'; Profile = 'acp'; Dsh = $previewDsh; Blocking = $false }
           )
           foreach ($case in $preflightCases) {
             $preflight = Join-Path $env:RUNNER_TEMP "dsh-profile-preflight-$($case.Lane)-$($case.Profile).json"
