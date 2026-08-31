@@ -1,4 +1,4 @@
-# Native DSH bundle entry. The relative module is anchored to this patch.
+# Native DSH bundle entry. DSH resolves the installed package's main module from the profile.
 - insert:
     - id: dsh-developer
-      name: './index.js'
+      name: 'dsh-developer'

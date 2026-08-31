@@ -1,5 +1,8 @@
+import './capabilities.test.js'
 import './creator-export.test.js'
 import './doctor.test.js'
+import './execution-lab.test.js'
+import './execution-lab.integration.test.js'
 import './files.test.js'
 import './native-plugin.test.js'
 import './promotion.test.js'

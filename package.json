@@ -6,7 +6,9 @@
   "main": "./index.js",
   "exports": {
     ".": "./index.js",
+    "./capabilities": "./lib/capabilities.js",
     "./doctor": "./lib/doctor.js",
+    "./execution-lab": "./lib/execution-lab.js",
     "./promote": "./lib/promote.js"
   },
   "bin": {
@@ -23,7 +25,7 @@
     "skills"
   ],
   "scripts": {
-    "check": "node --check index.js && node --check bin/dsh-developer.js",
+    "check": "node --check index.js && node --check bin/dsh-developer.js && node --check lib/lab/wsl-bubblewrap.js && node --check lib/lab/crash-controller.js",
     "test": "node test/run.js",
     "validate": "npm run check && npm test"
   },

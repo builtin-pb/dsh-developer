@@ -93,7 +93,7 @@ test('renders a deterministic dual DSH and Codex bundle', () => {
   const second = renderGeneratedBundle(value)
   assert.equal(first.fingerprint, second.fingerprint)
   assert.deepEqual([...first.files], [...second.files])
-  assert.match(first.files.get('cordis.patch.yml'), /name: '\.\/index\.js'/u)
+  assert.match(first.files.get('cordis.patch.yml'), /name: 'sample-plugin'/u)
   assert.match(first.files.get('index.js'), /export async function apply/u)
   assert.match(first.files.get('.codex-plugin/plugin.json'), /"name": "sample-plugin"/u)
   assert.match(first.files.get('skills/sample-plugin/SKILL.md'), /name: sample-plugin/u)

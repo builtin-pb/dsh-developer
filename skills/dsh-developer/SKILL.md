@@ -1,65 +1,72 @@
 ---
 name: dsh-developer
-description: "Promote a canonical DSH Creator export into a tested, installable native DSH and Codex plugin bundle, or audit an existing DSH plugin with Doctor. Use for DSH plugin creation, packaging, compatibility, safety, testing, and release-readiness work."
+description: "Develop DSH plugins through exact capability inspection, Doctor audits, and deterministic promotion of Creator exports into tested native DSH and Codex bundles. Use for plugin creation, packaging, compatibility, safety, testing, release readiness, or evidence-based evaluation of a missing DSH capability."
 ---
 
 # DSH Developer
 
 The single plugin you need for DSH
 
-Own one accountable workflow from source snapshot through handoff. Never claim a releaseable bundle when a blocking check failed.
+Own one accountable workflow from source snapshot through handoff. Never claim a releaseable bundle after a blocking failure.
 
-## Choose the journey
+## Route the request
 
-- For a saved DSH Creator export, use the promotion journey below.
-- For an existing plugin repository, run Doctor first and propose a bounded change-set; do not modify the repository unless the user separately authorizes it.
-- For an unstructured idea, help shape it in Creator and stop at a canonical export before promotion.
+- Saved Creator export: use **Promote**.
+- Existing repository: run **Audit**, then propose a bounded change; edit only with separate user authorization.
+- DSH runtime or core-level feature: inspect capabilities, then use [the core-gap rules](references/core-incubation.md).
+- Execution-bearing core incubation: also use [the local lab gate](references/execution-lab.md). PASS proves a boundary, not feature admission or permission to execute caller code.
+- Unstructured idea: shape it in Creator and stop at a canonical export.
 
-Read [the Creator export contract](references/creator-export.md) only when creating, diagnosing, or promoting an export. Read [the safety boundary](references/safety.md) before processing untrusted source.
+If repository work and a core feature overlap, inspect capabilities before Doctor, audit before edits, and propose one bounded change-set. New evidence or a materially broader effect needs new approval.
+
+Read [the Creator contract](references/creator-export.md) only for export creation, diagnosis, or promotion. Read [the safety boundary](references/safety.md) before untrusted source.
+
+For CLI use in Codex, resolve the installed plugin root two levels above this skill and run `bin/dsh-developer.js` with Node. Checkout examples below assume that root. In a DSH shell, use the injected absolute `DSH_DEVELOPER_BIN` under its normal sandbox and approval policy.
+
+## Inspect capabilities
+
+DSH Web:
+
+    /dsh-developer-capabilities {}
+
+CLI:
+
+    node bin/dsh-developer.js capabilities --dsh <path-to-dsh>
+
+This inspects the installed DSH without loading an arbitrary repository. Record exact DSH, Node, platform, lane, package identity, and digest. `behavior` means exercised; `inventory` means installed only. Absence does not cover other profiles. Prefer adequate native behavior; never promote preview or inventory evidence to a blocking claim.
 
 ## Promote
 
-1. Doctor: acquire one stable snapshot and run all source and environment checks before materialization. The blocking public target is DSH 0.1.1-rc.2; official master is advisory.
-2. Capture: state the exact source fingerprint, absent destination, and intended actions. Obtain approval before materialization.
-3. Materialize: in the DSH Web app, use the native user command after approval:
+1. **Doctor:** acquire one stable snapshot and run all source/environment checks. DSH 0.1.1-rc.2 is blocking; official master is advisory.
+2. **Capture:** state source fingerprint, absent destination, and exact effects. Obtain approval before materialization.
+3. **Materialize:** after approval, use DSH Web:
 
        /dsh-developer-promote {"source":"<creator.json>","output":"<new-directory>"}
 
-   Headless and automation surfaces do not consume DSH slash commands. When a DSH shell tool is composed, use the plugin's injected absolute launcher under the normal DSH sandbox and approval policy:
-
-       PowerShell: node $env:DSH_DEVELOPER_BIN promote --source <creator.json> --output <new-directory> --dsh <path-to-dsh>
-       Bash: node "$DSH_DEVELOPER_BIN" promote --source <creator.json> --output <new-directory> --dsh <path-to-dsh>
-
-   In Codex, resolve the installed plugin root as two parent directories above this SKILL.md resource and run its bin/dsh-developer.js with Node. In a repository checkout, the equivalent command is:
+   Or use the CLI:
 
        node bin/dsh-developer.js promote --source <creator.json> --output <new-directory> --dsh <path-to-dsh>
 
-4. Verify: trust the final Doctor gate, not intermediate success. It checks manifests, skill and reference integrity, paths, secrets, reproducibility, generated tests, and clean-profile DSH install/discovery/uninstall.
-5. Handoff: report the new destination, source and bundle fingerprints, Doctor digest, compatibility target, install command, and any retained recovery directory.
+   DSH shells may invoke `node $env:DSH_DEVELOPER_BIN ...` in PowerShell or `node "$DSH_DEVELOPER_BIN" ...` in Bash. Headless and automation surfaces do not consume slash commands.
+4. **Verify and hand off:** trust the final Doctor gate, not intermediate success. Report destination, source/bundle fingerprints, Doctor digest, compatibility target, install command, and retained recovery directory.
 
-Promotion creates one new directory only. The output basename must equal the export name. It never replaces, merges, publishes, installs into a user profile, or changes GitHub state.
+The final gate checks manifests, skill/reference integrity, paths, secrets, reproducibility, generated tests, and witnessed clean-profile DSH install/load/discovery/uninstall. Promotion creates one absent directory whose basename equals the export name. It never replaces, merges, publishes, installs into a real profile, or changes GitHub state.
 
 ## Audit
 
-In the DSH Web app, run:
+DSH Web:
 
     /dsh-developer-doctor {"source":"<creator.json-or-plugin-directory>","skipRuntime":false}
 
-In a model-driven DSH surface with a shell, use DSH_DEVELOPER_BIN as above with the doctor subcommand. In Codex, resolve the installed plugin root from this skill resource. In a repository checkout, run:
+CLI:
 
     node bin/dsh-developer.js doctor --source <creator.json-or-plugin-directory> --dsh <path-to-dsh>
 
-Use --skip-runtime only for an exploratory audit. A skipped runtime check is never release evidence and is forbidden during promotion.
+Use `--skip-runtime` only for exploration; it is never release evidence and is forbidden during promotion. Report blocking failures before warnings. Do not execute arbitrary repository code for diagnosis; controlled execution is reserved for byte-for-byte reproducible generated output.
 
-Summarize blocking failures first, then advisory warnings. Do not execute arbitrary repository code merely to diagnose it; controlled execution is reserved for byte-for-byte reproducible generated output.
+## Failure and authority
 
-## Failure and cancellation
-
-- Stop on an invalid fingerprint, detected credential, unsafe path/link/file, mutable source, incompatible DSH runtime, failed generated test, or failed lifecycle smoke.
-- If candidate generation began, preserve and identify its staging directory for recovery.
-- On cancellation, schedule no new work. Do not replay an ambiguous external request.
-- Never weaken a check or safety rule to make a candidate pass.
-
-## Separate authority
-
-Publishing, installing into a real user profile, applying changes to an existing repository, registry actions, and GitHub mutations are separate user-authorized actions.
+- Stop on invalid fingerprints, credentials, unsafe paths/files/links, mutation, incompatible DSH, failed tests, or failed lifecycle smoke.
+- If generation began, preserve and identify staging. On cancellation schedule nothing new and never replay an ambiguous external request.
+- Never weaken a safety rule to pass.
+- Publishing, real-profile installation, repository edits, registries, and GitHub mutations are separate user-authorized effects.

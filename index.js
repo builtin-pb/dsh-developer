@@ -1,5 +1,5 @@
-import { readFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile, writeFile } from 'node:fs/promises'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { registerNativeCommands } from './lib/native-commands.js'
 
@@ -8,6 +8,7 @@ export const inject = ['skills', 'commands', 'shellEnv']
 
 const skillDirectory = dirname(fileURLToPath(new URL('./skills/dsh-developer/SKILL.md', import.meta.url)))
 const cliPath = fileURLToPath(new URL('./bin/dsh-developer.js', import.meta.url))
+const LOAD_WITNESS_FILENAME = '.dsh-developer-load-witness'
 
 function parseSkill(markdown) {
   const match = /^---\r?\nname:\s*([a-z0-9-]+)\r?\ndescription:\s*"((?:[^"\\]|\\.)*)"\r?\n---\r?\n([\s\S]+)$/u.exec(markdown)
@@ -17,6 +18,22 @@ function parseSkill(markdown) {
     description: JSON.parse('"' + match[2] + '"'),
     content: match[3],
   }
+}
+
+async function completeLoadProbe(ctx) {
+  const token = process.env.DSH_DEVELOPER_LOAD_PROBE
+  if (token === undefined) return
+  if (!/^[a-f0-9]{64}$/u.test(token)) throw new Error('dsh-developer: invalid load-probe token')
+  const home = process.env.DSH_HOME
+  if (typeof home !== 'string' || home.length === 0) throw new Error('dsh-developer: load probe requires DSH_HOME')
+  const requestExit = typeof ctx.get === 'function' ? ctx.get('appExit') : undefined
+  if (typeof requestExit !== 'function') throw new Error('dsh-developer: load probe requires the DSH app-exit service')
+  await writeFile(join(resolve(home), LOAD_WITNESS_FILENAME), token + '\n', {
+    encoding: 'utf8',
+    flag: 'wx',
+    mode: 0o600,
+  })
+  requestExit(0)
 }
 
 export async function apply(ctx) {
@@ -40,4 +57,5 @@ export async function apply(ctx) {
     },
   })
   registerNativeCommands(ctx)
+  await completeLoadProbe(ctx)
 }

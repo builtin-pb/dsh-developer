@@ -17,3 +17,47 @@ jobs:
           node-version: '22.18'
       - run: npm run validate
       - run: npm pack --dry-run
+
+  compatibility:
+    name: DSH ${{ matrix.dsh }} (${{ matrix.claim }})
+    runs-on: windows-latest
+    continue-on-error: ${{ matrix.claim == 'preview' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dsh: 0.1.1-rc.2
+            claim: blocking
+          - dsh: 0.1.2-alpha.2
+            claim: preview
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.18'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11.7.0'
+      - name: Install exact DSH lane without lifecycle scripts
+        shell: pwsh
+        run: |
+          $runtime = Join-Path $env:RUNNER_TEMP "dsh-${{ matrix.dsh }}"
+          New-Item -ItemType Directory -Force -Path $runtime | Out-Null
+          npm install --prefix $runtime --ignore-scripts --no-audit --no-fund --no-package-lock --no-save "@deepseek-ai/dsh@${{ matrix.dsh }}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "DSH_RUNTIME=$runtime" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Record exact-lane capability evidence
+        shell: pwsh
+        run: |
+          $dsh = Join-Path $env:DSH_RUNTIME "node_modules/.bin/dsh.cmd"
+          $evidence = Join-Path $env:RUNNER_TEMP "dsh-capabilities-${{ matrix.dsh }}.json"
+          node bin/dsh-developer.js capabilities --dsh $dsh --json | Tee-Object -FilePath $evidence
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload capability evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-capabilities-${{ matrix.dsh }}
+          path: ${{ runner.temp }}/dsh-capabilities-${{ matrix.dsh }}.json
+          if-no-files-found: warn
+          retention-days: 14

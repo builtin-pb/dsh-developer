@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { appendFile, mkdtemp, rm, unlink } from 'node:fs/promises'
+import { appendFile, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -65,6 +65,24 @@ test('treats partial provenance as a blocking integrity failure', async () => {
     assert.equal(check.status, 'FAIL')
     assert.equal(check.blocking, true)
     assert.equal(report.ok, false)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('requires the declared package entry on the matching DSH row', async () => {
+  const root = await generatedFixture()
+  try {
+    await writeFile(join(root, 'cordis.patch.yml'), [
+      '- insert:',
+      '    - id: doctor-fixture',
+      "      name: 'different-package'",
+      '    - id: unrelated-row',
+      "      name: 'doctor-fixture'",
+      '',
+    ].join('\n'), 'utf8')
+    const report = await doctorPlugin(root, { runtime: 'skip' })
+    assert.equal(report.checks.find((value) => value.id === 'dsh.entrypoint').status, 'FAIL')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
