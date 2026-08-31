@@ -14,6 +14,7 @@ Own one accountable workflow from source snapshot through handoff. Never claim a
 - Saved Creator export: use **Promote**.
 - Existing repository: run **Audit**, then propose a bounded change; edit only with separate user authorization.
 - DSH runtime or core-level feature: inspect capabilities, then use [the core-gap rules](references/core-incubation.md).
+- Exact release-to-preview compatibility: run the compatibility matrix; behavior execution is limited to product source or reproducible promoted bytes.
 - Execution-bearing core incubation: also use [the local lab gate](references/execution-lab.md). PASS proves a boundary, not feature admission or permission to execute caller code.
 - Isolated child workspace or whole-environment isolation: run [the isolated-cell admission](references/isolated-cell.md) after both gates.
 - Unstructured idea: shape it in Creator and stop at a canonical export.
@@ -35,6 +36,18 @@ CLI:
     node bin/dsh-developer.js capabilities --dsh <path-to-dsh>
 
 This inspects the installed DSH without loading an arbitrary repository. Record exact DSH, Node, platform, lane, package identity, and digest. `behavior` means exercised; `inventory` means installed only. Absence does not cover other profiles. Prefer adequate native behavior; never promote preview or inventory evidence to a blocking claim.
+
+## Exercise compatibility
+
+DSH Web (the running DSH is the release lane unless `releaseDsh` is supplied):
+
+    /dsh-developer-compatibility {"source":"<plugin-directory>","previewDsh":"<path-to-preview-dsh>"}
+
+CLI:
+
+    node bin/dsh-developer.js compatibility --source <plugin-directory> --release-dsh <path> --preview-dsh <path>
+
+The matrix first runs non-runtime Doctor, establishes both package-declared official entries, reruns capability evidence, and then performs witnessed clean-profile install/load/discovery/uninstall on each exact lane. DSH 0.1.1-rc.2 is blocking and 0.1.2-alpha.2 is advisory. A preview failure remains visible but does not counterfeit a release failure. Never execute arbitrary repository code: lifecycle behavior is admitted only for this product source or byte-for-byte reproducible promoted output. Finish with a fresh matching source fingerprint and report capability drift plus the matrix digest.
 
 ## Promote
 

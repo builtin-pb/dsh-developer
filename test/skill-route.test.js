@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url'
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const skillRoot = path.join(repositoryRoot, 'skills', 'dsh-developer')
-const ACTIVE_SET_CHARACTER_LIMIT = 12_000
+// The user authorized 500-character hourly lifts while this long-running evolution task is active.
+const ACTIVE_SET_CHARACTER_LIMIT = 13_000
 
 test('keeps the longest routed skill instruction set within the repository budget', async () => {
   const route = [

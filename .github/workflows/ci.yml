@@ -3,24 +3,31 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   deterministic:
     runs-on: windows-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22.18'
+          node-version: '22.18.0'
       - run: npm run validate
       - run: npm pack --dry-run
 
-  compatibility:
+  lane-evidence:
     name: DSH ${{ matrix.dsh }} (${{ matrix.claim }})
     runs-on: windows-latest
+    timeout-minutes: 15
     continue-on-error: ${{ matrix.claim == 'preview' }}
     strategy:
       fail-fast: false
@@ -34,7 +41,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22.18'
+          node-version: '22.18.0'
       - uses: pnpm/action-setup@v4
         with:
           version: '11.7.0'
@@ -60,4 +67,48 @@ jobs:
           name: dsh-capabilities-${{ matrix.dsh }}
           path: ${{ runner.temp }}/dsh-capabilities-${{ matrix.dsh }}.json
           if-no-files-found: warn
+          retention-days: 14
+
+  product-matrix:
+    name: Product release-to-preview matrix
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.18.0'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11.7.0'
+      - name: Install exact release and preview lanes
+        shell: pwsh
+        run: |
+          $release = Join-Path $env:RUNNER_TEMP 'dsh-release'
+          $preview = Join-Path $env:RUNNER_TEMP 'dsh-preview'
+          New-Item -ItemType Directory -Force -Path $release, $preview | Out-Null
+          npm install --prefix $release --ignore-scripts --no-audit --no-fund --no-package-lock --no-save '@deepseek-ai/dsh@0.1.1-rc.2'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm install --prefix $preview --ignore-scripts --no-audit --no-fund --no-package-lock --no-save '@deepseek-ai/dsh@0.1.2-alpha.2'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "DSH_RELEASE=$release" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "DSH_PREVIEW=$preview" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Exercise this plugin across both lanes
+        shell: pwsh
+        run: |
+          $releaseDsh = Join-Path $env:DSH_RELEASE 'node_modules/.bin/dsh.cmd'
+          $previewDsh = Join-Path $env:DSH_PREVIEW 'node_modules/.bin/dsh.cmd'
+          $evidence = Join-Path $env:RUNNER_TEMP 'dsh-compatibility-matrix.json'
+          node bin/dsh-developer.js compatibility --source . --release-dsh $releaseDsh --preview-dsh $previewDsh --json | Tee-Object -FilePath $evidence
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $report = Get-Content -Raw $evidence | ConvertFrom-Json
+          $preview = $report.lanes | Where-Object { $_.id -eq 'preview' }
+          if (-not $preview.ok) { Write-Output '::warning::The advisory DSH preview lifecycle failed; inspect the uploaded matrix.' }
+      - name: Upload compatibility evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-compatibility-matrix
+          path: ${{ runner.temp }}/dsh-compatibility-matrix.json
+          if-no-files-found: error
           retention-days: 14

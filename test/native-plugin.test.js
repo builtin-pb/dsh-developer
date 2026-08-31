@@ -36,6 +36,7 @@ test('registers the canonical skill through the native DSH service', async () =>
   assert.deepEqual([...commands.keys()], [
     'dsh-developer-admit-cell',
     'dsh-developer-capabilities',
+    'dsh-developer-compatibility',
     'dsh-developer-lab',
     'dsh-developer-doctor',
     'dsh-developer-promote',

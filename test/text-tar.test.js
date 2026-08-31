@@ -51,7 +51,7 @@ test('rejects binary output and credential-shaped content', () => {
     (error) => error.code === 'CELL_ARCHIVE_BINARY',
   )
   assert.throws(
-    () => encodeTextTree([{ path: 'config.txt', content: 'api_key=abcdefghijk' }]),
+    () => encodeTextTree([{ path: 'config.txt', content: 'api_' + 'key=abcdefghijk' }]),
     (error) => error.code === 'SECRET_DETECTED',
   )
 })

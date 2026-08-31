@@ -1,207 +1,185 @@
 # dsh-developer
 
-The single plugin you need for DSH
+> **The single plugin you need for DSH**
 
-Proudly designed and implemented by [MetaFlow](https://github.com/builtin-pb/metaflow).
+Proudly designed and implemented by [MetaFlow](https://github.com/builtin-pb/metaflow), **dsh-developer** is an unofficial community plugin that fixes the dangerous last mile of DSH plugin development: a plugin can look finished in its checkout and still fail to register, load, survive the next DSH lane, or cross a release boundary safely.
 
-Develop, inspect, test, harden, and ship DSH plugins from one native workflow. dsh-developer works natively in DSH and exposes the same canonical Agent Skill to Codex. It inspects exact DSH capability evidence, proves a strict local execution-lab boundary, promotes fingerprinted Creator exports into deterministic installable bundles, audits Creator exports and existing plugin repositories with Doctor, and proves generated packages against the real DSH lifecycle before handoff.
+One native workflow inspects the exact DSH installation, audits Creator exports and existing repositories, deterministically builds a new plugin bundle, and exercises trusted bytes across exact release and preview lanes. It witnesses clean-profile install, load, discovery, and uninstall, classifies capability drift, and emits stable evidence before handoff. Caller-supplied repositories stay read-only and are not executed; generated bundles run only after their bytes reproduce from fingerprinted provenance.
 
-## What it does
+[![CI](https://github.com/builtin-pb/dsh-developer/actions/workflows/ci.yml/badge.svg)](https://github.com/builtin-pb/dsh-developer/actions/workflows/ci.yml) [![Node.js 22.18+](https://img.shields.io/badge/Node.js-22.18%2B-339933?logo=nodedotjs&logoColor=white)](package.json) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-- Guides Creator exports and existing repositories through one accountable development workflow
-- Registers natively with DSH and shares one Agent Skill with Codex
-- Reports exact DSH release or preview capability evidence without executing an audited repository
-- Runs a dated admission gate for the isolated-agent-cell gap against exact installed DSH behavior and public evidence
-- Proves a keyless WSL2/Bubblewrap execution-lab policy without executing user source
-- Opens an admitted disposable command workspace, stages a sealed full result separately, and leaves the source untouched
-- Audits manifests, references, paths, binary content, size bounds, credentials, licensing, and compatibility with Doctor
-- Produces deterministic scaffolding with fingerprinted provenance and byte-for-byte reproducibility evidence
-- Tests native registration and witnessed clean-profile DSH install, load, discovery, and uninstall with package installation offline and lifecycle scripts disabled
-- Creates one new output through private staging and an atomic no-replace commit
+```text
+Creator export  ->  Doctor  ->  deterministic bundle  ->  real DSH lifecycle proof
+Existing plugin ->  read-only Doctor report           ->  concrete fixes to make
+Trusted bundle  ->  release + preview matrix          ->  classified drift + stable digest
+```
 
-No model runs during deterministic promotion or lab conformance, so no API key is needed.
+No provider key is needed for capability inspection, Doctor, deterministic promotion, the compatibility matrix, or the execution-lab checks.
 
-## Five-minute quickstart
+## Get a useful result in five minutes
 
-Requirements:
+The currently verified release path is Windows-first and requires:
 
 - Node.js 22.18 or newer
-- pnpm 11.7.0 (the lifecycle package manager pinned in CI)
-- DSH 0.1.1-rc.2 available as `dsh` on PATH (or pass `--dsh <path-to-dsh>`)
-- Windows on a filesystem that passes the no-replace directory-rename probe
+- DSH 0.1.1-rc.2 on `PATH` (or its exact executable passed with `--dsh`)
+- pnpm 11.7.0 for the pinned DSH lifecycle environment
+- A filesystem that passes the no-replace directory-rename probe used during promotion
 
-From this repository:
+Clone, verify, and install the plugin into a DSH Web profile:
 
-    npm test
-    node bin/dsh-developer.js capabilities --dsh D:\path\to\dsh.cmd
-    node bin/dsh-developer.js admit-cell --dsh D:\path\to\dsh.cmd --wsl-distro Ubuntu-22.04
-    node bin/dsh-developer.js doctor --source examples/hello-dsh.creator.json
-    node bin/dsh-developer.js promote --source examples/hello-dsh.creator.json --output ..\hello-dsh
-    cd ..\hello-dsh
-    npm test
+```powershell
+git clone https://github.com/builtin-pb/dsh-developer.git
+cd dsh-developer
+npm test
+dsh plugin --profile web add .
+dsh web
+```
 
-The output basename must match the export name, and the destination must not exist. Promotion retains a named staging directory when a final gate fails.
+Inside DSH Web, inspect the running DSH and audit a plugin without executing that plugin repository:
 
-Install the generated plugin into a profile only after reviewing it:
+```text
+/dsh-developer-capabilities {}
+/dsh-developer-doctor {"source":"C:/path/to/plugin","skipRuntime":false}
+```
 
-    dsh plugin --profile headless add .
-    dsh --profile headless --dump-config
+Have a saved Creator export? Turn it into a new tested bundle:
 
-Installation into your real profile is deliberately separate from promotion.
+```text
+/dsh-developer-promote {"source":"C:/path/to/hello-dsh.creator.json","output":"C:/path/to/hello-dsh"}
+```
 
-On Windows, optionally prove the strict local lab when WSL2, systemd, Bubblewrap, and `prlimit` are available:
+The output directory must not exist, and its basename must match the exported plugin name. Promotion does not install into a real profile, replace an existing directory, publish a package, or change GitHub state. Review the result, then install it deliberately:
 
-    node bin/dsh-developer.js lab --wsl-distro Ubuntu-22.04
+```powershell
+dsh plugin --profile headless add C:\path\to\hello-dsh
+dsh --profile headless --dump-config
+```
 
-## Use as a native DSH plugin
+## Pick the route that matches your work
 
-Install this repository itself into the DSH Web profile for direct slash commands:
+| You have | Start here | What you get |
+| --- | --- | --- |
+| A DSH Creator JSON export | `promote` | A new deterministic DSH + Codex plugin bundle, or a retained staging directory with the blocking failure |
+| An existing plugin repository | `doctor` | A read-only audit of structure, safety, compatibility, documentation, and native lifecycle eligibility |
+| An unfamiliar DSH installation | `capabilities` | Exact runtime, package, lane, evidence-strength, and digest information |
+| This product source or a reproducible promoted bundle | `compatibility` | Witnessed behavior on exact release and preview DSH lanes, plus classified revalidation triggers |
+| A Windows host that needs stronger execution isolation | `lab`, then `admit-cell` | Evidence for a bounded WSL2/Bubblewrap boundary before the isolated-cell API is exposed |
+| A model-guided development task | `$dsh-developer` | The same accountable Agent Skill in DSH and Codex |
 
-    dsh plugin --profile web add .
-    dsh web
+## What Doctor checks
 
-The bundle patch loads the package entry (`index.js`), whose named apply export registers `skills/dsh-developer/SKILL.md` through the native skills service plus five direct user commands:
+Doctor is more than a manifest linter. Its release catalogue covers:
 
-    /dsh-developer-admit-cell {"distro":"Ubuntu-22.04"}
-    /dsh-developer-capabilities {}
-    /dsh-developer-lab {"distro":"Ubuntu-22.04"}
-    /dsh-developer-doctor {"source":"C:/path/plugin","skipRuntime":false}
-    /dsh-developer-promote {"source":"C:/path/export.json","output":"C:/path/new-plugin"}
+- stable ordinary-file snapshots, portable paths, case collisions, binary content, dependency trees, size limits, and credential-shaped material;
+- npm, DSH bundle, Codex plugin, Agent Skill, local-reference, documentation, test-guidance, compatibility, and MIT-license contracts;
+- exact DSH 0.1.1-rc.2 compatibility, with DSH 0.1.2-alpha.2 treated only as preview evidence;
+- byte-for-byte reproduction of promoted bundles from their fingerprinted Creator provenance;
+- native module registration plus a witnessed clean-profile DSH install, load, discovery, and uninstall, with package installation offline and lifecycle scripts disabled; and
+- a fresh final tree fingerprint so a passing report cannot silently describe earlier bytes.
 
-The command itself authorizes its bounded effect: capability inspection, controlled lab fixtures, audit of the named source, or creation of the named output. The shipped headless, ACP, and JSON-RPC surfaces do not consume the command registry. In model-driven DSH surfaces that compose a shell, the plugin contributes DSH_DEVELOPER_BIN as the absolute CLI entry; invoking it remains subject to that surface's normal shell sandbox and approval policy.
+`--skip-runtime` is useful while exploring a repository, but it is never release evidence and cannot be used during promotion.
 
-Invoke the dsh-developer skill for the guided workflow and decision checks around either native route.
+## Keep shipping as DSH moves
 
-## Use in Codex
+Doctor proves one package against the blocking release lane. The compatibility matrix answers the next question: does the exact same trusted tree still behave on the preview lane, and which changed surfaces need revalidation?
 
-Install this directory as a Codex plugin and invoke $dsh-developer. Codex reads the same skills/dsh-developer/SKILL.md instructions as DSH; there is no second workflow implementation.
+From DSH Web, the running DSH is the release lane unless `releaseDsh` is supplied:
 
-## CLI
+```text
+/dsh-developer-compatibility {"source":"C:/path/to/plugin","previewDsh":"D:/preview/dsh.cmd"}
+```
 
-Run the evidence gate for the isolated-agent-cell candidate:
+From the CLI, name both installations explicitly:
 
-    node bin/dsh-developer.js admit-cell [--dsh <path-to-dsh>] [--wsl-distro <name>]
+```powershell
+node bin/dsh-developer.js compatibility --source C:\path\to\plugin --release-dsh D:\release\dsh.cmd --preview-dsh D:\preview\dsh.cmd
+```
 
-Inspect the exact installed DSH runtime and its capability inventory:
+The matrix first runs non-runtime Doctor, accepts only package-declared official DSH 0.1.1-rc.2 and 0.1.2-alpha.2 entries, and reruns each lane's capability and self-lifecycle evidence. It exercises the target plugin lifecycle only for dsh-developer itself or byte-for-byte reproducible promoted output—never an arbitrary repository. Release failure is blocking; preview failure remains visible but advisory. A report also requires an unchanged final source fingerprint, classifies each drift trigger as `contract` or `package-version`, and ends with a stable digest.
 
-    node bin/dsh-developer.js capabilities [--dsh <path-to-dsh>]
+## Why it is a native DSH plugin
 
-Run keyless conformance for the local execution lab:
+Installing dsh-developer loads its real `index.js` entry through DSH. The plugin registers one model- and user-invocable Agent Skill, injects the absolute CLI path into DSH shell environments, and adds six direct DSH Web commands:
 
-    node bin/dsh-developer.js lab [--wsl-distro <name>]
+```text
+/dsh-developer-capabilities {}
+/dsh-developer-compatibility {"source":"C:/path/to/plugin","previewDsh":"D:/preview/dsh.cmd"}
+/dsh-developer-doctor {"source":"C:/path/to/plugin","skipRuntime":false}
+/dsh-developer-promote {"source":"C:/path/export.json","output":"C:/path/new-plugin"}
+/dsh-developer-lab {"distro":"Ubuntu-22.04"}
+/dsh-developer-admit-cell {"distro":"Ubuntu-22.04"}
+```
 
-Audit a Creator export or plugin directory:
+Headless, ACP, and JSON-RPC surfaces do not consume the Web command registry. Model-driven DSH surfaces that provide a shell receive `DSH_DEVELOPER_BIN`; execution still follows that surface's normal sandbox and approval policy.
 
-    node bin/dsh-developer.js doctor --source <path> [--dsh <path-to-dsh>]
+## Use the CLI directly
 
-Promote a Creator export:
+Every native operation also has a scriptable CLI. Add `--json` when another tool should consume the evidence.
 
-    node bin/dsh-developer.js promote --source <creator.json> --output <absent-directory> [--dsh <path-to-dsh>]
+```powershell
+node bin/dsh-developer.js capabilities --dsh D:\path\to\dsh.cmd
+node bin/dsh-developer.js compatibility --source C:\path\to\plugin --release-dsh D:\release\dsh.cmd --preview-dsh D:\preview\dsh.cmd
+node bin/dsh-developer.js doctor --source C:\path\to\plugin --dsh D:\path\to\dsh.cmd
+node bin/dsh-developer.js promote --source C:\path\to\export.json --output C:\path\to\new-plugin --dsh D:\path\to\dsh.cmd
+node bin/dsh-developer.js fingerprint --source C:\path\to\creator-draft.json
+```
 
-Calculate a draft export fingerprint:
+Try the bundled export without risking an existing destination:
 
-    node bin/dsh-developer.js fingerprint --source <creator-draft.json>
+```powershell
+node bin/dsh-developer.js doctor --source examples\hello-dsh.creator.json
+node bin/dsh-developer.js promote --source examples\hello-dsh.creator.json --output ..\hello-dsh
+```
 
-Add --json for machine-readable output. --skip-runtime is accepted by Doctor for exploration but is forbidden during promotion and is not release evidence.
+If `dsh` is not on `PATH`, pass `--dsh`. The selected DSH executable is trusted input and is actually executed; review where it came from before using it as evidence.
 
-## Capability evidence
+## Stronger isolation for execution-bearing work
 
-Capability inspection exercises the installed CLI contract and reads bounded package metadata adjacent to the official DSH entry. It records the DSH, Node, platform, architecture, compatibility lane, package identity, capability status, evidence strength, and a stable evidence digest.
+The optional execution lab is for Windows hosts with WSL2, a non-root Linux user, systemd user scopes, Bubblewrap, and `prlimit`. It runs fixed keyless conformance fixtures—not a model, repository, build script, or caller command—and fails closed when the host cannot prove the boundary.
 
-An installed package is not automatically a complete security boundary. In particular, DSH's current Windows ACL backend is reported as `partial`: it restricts writes but does not fully confine reads, network access, process visibility, credentials, devices, or hard-link aliases.
+```powershell
+node bin/dsh-developer.js lab --wsl-distro Ubuntu-22.04
+node bin/dsh-developer.js admit-cell --dsh D:\path\to\dsh.cmd --wsl-distro Ubuntu-22.04
+```
 
-`behavior` evidence means the named contract was exercised. `inventory` evidence means matching packages are installed; it does not claim that a service is active in every profile. Missing optional or experimental packages are observations, not report failures. Package semantics are classified only for reviewed exact DSH/package versions; other installed versions remain `present-unclassified`.
+A passing admission can issue an opaque, in-process grant to the JavaScript API exported from `dsh-developer/isolated-cell`. That API imports a bounded UTF-8 text tree into a disposable, network-free, credential-free Bubblewrap workspace, runs one operation at a time, stages a sealed complete result outside the source, and verifies cleanup. The native admission command does not itself expose a general arbitrary-command CLI.
 
-DSH 0.1.1-rc.2 remains the blocking release lane. DSH 0.1.2-alpha.2 is recognized as preview evidence only. Other versions remain inspectable but receive no compatibility claim.
+The provider shares the WSL2 kernel; it is not a microVM and claims no project-specific seccomp filter. Read the exact [execution-lab contract](skills/dsh-developer/references/execution-lab.md) and [isolated-cell contract](skills/dsh-developer/references/isolated-cell.md) before integrating the API.
 
-## Isolated-cell admission evidence
+## Use it from Codex
 
-`admit-cell` executes DSH's installed `childSessionMeta` contract twice and confirms that representative children inherit one parent workspace and alias the same write target. It also reads the exact public sandbox contract, reruns capability and local-lab conformance, and binds the result to dated public DSH and cross-harness reports. It never runs a model, repository, build script, or caller-supplied workload.
+The checkout already contains `.codex-plugin/plugin.json` and exposes the same canonical skill used by DSH. In Codex, ask `$plugin-creator` to add this existing plugin folder to a personal marketplace, refresh Codex, install **dsh-developer** from that local source, and invoke `$dsh-developer` in a new task. This follows the [official local-plugin testing flow](https://learn.chatgpt.com/docs/build-plugins); there is no second Codex-only workflow to drift.
 
-The selected `--dsh` installation is trusted executable input, not a sandboxed subject: review how it was installed before running the gate. Admission first requires the selected entry to resolve to the public package's declared `@deepseek-ai/dsh` CLI entry, but local manifest identity is not registry-integrity or provenance proof.
+## Compatibility and safety boundaries
 
-The current reviewed release and preview lanes return `Incubate`: DSH's native subagent lifecycle remains authoritative, experimental Team remains out of scope, and only the missing disposable workspace plus whole-environment boundary is admitted. The report explicitly excludes roster, mailbox, task-board, ordinary child-lifecycle, and generic orchestration replacements. Unknown lanes, failed containment, or unclassified behavior return `Unsupported` and wire no executor.
+- **Blocking release lane:** public DSH 0.1.1-rc.2.
+- **Preview lane:** DSH 0.1.2-alpha.2 is inspectable but not blocking release evidence.
+- **Other versions:** capabilities remain inspectable, but dsh-developer makes no compatibility claim.
+- **Compatibility execution:** the matrix executes only exact product source or reproducible promoted bytes; arbitrary repositories receive no behavior claim.
+- **Untrusted repositories:** Doctor reads bounded text snapshots and does not execute arbitrary repository code. Controlled execution is reserved for reproducible generated output and this product's own lifecycle proof.
+- **Destinations:** promotion creates one absent sibling directory through private staging and a probed no-replace rename. It never merges or overwrites.
+- **Credentials:** deterministic paths do not need a model or provider key, and credentials must not enter Creator exports, plugin trees, child environments, reports, or bundles.
+- **Windows sandboxing:** DSH's ACL backend is reported as partial rather than presented as whole-environment containment. Use the admitted WSL2/Bubblewrap route when that stronger boundary is required.
 
-### Use the admitted isolated-cell API
+For the complete input and authority rules, see the [Creator export contract](skills/dsh-developer/references/creator-export.md) and [safety boundary](skills/dsh-developer/references/safety.md).
 
-The public executor requires the exact report object returned by `inspectIsolatedCellAdmission()` in the same process. A copied, parsed, fabricated, unsupported, or provider-less report is not a grant. The admitted provider and distro are taken from that report; callers cannot substitute either at cell-open time.
+## Develop dsh-developer
 
-    import { rm } from 'node:fs/promises'
-    import { inspectIsolatedCellAdmission } from 'dsh-developer/cell-admission'
-    import { openIsolatedCell } from 'dsh-developer/isolated-cell'
+The deterministic suite is keyless:
 
-    const admission = await inspectIsolatedCellAdmission('D:/path/to/dsh.cmd', {
-      distro: 'Ubuntu-22.04',
-    })
-    const cell = await openIsolatedCell('D:/path/to/plugin', { admission })
-    let result
-    try {
-      const command = await cell.exec('/usr/bin/find . -type f -print')
-      result = await cell.stageResult()
-      // Review or copy result.staging. It is a complete result tree, not a patch.
-    } finally {
-      await cell.dispose()
-    }
-    if (result?.stagingRoot) {
-      await rm(result.stagingRoot, { recursive: true, force: true })
-    }
+```powershell
+npm run validate
+npm pack --dry-run
+```
 
-One public cell may be active per plugin process, and one operation may be active in that cell. `stageResult()` is single-use: it acquires two matching bounded snapshots, seals the cell, and returns created, modified, and deleted path lists. A changed result is materialized in a new private host temporary directory; it never overwrites the source. Cell disposal verifies removal of the WSL workspace but deliberately preserves the staged host result. The caller owns the exact `stagingRoot` returned and must remove it after review, copy, or promotion. If staging and its cleanup both fail, the error identifies the retained root.
+To add the host-bound WSL and Windows process-tree checks:
 
-Transfer accepts bounded ordinary UTF-8 text trees only. Binary files, links, special files, dependency trees, credential-shaped paths or content, nonportable names, case collisions, mutation during capture, and tar omissions fail closed. Cell-wide and per-operation cancellation signals are combined. Aborting the cell-wide signal starts disposal automatically; awaiting the interrupted operation or `dispose()` also waits for verified cleanup. Disposal stops admission of new work, cancels and settles an in-flight command or snapshot, reaps its process scope, and releases capacity only after cleanup is verified.
-
-The current provider admits an 8 MiB or 2,048-entry workspace-growth threshold and proves termination within conservative 16 MiB and 4,096-entry observed ceilings. A controller outside the private PID namespace monitors logical size and entries, freezes and kills the complete systemd cgroup directly, and fails the admission lab if either stop ceiling is exceeded. The same scope also enforces a 512 KiB per-file limit, 256 MiB memory ceiling, zero swap, 32 tasks, fixed CPU quota, and systemd write bandwidth and IOPS controls. Byte-growth and zero-byte entry-growth fixtures are part of blocking conformance, followed by verified root removal.
-
-DSH remains responsible for model inference and its provider connection. The isolated cell is the credential-free, network-free boundary for model-visible plugin files and commands; provider credentials are never copied into it.
-
-## Execution-lab evidence
-
-The current strict provider is Windows-to-WSL2 Bubblewrap. It uses an argv-only `wsl.exe --exec` path and imports only a read-only `/usr` runtime into an otherwise minimal root. `/etc`, `/var`, homes, Windows mounts, WSL integration, and a credential canary outside the ordinary masks are absent. The cell receives a fixed credential-free environment, private network/PID/IPC/UTS/user namespaces, fresh devices, systemd cgroup limits, and `prlimit` bounds.
-
-Conformance also proves exit-137 heartbeat expiry, process-tree cancellation without delayed effects, forced orphan scans, and cleanup. A separate controller process is force-killed; after its lease becomes stale, a fresh controller must remove the cell scope and private root.
-
-Conformance executes fixed keyless fixtures only. It does not expose an arbitrary-command CLI, execute an audited repository, or admit a proposed core feature. A PASS applies only to the recorded host, distro, kernel, provider versions, mounts, policy, and evidence digest. The provider shares the WSL2 kernel and claims no project-specific seccomp filter or microVM boundary.
-
-Missing Bubblewrap, root execution, an unfamiliar Windows-backed mount, a failed resource or cancellation probe, or uncertain cleanup fails closed without using the partial Windows ACL provider or a remote fallback.
-
-## Doctor release catalogue
-
-Doctor treats these as blocking where applicable:
-
-- Stable ordinary-file/tree snapshot and portable case-safe paths
-- File-count, byte, UTF-8, dependency-tree, config, and credential policy
-- npm, DSH bundle, Codex plugin, Agent Skill, and reference integrity
-- Exact public DSH 0.1.1-rc.2 compatibility
-- Byte-for-byte reproduction from Creator provenance
-- Generated native entry invocation
-- Witnessed clean-profile install, load, discovery, and uninstall with package installation offline and lifecycle scripts disabled
-- Documentation, exact slogan, test guidance, and MIT license
-- Fresh final tree fingerprint immediately before commit
-
-Official DSH master is advisory and is never presented as passing release evidence.
-
-## Safety model
-
-Inputs are untrusted and read-only. Promotion reads one stable snapshot, scans model-visible text for likely credentials, generates only manifest-listed text files in a unique sibling staging directory, reruns the complete final gate, and commits with a filesystem-probed no-replace rename. It never modifies a source or existing destination.
-
-The current atomic commit is intentionally Windows-first. On filesystems where renaming a directory can replace an existing empty destination, promotion stops instead of using an unsafe check-then-rename fallback.
-
-## Development
-
-Run:
-
-    npm run validate
-
-The deterministic suite requires no provider credential.
-
-To include the host-bound WSL lab and Windows process-tree integration checks in PowerShell:
-
-    $env:DSH_DEVELOPER_WSL_LAB_TEST='1'
-    $env:DSH_DEVELOPER_PROCESS_TEST='1'
-    npm test
-
-See skills/dsh-developer/references/creator-export.md for the export contract.
+```powershell
+$env:DSH_DEVELOPER_WSL_LAB_TEST='1'
+$env:DSH_DEVELOPER_PROCESS_TEST='1'
+npm test
+```
 
 ## License
 
-MIT
+[MIT](LICENSE)
