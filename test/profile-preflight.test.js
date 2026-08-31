@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { DSH_COMPATIBILITY_TARGET } from '../lib/constants.js'
 import { DshDeveloperError } from '../lib/errors.js'
-import { inspectProfilePreflight } from '../lib/profile-preflight.js'
+import { formatProfilePreflightReport, inspectProfilePreflight } from '../lib/profile-preflight.js'
 import {
   inspectProfilePreflightInternal,
   inspectProfileComposition,
@@ -114,6 +114,7 @@ test('reports optional inject services without making them profile requirements'
     assert.deepEqual(report.requiredServices, ['skills'])
     assert.deepEqual(report.optionalServices, ['remote.workspace'])
     assert.deepEqual(composedServices, ['skills'])
+    assert.match(formatProfilePreflightReport(report), /\n  OPTIONAL remote\.workspace\n/u)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
