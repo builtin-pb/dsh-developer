@@ -74,8 +74,62 @@ test('proves dotted required services with clean-profile composition evidence', 
     assert.equal(report.ok, true)
     assert.deepEqual(report.requiredServices, ['remote.workspace', 'skills'])
     assert.deepEqual(observed, { profile: 'headless', services: ['remote.workspace', 'skills'] })
+    assert.equal(report.checks.find((value) => value.id === 'source.inject-contract').status, 'PASS')
     assert.equal(report.checks.find((value) => value.id === 'profile.service-contract').status, 'PASS')
     assert.match(report.evidenceDigest, /^sha256:[a-f0-9]{64}$/u)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('fails closed when an inject assignment cannot be reduced to literal services', async () => {
+  const root = await fixture()
+  await writeFile(join(root, 'index.js'), [
+    "const baseServices = ['skills']",
+    'export const inject = Object.freeze(baseServices)',
+    'export function apply() {}',
+    '',
+  ].join('\n'), 'utf8')
+  try {
+    const report = await inspectProfilePreflightInternal(root, {
+      dshPath: 'fake-dsh',
+      profile: 'headless',
+    }, runtimeDependencies(async (_invocation, profile, services) => ({
+      profile,
+      requiredServices: services,
+      mappings: [],
+      confidence: 'composition',
+      profileActivated: false,
+      repositoryCodeExecuted: false,
+    })))
+    assert.equal(report.ok, false)
+    assert.deepEqual(report.requiredServices, [])
+    const failed = report.checks.find((value) => value.id === 'source.inject-contract')
+    assert.equal(failed.status, 'FAIL')
+    assert.deepEqual(failed.evidence.paths, ['index.js'])
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('fails closed when a literal-looking inject prefix has a dynamic tail', async () => {
+  const root = await fixture()
+  await writeFile(join(root, 'index.js'), [
+    "const extraServices = ['skills']",
+    "export const inject = ['commands'].concat(extraServices)",
+    'export function apply() {}',
+    '',
+  ].join('\n'), 'utf8')
+  try {
+    const report = await inspectProfilePreflightInternal(root, {
+      dshPath: 'fake-dsh',
+      profile: 'headless',
+    }, runtimeDependencies(async () => {
+      throw new Error('dynamic inject source must fail before profile composition')
+    }))
+    assert.equal(report.ok, false)
+    assert.deepEqual(report.requiredServices, [])
+    assert.equal(report.checks.find((value) => value.id === 'source.inject-contract').status, 'FAIL')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
