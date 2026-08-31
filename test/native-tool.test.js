@@ -80,3 +80,28 @@ test('renders scoped UI admission evidence without adding another tool schema', 
   assert.equal(value.operation, 'ui')
   assert.match(definition.output.render({}, value)[0].text, /^FAIL UI capabilities/u)
 })
+
+test('renders delegated fixed-authority evidence without adding another tool schema', async () => {
+  const definition = createNativeToolDefinition(async () => ({
+    operation: 'delegation',
+    ok: true,
+    report: {
+      ok: true,
+      applies: true,
+      agent: { depth: 1 },
+      tools: [{ name: 'bash', status: 'fixed-scope', exposed: [] }],
+      checks: [{ id: 'agent-scope', status: 'PASS', message: 'delegated' }],
+      evidenceDigest: 'sha256:test',
+    },
+  }))
+  const value = await definition.execute({ operation: 'delegation' }, {
+    signal: new AbortController().signal,
+  })
+  assert.equal(value.operation, 'delegation')
+  assert.match(definition.output.render({}, value)[0].text, /^PASS Delegation safety/u)
+  assert.deepEqual(parseNativeToolInput({ operation: 'delegation' }), { operation: 'delegation' })
+  assert.throws(
+    () => parseNativeToolInput({ operation: 'delegation', source: 'plugin' }),
+    /Field "source" is not valid for operation "delegation"/u,
+  )
+})

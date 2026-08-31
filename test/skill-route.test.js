@@ -12,11 +12,14 @@ test('keeps every routed skill instruction set within the repository budget', as
   const routes = {
     creator: ['references/creator-export.md', 'references/safety.md'],
     audit: ['references/safety.md'],
-    core: ['references/core-incubation.md'],
-    'core-with-untrusted-source': ['references/core-incubation.md', 'references/safety.md'],
-    'execution-bearing-core': ['references/execution-lab.md', 'references/safety.md'],
+    core: ['references/core-incubation.md', 'references/core-admission.md'],
+    'core-with-untrusted-source': ['references/core-incubation.md', 'references/core-admission.md', 'references/safety.md'],
+    'execution-bearing-core': ['references/execution-lab.md', 'references/core-admission.md', 'references/safety.md'],
     'isolated-cell': ['references/isolated-cell.md', 'references/safety.md'],
+    delegation: ['references/delegation-safety.md'],
+    'delegation-with-untrusted-source': ['references/delegation-safety.md', 'references/safety.md'],
     ui: ['references/agent-native-ui.md'],
+    'ui-with-untrusted-source': ['references/agent-native-ui.md', 'references/safety.md'],
   }
 
   for (const [name, references] of Object.entries(routes)) {
@@ -24,10 +27,7 @@ test('keeps every routed skill instruction set within the repository budget', as
       const contents = await Promise.all(['SKILL.md', ...references].map((relativePath) => (
         readFile(path.join(skillRoot, relativePath), 'utf8')
       )))
-      const characters = contents.reduce(
-        (total, content) => total + content.replaceAll('\r\n', '\n').length,
-        0,
-      )
+      const characters = contents.reduce((total, content) => total + content.length, 0)
       assert.ok(
         characters <= ACTIVE_SET_CHARACTER_LIMIT,
         `${name} route uses ${characters} characters; limit is ${ACTIVE_SET_CHARACTER_LIMIT}`,

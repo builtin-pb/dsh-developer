@@ -1,13 +1,15 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { registerDelegationProbe } from './lib/delegation-probe.js'
+import { registerDelegationSafety } from './lib/delegation-safety.js'
 import { registerNativeCommands } from './lib/native-commands.js'
 import { hasNativeTool, registerNativeTool } from './lib/native-tool.js'
 import { registerUiCliTool } from './lib/ui-cli-tool.js'
 import { registerUiSafetyGuard } from './lib/ui-policy.js'
 
 export const name = 'dsh-developer'
-export const inject = ['skills', 'commands', 'shellEnv', 'tools']
+export const inject = ['skills', 'commands', 'shellEnv', 'tools', 'agents']
 
 const skillDirectory = dirname(fileURLToPath(new URL('./skills/dsh-developer/SKILL.md', import.meta.url)))
 const cliPath = fileURLToPath(new URL('./bin/dsh-developer.js', import.meta.url))
@@ -64,9 +66,11 @@ export async function apply(ctx) {
       return { DSH_DEVELOPER_BIN: cliPath, DSH_DEVELOPER_UI_PATCH: uiPatchPath }
     },
   })
+  registerDelegationSafety(ctx)
   registerNativeTool(ctx)
   registerUiSafetyGuard(ctx)
   await registerUiCliTool(ctx)
   registerNativeCommands(ctx)
+  registerDelegationProbe(ctx)
   await completeLoadProbe(ctx)
 }

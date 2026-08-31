@@ -8,6 +8,7 @@ test('registers the canonical skill through the native DSH service', async () =>
   let shellContribution
   let nativeTool
   let nativeGuard
+  const lifecycleListeners = new Map()
   await apply({
     skills: {
       register(value) {
@@ -39,10 +40,24 @@ test('registers the canonical skill through the native DSH service', async () =>
       schemas() {
         return []
       },
+      get() {
+        return undefined
+      },
+    },
+    agents: { list() { return [] } },
+    on(name, callback) {
+      lifecycleListeners.set(name, callback)
+      return () => {}
+    },
+    effect(factory) {
+      factory()
+      return () => {}
     },
   })
   assert.equal(name, 'dsh-developer')
-  assert.deepEqual(inject, ['skills', 'commands', 'shellEnv', 'tools'])
+  assert.deepEqual(inject, ['skills', 'commands', 'shellEnv', 'tools', 'agents'])
+  assert.equal(typeof lifecycleListeners.get('agent/created'), 'function')
+  assert.equal(typeof lifecycleListeners.get('agent/disposed'), 'function')
   assert.equal(registration.name, 'dsh-developer')
   assert.equal(registration.source, 'bundled')
   assert.equal(registration.invocation.modelInvocable, true)

@@ -4,7 +4,7 @@
 
 Proudly designed and implemented by [MetaFlow](https://github.com/builtin-pb/metaflow), **dsh-developer** is an unofficial community plugin that fixes the dangerous last mile of DSH plugin development: a plugin can look finished in its checkout and still fail to register, load, survive the next DSH lane, or cross a release boundary safely.
 
-One native workflow inspects the exact DSH installation, audits Creator exports and existing repositories, deterministically builds a new plugin bundle, and exercises trusted bytes across exact release and preview lanes. DSH agents get the same evidence through one structured model tool—not a shell transcript or a Web-only command. An opt-in second tool gives each agent its own compact, protected browser session for compute-efficient local UI verification. The workflow witnesses clean-profile install, load, discovery, and uninstall, classifies capability drift, and emits stable evidence before handoff. Caller-supplied repositories stay read-only and are not executed; generated bundles run only after their bytes reproduce from fingerprinted provenance.
+One native workflow inspects the exact DSH installation, audits Creator exports and existing repositories, deterministically builds a new plugin bundle, and exercises trusted bytes across exact release and preview lanes. DSH agents get the same evidence through one structured model tool—not a shell transcript or a Web-only command. Delegated children automatically receive honest fixed-authority shell and file schemas instead of impossible escalation arguments. An opt-in second tool gives each agent its own compact, protected browser session for compute-efficient local UI verification. The workflow witnesses clean-profile install, load, discovery, and uninstall, classifies capability drift, and emits stable evidence before handoff. Caller-supplied repositories stay read-only and are not executed; generated bundles run only after their bytes reproduce from fingerprinted provenance.
 
 [![CI](https://github.com/builtin-pb/dsh-developer/actions/workflows/ci.yml/badge.svg)](https://github.com/builtin-pb/dsh-developer/actions/workflows/ci.yml) [![Node.js 22.18+](https://img.shields.io/badge/Node.js-22.18%2B-339933?logo=nodedotjs&logoColor=white)](package.json) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -14,6 +14,7 @@ Existing plugin ->  read-only Doctor report           ->  concrete fixes to make
 Trusted bundle  ->  release + preview matrix          ->  classified drift + stable digest
 Plugin + profile -> exact clean-profile composition   ->  service-owner evidence, no repo execution
 DSH agent        -> one native structured tool         ->  canonical evidence, every model surface
+Delegated child  -> fixed-authority tool schemas       ->  no impossible escalation loop
 Local plugin UI  -> one agent-owned semantic session   ->  assertions + bounded visual evidence
 ```
 
@@ -69,6 +70,7 @@ dsh --profile headless --dump-config
 | A plugin facing a DSH upgrade | `impact` | The exact package, public declaration, entry, dependency, and injected-service surfaces that changed |
 | This product source or a reproducible promoted bundle | `compatibility` | Witnessed behavior on exact release and preview DSH lanes, plus classified revalidation triggers |
 | A Windows host that needs stronger execution isolation | `lab`, then `admit-cell` | Evidence for a bounded WSL2/Bubblewrap boundary before the isolated-cell API is exposed |
+| A delegated child that needs its authority verified—or is stuck on impossible permission arguments | Run `dsh_developer {"operation":"delegation"}` in that child | Child-only schema correction, runtime enforcement, and a stable evidence digest without changing parent authority |
 | A local plugin UI that needs agent verification | Configure `dsh_ui`, then run `dsh_developer {"operation":"ui"}` | One agent-owned semantic session, authority containment, exact operations, and visible catalog cost |
 | A model-guided development task | `$dsh-developer` | The same accountable Agent Skill in DSH and Codex, backed by a native structured DSH tool |
 
@@ -161,6 +163,18 @@ node bin/dsh-developer.js ui --session codex-task --action close --json
 
 For persistent exploratory work, the larger MCP route remains available. Install `@playwright/mcp@0.0.79`, set `PLAYWRIGHT_MCP_ENTRY`, `PLAYWRIGHT_MCP_EXECUTABLE_PATH`, and `DSH_DEVELOPER_UI_OUTPUT`, then start DSH with `--patch .\presets\playwright-mcp.cordis.yml`. The `dsh_ui` MCP namespace receives the same loopback-only, fail-closed guard; other namespaces are untouched. Do not enable both routes unless their extra visible schemas are worth the context cost. See the full [agent-native UI contract](skills/dsh-developer/references/agent-native-ui.md).
 
+## Stop delegated agents from asking for authority they cannot receive
+
+Current DSH delegated children can run with fixed authority while shell and mutating-file schemas still describe escalation arguments. That mismatch can send GPT-style models into a validation loop: the schema invites `sandbox_permissions` and `justification`, but the child cannot use them. The behavior is independently reported against DSH 0.1.1-rc.2 in [discussion #4930](https://github.com/deepseek-ai/deepseek-harness/discussions/4930).
+
+dsh-developer recognizes only durable DSH subagent lineage. Inside that child scope, it shadows the upstream `bash`, `pwsh`, `edit`, and `write` definitions just enough to remove the impossible fields and matching guidance while preserving their original execution and output behavior. A second guard rejects hidden attempts to smuggle either argument back in. Parent and other top-level agents keep their ordinary schemas and approval path.
+
+```text
+dsh_developer {"operation":"delegation"}
+```
+
+The report proves the calling scope, visible corrected tools, runtime policy, and stable digest. This is deliberately narrower than an agent-team framework: dsh-developer uses DSH's own lifecycle and communication primitives, and the correction can disappear once upstream makes child-visible schemas reflect fixed authority. See the [delegated-child authority contract](skills/dsh-developer/references/delegation-safety.md).
+
 ## One evidence tool for every DSH agent surface
 
 DSH's public tool registry is the canonical model-facing extension seam. dsh-developer always registers one global `dsh_developer` evidence tool, so inspection reaches headless agents, DSH Web agents, Code Mode programs, and the preview ACP automation profile without teaching each transport a private protocol.
@@ -169,11 +183,11 @@ DSH's public tool registry is the canonical model-facing extension seam. dsh-dev
 {"operation":"doctor","source":"C:/path/to/plugin","skipRuntime":true}
 ```
 
-The operation is one of `capabilities`, `doctor`, `preflight`, `impact`, `compatibility`, or `ui`. Operation-specific arguments are closed and validated before work begins; cancellation flows through the DSH tool pipeline. Native presentation stays compact, while Code Mode receives canonical JSON. `ui` only inspects the calling agent's visible registry and selects an admitted route.
+The operation is one of `capabilities`, `doctor`, `preflight`, `impact`, `compatibility`, `delegation`, or `ui`. Operation-specific arguments are closed and validated before work begins; cancellation flows through the DSH tool pipeline. Native presentation stays compact, while Code Mode receives canonical JSON. `delegation` and `ui` inspect only the calling agent's visible registry and authority boundary.
 
 When the pinned CLI paths are configured, the plugin separately registers one compact `dsh_ui` action tool. That boundary is deliberately distinct from evidence: its closed operation enum is `status`, `open`, `navigate`, `snapshot`, `find`, `fill`, `click`, `press`, `select`, `check`, `uncheck`, `hover`, `resize`, `wait`, `screenshot`, `console`, `requests`, or `close`. Promotion, repository edits, publication, real-profile installation, and general execution remain absent.
 
-Using one operation-discriminated evidence tool instead of five independent schemas keeps the model-visible catalog small; the optional UI route adds only one more schema. The plugin imports no private DSH internals and no profile-local copy of the tool runtime; exact release and preview preflight proves that `tools` comes from the host. The controlled lifecycle witness fails unless DSH can register and resolve the definition. See DSH's official [tool authoring reference](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/cookbook/adding-a-tool.md).
+Using one operation-discriminated evidence tool instead of a growing set of independent schemas keeps the model-visible catalog small; the optional UI route adds only one more schema. The plugin imports no private DSH internals and no profile-local copy of the tool runtime; exact release and preview preflight proves that `tools` comes from the host. The controlled lifecycle witness fails unless DSH can register and resolve the definition. See DSH's official [tool authoring reference](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/cookbook/adding-a-tool.md).
 
 ## Why the rest is also native DSH
 
@@ -243,6 +257,7 @@ The checkout already contains `.codex-plugin/plugin.json` and exposes the same c
 - **Untrusted repositories:** Doctor reads bounded text snapshots and does not execute arbitrary repository code. Controlled execution is reserved for reproducible generated output and this product's own lifecycle proof.
 - **Profile preflight:** only DSH's config-dump path runs in a disposable credential-free profile; the repository is not installed or loaded, and PASS is not a behavior claim.
 - **Native evidence tool:** exposes read/evidence operations only, including scoped UI-route admission. It does not promote, edit, publish, install into real profiles, control a browser, or open an isolation executor.
+- **Delegated authority:** only durable child scopes receive corrected fixed-authority schemas and a hidden-argument guard. The plugin grants no authority, changes no permission mode, and leaves parent schemas untouched.
 - **Protected UI tool:** the optional native `dsh_ui` route is agent-owned, serialized, credential-free, loopback-only, and closed to arbitrary code, files, storage, attachment, and unknown operations. The MCP `dsh_ui` namespace receives an equivalent fail-closed semantic guard; other namespaces remain untouched.
 - **Destinations:** promotion creates one absent sibling directory through private staging and a probed no-replace rename. It never merges or overwrites.
 - **Credentials:** deterministic paths do not need a model or provider key, and credentials must not enter Creator exports, plugin trees, child environments, reports, or bundles.

@@ -72,7 +72,7 @@ test('discovers declared packages, injected services, static imports, and the ba
     await writeFile(join(root, 'index.js'), [
       "import '@deepseek-ai/dsh-shell-env'",
       "export const inject = { required: ['skills', 'commands', 'remote.workspace'] }",
-      "export async function apply(ctx) { ctx.commands.register({}); ctx.get('appExit') }",
+      "export async function apply(ctx) { ctx.commands.register({}); ctx.get('appExit'); ctx.inject(['agentLoop'], () => {}); ctx.logger.info('ready') }",
       '',
     ].join('\n'), 'utf8')
     const references = discoverUpstreamReferences(await scanOrdinaryTree(root))
@@ -83,7 +83,12 @@ test('discovers declared packages, injected services, static imports, and the ba
       '@deepseek-ai/dsh-skill',
     ])
     assert.deepEqual(references.packages.find((value) => value.package === '@deepseek-ai/dsh-skill').subpaths, ['./invariant'])
-    assert.deepEqual(references.services.map((value) => value.service), ['appExit', 'commands', 'remote.workspace', 'skills'])
+    assert.deepEqual(references.services.map((value) => value.service), ['agentLoop', 'appExit', 'commands', 'remote.workspace', 'skills'])
+    assert.equal(
+      references.services.find((value) => value.service === 'agentLoop')
+        .evidence.find((value) => value.kind === 'context-inject').requirement,
+      'runtime',
+    )
     assert.equal(
       references.services.find((value) => value.service === 'remote.workspace')
         .evidence.find((value) => value.kind === 'inject').requirement,
@@ -223,6 +228,20 @@ test('maps a declared service to exact package owners and emits stable scoped im
     const failed = dynamic.checks.find((value) => value.id === 'source.inject-contract')
     assert.equal(failed.status, 'FAIL')
     assert.deepEqual(failed.evidence.paths, ['index.js'])
+
+    await writeFile(join(source, 'index.js'), [
+      "export const inject = ['skills']",
+      'export async function apply(ctx) { ctx.inject(runtimeServices(), () => {}) }',
+      '',
+    ].join('\n'), 'utf8')
+    const dynamicContext = await inspectUpstreamImpactInternal(source, {
+      releaseDsh: 'release',
+      previewDsh: 'preview',
+    }, dependencies)
+    assert.equal(dynamicContext.ok, false)
+    const contextFailure = dynamicContext.checks.find((value) => value.id === 'source.inject-contract')
+    assert.equal(contextFailure.status, 'FAIL')
+    assert.deepEqual(contextFailure.evidence.paths, ['index.js'])
   } finally {
     await rm(root, { recursive: true, force: true })
   }
