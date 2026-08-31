@@ -98,6 +98,9 @@ jobs:
         run: |
           $releaseDsh = Join-Path $env:DSH_RELEASE 'node_modules/.bin/dsh.cmd'
           $previewDsh = Join-Path $env:DSH_PREVIEW 'node_modules/.bin/dsh.cmd'
+          $impact = Join-Path $env:RUNNER_TEMP 'dsh-upstream-impact.json'
+          node bin/dsh-developer.js impact --source . --release-dsh $releaseDsh --preview-dsh $previewDsh --json | Tee-Object -FilePath $impact
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $evidence = Join-Path $env:RUNNER_TEMP 'dsh-compatibility-matrix.json'
           node bin/dsh-developer.js compatibility --source . --release-dsh $releaseDsh --preview-dsh $previewDsh --json | Tee-Object -FilePath $evidence
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -109,6 +112,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dsh-compatibility-matrix
-          path: ${{ runner.temp }}/dsh-compatibility-matrix.json
+          path: |
+            ${{ runner.temp }}/dsh-upstream-impact.json
+            ${{ runner.temp }}/dsh-compatibility-matrix.json
           if-no-files-found: error
           retention-days: 14

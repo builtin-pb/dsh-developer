@@ -14,7 +14,7 @@ Existing plugin ->  read-only Doctor report           ->  concrete fixes to make
 Trusted bundle  ->  release + preview matrix          ->  classified drift + stable digest
 ```
 
-No provider key is needed for capability inspection, Doctor, deterministic promotion, the compatibility matrix, or the execution-lab checks.
+No provider key is needed for capability inspection, Doctor, deterministic promotion, upstream impact analysis, the compatibility matrix, or the execution-lab checks.
 
 ## Get a useful result in five minutes
 
@@ -62,6 +62,7 @@ dsh --profile headless --dump-config
 | A DSH Creator JSON export | `promote` | A new deterministic DSH + Codex plugin bundle, or a retained staging directory with the blocking failure |
 | An existing plugin repository | `doctor` | A read-only audit of structure, safety, compatibility, documentation, and native lifecycle eligibility |
 | An unfamiliar DSH installation | `capabilities` | Exact runtime, package, lane, evidence-strength, and digest information |
+| A plugin facing a DSH upgrade | `impact` | The exact package, public declaration, entry, dependency, and injected-service surfaces that changed |
 | This product source or a reproducible promoted bundle | `compatibility` | Witnessed behavior on exact release and preview DSH lanes, plus classified revalidation triggers |
 | A Windows host that needs stronger execution isolation | `lab`, then `admit-cell` | Evidence for a bounded WSL2/Bubblewrap boundary before the isolated-cell API is exposed |
 | A model-guided development task | `$dsh-developer` | The same accountable Agent Skill in DSH and Codex |
@@ -81,7 +82,15 @@ Doctor is more than a manifest linter. Its release catalogue covers:
 
 ## Keep shipping as DSH moves
 
-Doctor proves one package against the blocking release lane. The compatibility matrix answers the next question: does the exact same trusted tree still behave on the preview lane, and which changed surfaces need revalidation?
+Doctor proves one package against the blocking release lane. Impact analysis first narrows an upgrade to the upstream packages and Cordis services the plugin actually declares or uses:
+
+```powershell
+node bin/dsh-developer.js impact --source C:\path\to\plugin --release-dsh D:\release\dsh.cmd --preview-dsh D:\preview\dsh.cmd
+```
+
+It reads both package-declared official DSH entries without executing them, maps `ctx` services to the packages that publish their Cordis declarations, and compares public exports, declaration files, entries, peer contracts, runtime dependencies, and DSH metadata. Add `dshDeveloper.upstream.services` and `dshDeveloper.upstream.packages` to `package.json` for an explicit machine-readable attachment declaration; inferred but undeclared surfaces stay visible as warnings. A stable digest binds the result to the final unchanged plugin tree.
+
+The compatibility matrix then answers the harder question: does the exact same trusted tree still behave on the preview lane?
 
 From DSH Web, the running DSH is the release lane unless `releaseDsh` is supplied:
 
@@ -99,12 +108,13 @@ The matrix first runs non-runtime Doctor, accepts only package-declared official
 
 ## Why it is a native DSH plugin
 
-Installing dsh-developer loads its real `index.js` entry through DSH. The plugin registers one model- and user-invocable Agent Skill, injects the absolute CLI path into DSH shell environments, and adds six direct DSH Web commands:
+Installing dsh-developer loads its real `index.js` entry through DSH. The plugin registers one model- and user-invocable Agent Skill, injects the absolute CLI path into DSH shell environments, and adds seven direct DSH Web commands:
 
 ```text
 /dsh-developer-capabilities {}
 /dsh-developer-compatibility {"source":"C:/path/to/plugin","previewDsh":"D:/preview/dsh.cmd"}
 /dsh-developer-doctor {"source":"C:/path/to/plugin","skipRuntime":false}
+/dsh-developer-impact {"source":"C:/path/to/plugin","previewDsh":"D:/preview/dsh.cmd"}
 /dsh-developer-promote {"source":"C:/path/export.json","output":"C:/path/new-plugin"}
 /dsh-developer-lab {"distro":"Ubuntu-22.04"}
 /dsh-developer-admit-cell {"distro":"Ubuntu-22.04"}
@@ -120,6 +130,7 @@ Every native operation also has a scriptable CLI. Add `--json` when another tool
 node bin/dsh-developer.js capabilities --dsh D:\path\to\dsh.cmd
 node bin/dsh-developer.js compatibility --source C:\path\to\plugin --release-dsh D:\release\dsh.cmd --preview-dsh D:\preview\dsh.cmd
 node bin/dsh-developer.js doctor --source C:\path\to\plugin --dsh D:\path\to\dsh.cmd
+node bin/dsh-developer.js impact --source C:\path\to\plugin --release-dsh D:\release\dsh.cmd --preview-dsh D:\preview\dsh.cmd
 node bin/dsh-developer.js promote --source C:\path\to\export.json --output C:\path\to\new-plugin --dsh D:\path\to\dsh.cmd
 node bin/dsh-developer.js fingerprint --source C:\path\to\creator-draft.json
 ```

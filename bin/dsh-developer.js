@@ -13,6 +13,7 @@ import {
 import { asDiagnostic, DshDeveloperError } from '../lib/errors.js'
 import { conformExecutionLab, formatExecutionLabReport } from '../lib/execution-lab.js'
 import { promoteCreatorExport } from '../lib/promote.js'
+import { formatUpstreamImpactReport, inspectUpstreamImpact } from '../lib/upstream-impact.js'
 
 const USAGE = [
   'dsh-developer — The single plugin you need for DSH',
@@ -21,6 +22,7 @@ const USAGE = [
   '  dsh-developer admit-cell [--dsh <path>] [--wsl-distro <name>] [--json]',
   '  dsh-developer capabilities [--dsh <path>] [--json]',
   '  dsh-developer compatibility --source <plugin-dir> --release-dsh <path> --preview-dsh <path> [--json]',
+  '  dsh-developer impact --source <plugin-dir> --release-dsh <path> --preview-dsh <path> [--json]',
   '  dsh-developer lab [--wsl-distro <name>] [--json]',
   '  dsh-developer doctor --source <creator.json|plugin-dir> [--dsh <path>] [--skip-runtime] [--json]',
   '  dsh-developer promote --source <creator.json> --output <new-dir> [--dsh <path>] [--json]',
@@ -103,6 +105,22 @@ async function main(argv) {
       signal: controller.signal,
     })
     process.stdout.write(options.json ? JSON.stringify(report, null, 2) + '\n' : formatExecutionLabReport(report) + '\n')
+    if (!report.ok) process.exitCode = 1
+    return
+  }
+  if (command === 'impact') {
+    if (options.output || options.dsh || options.skipRuntime || options.wslDistro) {
+      throw new DshDeveloperError(
+        'CLI_USAGE',
+        'impact accepts only --source, --release-dsh, --preview-dsh, and --json.',
+      )
+    }
+    const report = await inspectUpstreamImpact(required(options, 'source'), {
+      releaseDsh: required(options, 'releaseDsh'),
+      previewDsh: required(options, 'previewDsh'),
+      signal: controller.signal,
+    })
+    process.stdout.write(options.json ? JSON.stringify(report, null, 2) + '\n' : formatUpstreamImpactReport(report) + '\n')
     if (!report.ok) process.exitCode = 1
     return
   }
