@@ -70,7 +70,7 @@ test('reports exact lane evidence without turning absent optional capabilities i
   try {
     for (const name of [
       '@deepseek-ai/dsh-skill',
-      '@deepseek-ai/dsh-native-command',
+      '@deepseek-ai/dsh-commands',
       '@deepseek-ai/dsh-shell-env',
       '@deepseek-ai/dsh-subagent',
       '@deepseek-ai/dsh-sandbox',
@@ -172,5 +172,8 @@ test('keeps the capability catalogue closed and uniquely identified', () => {
   assert.equal(new Set(specs.map((value) => value.id)).size, specs.length)
   assert.ok(specs.every((value) => value.packages.length > 0))
   assert.ok(specs.every((value) => value.reviewedVersions.includes('0.1.1-rc.2')))
+  const nativeSurface = specs.find((value) => value.id === 'plugin.native-surface')
+  assert.ok(nativeSurface.packages.includes('@deepseek-ai/dsh-commands'))
+  assert.ok(!nativeSurface.packages.includes('@deepseek-ai/dsh-native-command'))
   assert.match(specs.find((value) => value.id === 'sandbox.windows-acl').partialGuarantee, /Write restriction only/u)
 })
