@@ -92,6 +92,8 @@ node bin/dsh-developer.js preflight --source C:\path\to\plugin --profile headles
 
 The selected official DSH lane runs only its config-dump path; the plugin repository is neither installed nor loaded, the child environment excludes credentials, and the disposable profile is removed afterward. Preflight also rejects required service-owner packages placed in `dependencies` or `optionalDependencies`, where a profile-local copy can shadow DSH's host instance. PASS means the clean composition unconditionally mounts at least one installed owner for each required service. It is composition evidence—not activation proof, plugin behavior, or a claim about a customized user's full stack.
 
+CI records this contract for both `headless` and `web`: release failures block, while preview failures remain visible advisory evidence.
+
 ## Keep shipping as DSH moves
 
 Doctor proves one package against the blocking release lane. Impact analysis first narrows an upgrade to the upstream packages and Cordis services the plugin actually declares or uses:

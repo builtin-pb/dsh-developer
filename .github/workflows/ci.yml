@@ -100,6 +100,21 @@ jobs:
         run: |
           $releaseDsh = Join-Path $env:DSH_RELEASE 'node_modules/.bin/dsh.cmd'
           $previewDsh = Join-Path $env:DSH_PREVIEW 'node_modules/.bin/dsh.cmd'
+          $preflightCases = @(
+            @{ Lane = 'release'; Profile = 'headless'; Dsh = $releaseDsh; Blocking = $true },
+            @{ Lane = 'release'; Profile = 'web'; Dsh = $releaseDsh; Blocking = $true },
+            @{ Lane = 'preview'; Profile = 'headless'; Dsh = $previewDsh; Blocking = $false },
+            @{ Lane = 'preview'; Profile = 'web'; Dsh = $previewDsh; Blocking = $false }
+          )
+          foreach ($case in $preflightCases) {
+            $preflight = Join-Path $env:RUNNER_TEMP "dsh-profile-preflight-$($case.Lane)-$($case.Profile).json"
+            node bin/dsh-developer.js preflight --source . --profile $case.Profile --dsh $case.Dsh --json | Tee-Object -FilePath $preflight
+            $exitCode = $LASTEXITCODE
+            if ($case.Blocking -and $exitCode -ne 0) { exit $exitCode }
+            if (-not $case.Blocking -and $exitCode -ne 0) {
+              Write-Output "::warning::The advisory $($case.Lane) $($case.Profile) profile preflight failed; inspect the uploaded evidence."
+            }
+          }
           $impact = Join-Path $env:RUNNER_TEMP 'dsh-upstream-impact.json'
           node bin/dsh-developer.js impact --source . --release-dsh $releaseDsh --preview-dsh $previewDsh --json | Tee-Object -FilePath $impact
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -115,6 +130,7 @@ jobs:
         with:
           name: dsh-compatibility-matrix
           path: |
+            ${{ runner.temp }}/dsh-profile-preflight-*.json
             ${{ runner.temp }}/dsh-upstream-impact.json
             ${{ runner.temp }}/dsh-compatibility-matrix.json
           if-no-files-found: error
