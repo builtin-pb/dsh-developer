@@ -20,7 +20,8 @@ test('keeps the longest routed skill instruction set within the repository budge
   const contents = await Promise.all(route.map((relativePath) => (
     readFile(path.join(skillRoot, relativePath), 'utf8')
   )))
-  const characters = contents.reduce((total, content) => total + content.length, 0)
+  // Instruction characters are independent of the checkout's newline encoding.
+  const characters = contents.reduce((total, content) => total + content.replaceAll('\r\n', '\n').length, 0)
 
   assert.ok(
     characters <= ACTIVE_SET_CHARACTER_LIMIT,

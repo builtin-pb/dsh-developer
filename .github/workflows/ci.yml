@@ -49,8 +49,9 @@ jobs:
         shell: pwsh
         run: |
           $runtime = Join-Path $env:RUNNER_TEMP "dsh-${{ matrix.dsh }}"
+          $store = Join-Path $env:RUNNER_TEMP 'pnpm-store'
           New-Item -ItemType Directory -Force -Path $runtime | Out-Null
-          npm install --prefix $runtime --ignore-scripts --no-audit --no-fund --no-package-lock --no-save "@deepseek-ai/dsh@${{ matrix.dsh }}"
+          pnpm --dir $runtime --store-dir $store add --ignore-scripts --save-exact "@deepseek-ai/dsh@${{ matrix.dsh }}"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "DSH_RUNTIME=$runtime" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Record exact-lane capability evidence
@@ -86,10 +87,11 @@ jobs:
         run: |
           $release = Join-Path $env:RUNNER_TEMP 'dsh-release'
           $preview = Join-Path $env:RUNNER_TEMP 'dsh-preview'
+          $store = Join-Path $env:RUNNER_TEMP 'pnpm-store'
           New-Item -ItemType Directory -Force -Path $release, $preview | Out-Null
-          npm install --prefix $release --ignore-scripts --no-audit --no-fund --no-package-lock --no-save '@deepseek-ai/dsh@0.1.1-rc.2'
+          pnpm --dir $release --store-dir $store add --ignore-scripts --save-exact '@deepseek-ai/dsh@0.1.1-rc.2'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm install --prefix $preview --ignore-scripts --no-audit --no-fund --no-package-lock --no-save '@deepseek-ai/dsh@0.1.2-alpha.2'
+          pnpm --dir $preview --store-dir $store add --ignore-scripts --save-exact '@deepseek-ai/dsh@0.1.2-alpha.2'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "DSH_RELEASE=$release" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "DSH_PREVIEW=$preview" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8

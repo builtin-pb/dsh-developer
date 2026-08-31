@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { doctorPlugin } from '../lib/doctor.js'
 import { withCreatorFingerprint } from '../lib/creator-export.js'
 import { DshDeveloperError } from '../lib/errors.js'
+import { assertAbsentDirectoryDestination } from '../lib/files.js'
 import { promoteCreatorExport } from '../lib/promote.js'
 
 function draft(name = 'promoted-plugin') {
@@ -73,6 +74,25 @@ test('never replaces an existing destination', async () => {
     assert.equal(await readFile(value.output, 'utf8'), 'keep me')
   } finally {
     await rm(value.root, { recursive: true, force: true })
+  }
+})
+
+test('rejects an output path that traverses a junction ancestor', { skip: process.platform !== 'win32' }, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-developer-junction-test-'))
+  const target = join(root, 'physical-parent')
+  const targetChild = join(target, 'ordinary-child')
+  const alias = join(root, 'junction-alias')
+  await mkdir(targetChild, { recursive: true })
+  await symlink(target, alias, 'junction')
+  try {
+    await assert.rejects(
+      assertAbsentDirectoryDestination(join(alias, 'ordinary-child', 'promoted-plugin')),
+      (error) => error instanceof DshDeveloperError
+        && error.code === 'UNSAFE_OUTPUT_PARENT'
+        && error.details.linkedAncestor === alias,
+    )
+  } finally {
+    await rm(root, { recursive: true, force: true })
   }
 })
 
