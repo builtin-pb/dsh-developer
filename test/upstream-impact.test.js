@@ -203,6 +203,21 @@ test('maps a declared service to exact package owners and emits stable scoped im
     assert.equal(first.changes.find((value) => value.package === '@deepseek-ai/dsh-skill').classification, 'contract')
     assert.equal(first.evidenceDigest, second.evidenceDigest)
     assert.match(formatUpstreamImpactReport(first), /^PASS DSH upstream impact impact-fixture/u)
+
+    await writeFile(join(source, 'index.js'), [
+      "const required = ['skills']",
+      'export const inject = Object.freeze(required)',
+      'export async function apply() {}',
+      '',
+    ].join('\n'), 'utf8')
+    const dynamic = await inspectUpstreamImpactInternal(source, {
+      releaseDsh: 'release',
+      previewDsh: 'preview',
+    }, dependencies)
+    assert.equal(dynamic.ok, false)
+    const failed = dynamic.checks.find((value) => value.id === 'source.inject-contract')
+    assert.equal(failed.status, 'FAIL')
+    assert.deepEqual(failed.evidence.paths, ['index.js'])
   } finally {
     await rm(root, { recursive: true, force: true })
   }

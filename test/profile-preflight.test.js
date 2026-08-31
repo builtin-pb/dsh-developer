@@ -90,23 +90,22 @@ test('fails closed when an inject assignment cannot be reduced to literal servic
     'export function apply() {}',
     '',
   ].join('\n'), 'utf8')
+  let composed = false
   try {
     const report = await inspectProfilePreflightInternal(root, {
       dshPath: 'fake-dsh',
       profile: 'headless',
-    }, runtimeDependencies(async (_invocation, profile, services) => ({
-      profile,
-      requiredServices: services,
-      mappings: [],
-      confidence: 'composition',
-      profileActivated: false,
-      repositoryCodeExecuted: false,
-    })))
+    }, runtimeDependencies(async () => {
+      composed = true
+      throw new Error('dynamic inject source must not reach profile composition')
+    }))
     assert.equal(report.ok, false)
     assert.deepEqual(report.requiredServices, [])
     const failed = report.checks.find((value) => value.id === 'source.inject-contract')
     assert.equal(failed.status, 'FAIL')
     assert.deepEqual(failed.evidence.paths, ['index.js'])
+    assert.equal(composed, false)
+    assert.equal(report.checks.find((value) => value.id === 'profile.service-contract').status, 'SKIP')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -120,16 +119,20 @@ test('fails closed when a literal-looking inject prefix has a dynamic tail', asy
     'export function apply() {}',
     '',
   ].join('\n'), 'utf8')
+  let composed = false
   try {
     const report = await inspectProfilePreflightInternal(root, {
       dshPath: 'fake-dsh',
       profile: 'headless',
     }, runtimeDependencies(async () => {
-      throw new Error('dynamic inject source must fail before profile composition')
+      composed = true
+      throw new Error('dynamic inject source must not reach profile composition')
     }))
     assert.equal(report.ok, false)
     assert.deepEqual(report.requiredServices, [])
     assert.equal(report.checks.find((value) => value.id === 'source.inject-contract').status, 'FAIL')
+    assert.equal(report.checks.find((value) => value.id === 'profile.service-contract').status, 'SKIP')
+    assert.equal(composed, false)
   } finally {
     await rm(root, { recursive: true, force: true })
   }

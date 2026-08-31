@@ -102,7 +102,7 @@ Doctor proves one package against the blocking release lane. Impact analysis fir
 node bin/dsh-developer.js impact --source C:\path\to\plugin --release-dsh D:\release\dsh.cmd --preview-dsh D:\preview\dsh.cmd
 ```
 
-It reads both package-declared official DSH entries without executing them, maps `ctx` services to the packages that publish their Cordis declarations, and compares public exports, declaration files, entries, peer contracts, runtime dependencies, and DSH metadata. Add `dshDeveloper.upstream.services` and `dshDeveloper.upstream.packages` to `package.json` for an explicit machine-readable attachment declaration; inferred but undeclared surfaces stay visible as warnings. A stable digest binds the result to the final unchanged plugin tree.
+It reads both package-declared official DSH entries without executing them, maps `ctx` services to the packages that publish their Cordis declarations, and compares public exports, declaration files, entries, peer contracts, runtime dependencies, and DSH metadata. Add `dshDeveloper.upstream.services` and `dshDeveloper.upstream.packages` to `package.json` for an explicit machine-readable attachment declaration; inferred but undeclared surfaces stay visible as warnings, while dynamic `inject` assignments block the completeness claim. A stable digest binds the result to the final unchanged plugin tree.
 
 The compatibility matrix then answers the harder question: does the exact same trusted tree still behave on the preview lane?
 
