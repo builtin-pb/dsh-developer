@@ -63,6 +63,7 @@ test('assesses an ordinary hand-written DSH plugin without generated Codex bundl
   const report = await doctorPlugin(ordinaryPluginFixture, { runtime: 'skip' })
 
   assert.equal(report.ok, true, JSON.stringify(report.checks, null, 2))
+  assert.deepEqual(report, JSON.parse(JSON.stringify(report)), 'Doctor evidence must be lossless JSON for native tools')
   assert.equal(report.plugin.name, 'ordinary-dsh-plugin')
   const codex = report.checks.find((check) => check.id === 'manifest.codex-plugin')
   assert.equal(codex.status, 'SKIP')

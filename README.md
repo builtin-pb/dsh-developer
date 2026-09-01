@@ -109,7 +109,7 @@ The global `dsh_developer` tool reaches Web, headless, ACP, Code Mode, and JSON-
 {"operation":"doctor","source":"C:/path/to/plugin","skipRuntime":true}
 ```
 
-Its operation is one of `authority`, `capabilities`, `doctor`, `preflight`, `impact`, `compatibility`, `delegation`, or `ui`. One schema keeps the model-visible tool catalogue small while returning canonical structured evidence everywhere.
+Its operation is one of `authority`, `capabilities`, `doctor`, `preflight`, `impact`, `compatibility`, `delegation`, `ui`, `cell-plan`, `cell-run`, or `cell-discard`. One schema keeps the model-visible tool catalogue small while returning canonical structured evidence everywhere.
 
 Delegated and fixed-authority agents also receive truthful shell and file schemas. Impossible escalation arguments disappear, stale arguments are removed before execution, and real denials explain the fixed boundary instead of sending the model into another retry loop.
 
@@ -147,6 +147,16 @@ node bin/dsh-developer.js ui --session codex-task --action close --json
 Read-only analysis never executes the target repository. Controlled lifecycle execution is reserved for this product and byte-for-byte reproducible promoted output. Credentials stay out of child environments and evidence.
 
 Execution-bearing work can use the admitted WSL2 + Bubblewrap cell: a disposable, network-free, credential-free workspace with bounded input, serialized commands, sealed output, and verified cleanup.
+
+Inside a top-level DSH Agent, isolated Build is native and path-free. The agent chooses one to four exact commands; the controller accepts only the exact live Agent object in `agents.roots()`, derives its physical source exclusively from that Agent's workspace, and binds the source identity, real-profile fence, exact DSH lane, fingerprint, commands, timeouts, fixed policy, and owner into an expiring digest. It then asks DSH for an audited one-time approval:
+
+```json
+{"operation":"cell-plan","outcome":"Run focused tests and the repository check","commands":[{"command":"node --test","timeoutMs":60000},{"command":"npm run check","timeoutMs":60000}]}
+{"operation":"cell-run","planDigest":"sha256:<digest returned by cell-plan>"}
+{"operation":"cell-discard","planDigest":"sha256:<same digest>"}
+```
+
+`cell-run` accepts only the digest. Conversation text and boolean fields cannot approve it, and unavailable, rejected, cancelled, or non-once approval launches no cell. All commands run sequentially in one admitted cell, stop on failure or cancellation, and return bounded, credential-scanned output; nonzero commands include compact redacted stdout/stderr evidence. The source and real profile stay unchanged. Changed bytes are staged once through an opaque controller capability, physically outside both, then retained under a non-writable quarantine root—filename prefixes never grant ownership. `cell-discard` re-proves ancestry, identities, and fingerprints before deletion and is the only operation that releases the single process-wide slot. Missing, moved, replaced, or otherwise ambiguous staging keeps the slot poisoned and reports the recovery root; once verified deletion begins, caller cancellation cannot abandon it. Failure diagnostics are recursively bounded, allowlisted, and secret-scanned. These three actions intentionally have no CLI or cold-resume surface.
 
 ```powershell
 node bin/dsh-developer.js lab --wsl-distro Ubuntu-22.04

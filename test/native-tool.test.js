@@ -37,6 +37,35 @@ test('keeps operation-specific argument surfaces closed before execution', () =>
     () => parseNativeToolInput({ operation: 'doctor', source: 'plugin', skipRuntime: 'yes' }),
     /skipRuntime must be boolean/u,
   )
+  const digest = 'sha256:' + 'a'.repeat(64)
+  assert.deepEqual(parseNativeToolInput({
+    operation: 'cell-plan',
+    outcome: 'Run focused tests',
+    commands: [{ command: 'node --test', timeoutMs: 1_000 }],
+  }), {
+    operation: 'cell-plan',
+    outcome: 'Run focused tests',
+    commands: [{ command: 'node --test', timeoutMs: 1_000 }],
+  })
+  assert.deepEqual(parseNativeToolInput({ operation: 'cell-run', planDigest: digest }), {
+    operation: 'cell-run', planDigest: digest,
+  })
+  assert.deepEqual(parseNativeToolInput({ operation: 'cell-discard', planDigest: digest }), {
+    operation: 'cell-discard', planDigest: digest,
+  })
+  for (const operation of ['cell-plan', 'cell-run', 'cell-discard']) {
+    const base = operation === 'cell-plan'
+      ? { operation, outcome: 'test', commands: [{ command: 'true' }] }
+      : { operation, planDigest: digest }
+    assert.throws(
+      () => parseNativeToolInput({ ...base, source: 'forged', cwd: 'forged', approval: true }),
+      /Field "source" is not valid/u,
+    )
+  }
+  assert.throws(
+    () => parseNativeToolInput({ operation: 'cell-plan', outcome: 'test', commands: [{ command: 'true', env: {} }] }),
+    /Field "env" is not valid/u,
+  )
 })
 
 test('forwards cancellation and returns canonical evidence with compact native rendering', async () => {

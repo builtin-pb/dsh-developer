@@ -111,7 +111,7 @@ node bin/dsh-developer.js compatibility --source C:\path\to\plugin --release-dsh
 {"operation":"doctor","source":"C:/path/to/plugin","skipRuntime":true}
 ```
 
-`operation` 可选 `authority`、`capabilities`、`doctor`、`preflight`、`impact`、`compatibility`、`delegation` 或 `ui`。一个 schema 保持模型看到的工具目录足够小，同时在每个入口返回同一套标准化证据。
+`operation` 可选 `authority`、`capabilities`、`doctor`、`preflight`、`impact`、`compatibility`、`delegation`、`ui`、`cell-plan`、`cell-run` 或 `cell-discard`。一个 schema 保持模型看到的工具目录足够小，同时在每个入口返回同一套标准化证据。
 
 被委派的 agent 与固定权限边界的 agent 也能拿到真实的 shell 和文件 schema：不可能获批的升级参数不会出现，过期参数会在执行前被删除，真实拒绝会明确说明不可跨越的边界，不再让模型掉进无效重试。
 
@@ -149,6 +149,16 @@ node bin/dsh-developer.js ui --session codex-task --action close --json
 只读分析从不执行目标仓库代码。受控生命周期执行只用于 dsh-developer 自身，以及逐字节可复现的 promotion 输出。凭据不会进入子进程环境与证据。
 
 需要执行代码的任务进入经过准入验证的 WSL2 + Bubblewrap cell：一次性、断网、无凭据，输入有界，命令串行，输出封存，清理结果可验证。
+
+在顶层 DSH Agent 中，隔离 Build 是原生且不接收路径的。agent 选择一到四条精确命令；控制器只接受 `agents.roots()` 中完全相同的存活 Agent 对象，只从该 Agent 的工作区权限中推导物理源码，并把源码身份、真实 profile 边界、精确 DSH 通道、指纹、命令、超时、固定策略和所有者绑定到一个会过期的 digest，再由 DSH 发起可审计的一次性批准：
+
+```json
+{"operation":"cell-plan","outcome":"运行聚焦测试和仓库检查","commands":[{"command":"node --test","timeoutMs":60000},{"command":"npm run check","timeoutMs":60000}]}
+{"operation":"cell-run","planDigest":"sha256:<cell-plan 返回的 digest>"}
+{"operation":"cell-discard","planDigest":"sha256:<同一个 digest>"}
+```
+
+`cell-run` 只接受 digest。对话文字和布尔字段不能代替批准；批准通道不可用、拒绝、取消或返回非一次性许可时，都不会启动 cell。全部命令在同一个已准入 cell 中顺序运行，失败或取消即停止，只返回有界且经过凭据扫描的输出；命令非零退出时会附带紧凑、已脱敏的 stdout/stderr 证据。源码和真实 profile 始终不变。变化的字节只经由控制器的不透明能力封存一次，物理位置同时位于源码和 profile 之外，再保留在不可写的隔离根中；文件名前缀从不代表所有权。`cell-discard` 删除前会重新证明祖先、身份和指纹；只有它能释放全进程唯一工作流槽位。暂存根缺失、移动、替换或其他清理含糊都会保持槽位中毒并报告恢复根；一旦经过验证的删除开始，调用方取消也不能把它丢在半途。所有失败诊断都会递归限界、按白名单筛选并扫描凭据。这三个动作有意不提供 CLI 或冷恢复入口。
 
 ```powershell
 node bin/dsh-developer.js lab --wsl-distro Ubuntu-22.04
