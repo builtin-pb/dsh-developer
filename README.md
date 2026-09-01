@@ -45,9 +45,9 @@ Audit this plugin, repair every blocker, and give me the install command.
 Check whether these Claude hooks still deny tools on this DSH install.
 ```
 
-Natural language is the primary entry. DSH and Codex select dsh-developer for these plugin intents; it reads the workspace and extracts the goal and constraints. Answers and read-only audits act immediately. Changes produce one compact effects-and-proof plan. Approve its edit scope and the agent owns edit, test, diagnosis, repair, Doctor, profile proof, and exact-lane evidence. It pauses only for isolated execution, staged Apply, publishing, or a precise external blocker.
+Natural language is the primary entry. DSH and Codex select dsh-developer, extract the goal and constraints, then act on answers and read-only audits. Changes get one effects-and-proof plan; after you approve its edit scope, the agent owns implementation through exact-lane evidence. It pauses only for isolated execution, staged Apply, publishing, or a precise external blocker.
 
-`/dsh-developer` in DSH and `$dsh-developer` in Codex pin deterministic selection whenever you want it; they are not a command vocabulary users must learn.
+`/dsh-developer` in DSH and `$dsh-developer` in Codex pin deterministic selection; users do not need a command vocabulary.
 
 ## Ship a plugin
 
