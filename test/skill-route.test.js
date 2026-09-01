@@ -16,8 +16,8 @@ test('keeps every routed skill instruction set within the repository budget', as
     'core-with-untrusted-source': ['references/core-incubation.md', 'references/core-admission.md', 'references/safety.md'],
     'execution-bearing-core': ['references/execution-lab.md', 'references/core-admission.md', 'references/safety.md'],
     'isolated-cell': ['references/isolated-cell.md', 'references/safety.md'],
-    delegation: ['references/delegation-safety.md'],
-    'delegation-with-untrusted-source': ['references/delegation-safety.md', 'references/safety.md'],
+    authority: ['references/authority-safety.md'],
+    'authority-with-untrusted-source': ['references/authority-safety.md', 'references/safety.md'],
     ui: ['references/agent-native-ui.md'],
     'ui-with-untrusted-source': ['references/agent-native-ui.md', 'references/safety.md'],
   }

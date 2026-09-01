@@ -105,3 +105,24 @@ test('renders delegated fixed-authority evidence without adding another tool sch
     /Field "source" is not valid for operation "delegation"/u,
   )
 })
+
+test('renders current fixed-authority evidence on the same native schema', async () => {
+  const definition = createNativeToolDefinition(async () => ({
+    operation: 'authority',
+    ok: true,
+    report: {
+      ok: true,
+      applies: true,
+      agent: { delegated: false, depth: null },
+      authority: { reasons: ['maximum-sandbox'] },
+      tools: [{ name: 'pwsh', status: 'fixed-scope', exposed: [] }],
+      checks: [{ id: 'agent-scope', status: 'PASS', message: 'fixed' }],
+      evidenceDigest: 'sha256:test',
+    },
+  }))
+  const value = await definition.execute({ operation: 'authority' }, {
+    signal: new AbortController().signal,
+  })
+  assert.match(definition.output.render({}, value)[0].text, /^PASS Authority safety/u)
+  assert.deepEqual(parseNativeToolInput({ operation: 'authority' }), { operation: 'authority' })
+})

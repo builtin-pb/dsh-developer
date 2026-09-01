@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { registerDelegationProbe } from './lib/delegation-probe.js'
-import { registerDelegationSafety } from './lib/delegation-safety.js'
+import { registerAuthoritySafety } from './lib/delegation-safety.js'
 import { registerNativeCommands } from './lib/native-commands.js'
 import { hasNativeTool, registerNativeTool } from './lib/native-tool.js'
 import { registerUiCliTool } from './lib/ui-cli-tool.js'
@@ -66,7 +66,7 @@ export async function apply(ctx) {
       return { DSH_DEVELOPER_BIN: cliPath, DSH_DEVELOPER_UI_PATCH: uiPatchPath }
     },
   })
-  registerDelegationSafety(ctx)
+  registerAuthoritySafety(ctx)
   registerNativeTool(ctx)
   registerUiSafetyGuard(ctx)
   await registerUiCliTool(ctx)

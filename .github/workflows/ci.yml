@@ -121,6 +121,11 @@ jobs:
           $impact = Join-Path $env:RUNNER_TEMP 'dsh-upstream-impact.json'
           node bin/dsh-developer.js impact --source . --release-dsh $releaseDsh --preview-dsh $previewDsh --json | Tee-Object -FilePath $impact
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:DSH_DEVELOPER_DELEGATION_DSH_TEST = '1'
+          $env:DSH_DEVELOPER_RELEASE_DSH = $releaseDsh
+          $env:DSH_DEVELOPER_PREVIEW_DSH = $previewDsh
+          node --test --test-reporter=spec test/delegation-safety.integration.test.js
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $evidence = Join-Path $env:RUNNER_TEMP 'dsh-compatibility-matrix.json'
           node bin/dsh-developer.js compatibility --source . --release-dsh $releaseDsh --preview-dsh $previewDsh --json | Tee-Object -FilePath $evidence
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -1,6 +1,6 @@
 ---
 name: dsh-developer
-description: "Develop DSH plugins with Doctor, promotion, compatibility proof, delegation safety, and evidence-gated core work."
+description: "Develop DSH plugins with Doctor, promotion, compatibility proof, fixed-authority safety, and evidence-gated core work."
 ---
 
 # DSH Developer
@@ -13,7 +13,7 @@ Own through handoff; return evidence or blocker.
 
 - Creator export: **Promote**; load [the export contract](references/creator-export.md).
 - Existing repository: **Audit**; propose one bounded, authorized change.
-- Delegated-child verification, fixed-authority/schema mismatch, validation failure, or escalation loop: load [the delegated-child route](references/delegation-safety.md) first; it overrides core incubation.
+- Permission-argument failure, escalation loop, Full Access, disabled approvals, or delegated-child verification: load [the fixed-authority route](references/authority-safety.md) first; it overrides core incubation.
 - Other core lifecycle, communication, permission, or isolation: inspect and load [the core-gap rules](references/core-incubation.md). For execution, load [the lab gate](references/execution-lab.md) instead.
 - Separately owned child workspace: load [the isolated-cell contract](references/isolated-cell.md), which includes admission.
 - Exact release/preview: compatibility only for product or reproducible output.

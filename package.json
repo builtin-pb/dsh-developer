@@ -15,6 +15,7 @@
   "exports": {
     ".": "./index.js",
     "./cell-admission": "./lib/cell-admission.js",
+    "./authority-safety": "./lib/delegation-safety.js",
     "./capabilities": "./lib/capabilities.js",
     "./compatibility": "./lib/compatibility.js",
     "./delegation-safety": "./lib/delegation-safety.js",
@@ -60,7 +61,10 @@
         "agentPresets",
         "agents",
         "appExit",
+        "approval",
         "commands",
+        "permissionPresets",
+        "sandboxPolicy",
         "shellEnv",
         "skills",
         "tools"
@@ -72,6 +76,7 @@
   },
   "keywords": [
     "agent-native",
+    "agent-safety",
     "browser-automation",
     "deepseek",
     "deepseek-harness",
@@ -80,6 +85,7 @@
     "playwright",
     "plugin",
     "plugin-development",
+    "sandbox",
     "codex-plugin",
     "agent-skill",
     "developer-tools"
