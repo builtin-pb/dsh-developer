@@ -1,5 +1,6 @@
 import './cell-admission.test.js'
 import './capabilities.test.js'
+import './client-bundle-audit.test.js'
 import './cli-options.test.js'
 import './compatibility.test.js'
 import './creator-export.test.js'

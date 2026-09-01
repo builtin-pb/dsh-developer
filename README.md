@@ -80,6 +80,7 @@ Doctor is more than a manifest linter. Its release catalogue covers:
 
 - stable ordinary-file snapshots, portable paths, case collisions, binary content, dependency trees, size limits, and credential-shaped material;
 - npm, DSH bundle, Codex plugin, Agent Skill, local-reference, documentation, test-guidance, compatibility, and MIT-license contracts;
+- DSH Web client declarations, built `./client` artifacts, lazy-CJS registration identity, and a closed browser module boundary that rejects Node, file, and undeclared dynamic requests before they can brick Web boot;
 - exact DSH 0.1.1-rc.2 compatibility, with DSH 0.1.2-alpha.3 treated only as preview evidence;
 - byte-for-byte reproduction of promoted bundles from their fingerprinted Creator provenance;
 - native module registration plus a witnessed clean-profile DSH install, load, discovery, and uninstall, with package installation offline and lifecycle scripts disabled; and
