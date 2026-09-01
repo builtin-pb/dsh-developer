@@ -175,6 +175,58 @@ test('orders exact-lane recovery before Doctor and preflight repair without prom
   assert.deepEqual(preview, [])
 })
 
+test('keeps Hook Doctor recovery provenance-specific and edit-approval safe in structured and human output', () => {
+  const sourceAuthority = withNextActions({
+    kind: 'doctor-hook-bridge',
+    ok: false,
+    lane: { status: 'unreviewed' },
+    config: { status: 'not-inspected', issues: [{ code: 'HOOK_SOURCE_OUTSIDE_PROJECT', blocking: true }] },
+    checks: [{ id: 'source.authority', status: 'FAIL', blocking: true }],
+  }, { operation: 'hook-doctor' })
+  assert.deepEqual(sourceAuthority.nextActions, [])
+  assert.equal(appendFirstNextAction('FAIL Hook Bridge Doctor', sourceAuthority), 'FAIL Hook Bridge Doctor')
+
+  const laneFailure = deriveNextActions({
+    operation: 'hook-doctor',
+    report: {
+      kind: 'doctor-hook-bridge',
+      ok: false,
+      lane: { status: 'unreviewed' },
+      config: { status: 'not-inspected', issues: [{ code: 'HOOK_BRIDGE_UNREVIEWED', blocking: true }] },
+      checks: [{ id: 'lane.identity', status: 'FAIL', blocking: true }],
+    },
+  })
+  assert.deepEqual(ids(laneFailure), ['dsh.select-reviewed-lane'])
+
+  const configFailure = withNextActions({
+    kind: 'doctor-hook-bridge',
+    ok: false,
+    lane: { status: 'reviewed-partial', activation: 'not-inspected' },
+    config: {
+      status: 'inspected',
+      issues: [{ code: 'HOOK_EVENT_UNSUPPORTED', blocking: true }],
+    },
+    checks: [
+      { id: 'lane.identity', status: 'PASS', blocking: true },
+      { id: 'bridge.bytes', status: 'PASS', blocking: true },
+      { id: 'config.compatibility', status: 'FAIL', blocking: true },
+    ],
+  }, { operation: 'hook-doctor' })
+  assert.deepEqual(ids(configFailure.nextActions), ['hook-doctor.resolve-config'])
+  const [action] = configFailure.nextActions
+  assert.equal(action.automatic, false)
+  assert.equal(action.authorityClass, 'explicit-source-edit')
+  assert.equal(action.effectClass, 'source-change')
+  assert.match(action.recovery.text, /only within existing source-edit authority/u)
+  assert.match(action.recovery.text, /otherwise obtain explicit edit approval before any change/u)
+  assert.match(action.recovery.text, /Do not alter package bytes, execute or expand a handler, or claim activation/u)
+  assert.doesNotMatch(action.recovery.text, /already-authorized hook configuration/u)
+  const rendered = appendFirstNextAction('FAIL Hook Bridge Doctor', configFailure)
+  assert.match(rendered, /Next action \[hook-doctor\.resolve-config\]/u)
+  assert.match(rendered, /explicit edit approval before any change/u)
+  assert.match(rendered, /never use preview evidence as release proof/u)
+})
+
 test('models cell plan, approval denial, admission failure, run failure, and cleanup poison safely', () => {
   const plan = deriveNextActions({
     operation: 'cell-plan',

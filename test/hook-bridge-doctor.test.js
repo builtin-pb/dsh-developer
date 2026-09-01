@@ -7,7 +7,7 @@ import test from 'node:test'
 import { formatHookBridgeReport, inspectHookBridge } from '../lib/hook-bridge-doctor.js'
 import { inspectHookBridgeInternal } from '../lib/hook-bridge-doctor-internal.js'
 import { resolveInstalledDshEntry } from '../lib/dsh-installation.js'
-import { withNextActions } from '../lib/recovery-actions.js'
+import { appendFirstNextAction, withNextActions } from '../lib/recovery-actions.js'
 
 function hash(value) {
   return 'sha256:' + createHash('sha256').update(value).digest('hex')
@@ -297,6 +297,12 @@ test('confines relative native sources to the supplied project root', async (t) 
   })
   assert.equal(outside.ok, false)
   assert.equal(outside.checks[0].evidence.code, 'HOOK_SOURCE_OUTSIDE_PROJECT')
+  const boundary = withNextActions(outside, { operation: 'hook-doctor', report: outside })
+  assert.deepEqual(boundary.nextActions, [])
+  assert.doesNotMatch(
+    appendFirstNextAction(formatHookBridgeReport(outside), boundary),
+    /Next action|dsh\.select-reviewed-lane/u,
+  )
 })
 
 test('fails closed and redacts secret, malformed, non-text, NUL, oversized, and deep sources', async (t) => {
