@@ -127,6 +127,18 @@ test('does not impose a Web contract on a host-only plugin', () => {
   assert.deepEqual(inspectClientBundle(new Map(), { name: 'host-only' }), { declared: false })
 })
 
+test('rejects the legacy top-level client declaration with migration evidence', () => {
+  assert.throws(
+    () => inspectClientBundle(new Map(), {
+      name: 'legacy-client',
+      client: { platform: 'web' },
+    }),
+    (error) => error.code === 'CLIENT_DECLARATION_MISSING'
+      && error.details.legacyClient === true
+      && /legacy top-level package\.json client field/u.test(error.message),
+  )
+})
+
 test('ignores diagnostic strings and comments that merely mention boundary calls', () => {
   const source = [
     'window.__ModuleLoader__.load({ id: "client-fixture", factory: (require) => {',

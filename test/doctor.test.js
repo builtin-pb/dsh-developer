@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict'
-import { appendFile, mkdir, mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises'
+import { appendFile, cp, mkdir, mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import { withCreatorFingerprint } from '../lib/creator-export.js'
 import { doctorPlugin } from '../lib/doctor.js'
 import { writeFilesExclusive } from '../lib/files.js'
 import { renderGeneratedBundle } from '../lib/templates.js'
+
+const ordinaryPluginFixture = fileURLToPath(new URL('./fixtures/ordinary-dsh-plugin/', import.meta.url))
 
 function exportValue() {
   return withCreatorFingerprint({
@@ -48,6 +51,93 @@ async function addClientBundle(root, body) {
     'utf8',
   )
 }
+
+async function copiedOrdinaryFixture() {
+  const parent = await mkdtemp(join(tmpdir(), 'dsh-developer-ordinary-'))
+  const root = join(parent, 'ordinary-dsh-plugin')
+  await cp(ordinaryPluginFixture, root, { recursive: true })
+  return { parent, root }
+}
+
+test('assesses an ordinary hand-written DSH plugin without generated Codex bundle requirements', async () => {
+  const report = await doctorPlugin(ordinaryPluginFixture, { runtime: 'skip' })
+
+  assert.equal(report.ok, true, JSON.stringify(report.checks, null, 2))
+  assert.equal(report.plugin.name, 'ordinary-dsh-plugin')
+  const codex = report.checks.find((check) => check.id === 'manifest.codex-plugin')
+  assert.equal(codex.status, 'SKIP')
+  assert.equal(codex.blocking, false)
+  const skill = report.checks.find((check) => check.id === 'skill.integrity')
+  assert.equal(skill.status, 'SKIP')
+  assert.equal(skill.blocking, false)
+  const docs = report.checks.find((check) => check.id === 'docs-and-license')
+  assert.equal(docs.status, 'WARN')
+  assert.equal(docs.blocking, false)
+  assert.deepEqual(docs.evidence.missing, ['README.md'])
+  assert.equal(docs.recovery, 'Add README.md before a public release.')
+  assert.equal(report.checks.find((check) => check.id === 'manifest.package').status, 'PASS')
+  assert.equal(report.checks.find((check) => check.id === 'dsh.entrypoint').status, 'PASS')
+})
+
+test('accepts a DSH profile bundle that mounts dependencies instead of its own package', async () => {
+  const { parent, root } = await copiedOrdinaryFixture()
+  try {
+    await writeFile(join(root, 'cordis.patch.yml'), [
+      '- insert:',
+      '    - id: dependency-plugin',
+      "      name: '@example/dependency-plugin'",
+      '',
+    ].join('\n'), 'utf8')
+    await writeFile(join(root, 'index.js'), 'export {}\n', 'utf8')
+
+    const report = await doctorPlugin(root, { runtime: 'skip' })
+    assert.equal(report.ok, true, JSON.stringify(report.checks, null, 2))
+    const entrypoint = report.checks.find((check) => check.id === 'dsh.entrypoint')
+    assert.equal(entrypoint.status, 'PASS')
+    assert.equal(entrypoint.evidence.mounted, false)
+  } finally {
+    await rm(parent, { recursive: true, force: true })
+  }
+})
+
+test('keeps generated bundles strict when their Codex manifest is missing', async () => {
+  const root = await generatedFixture()
+  try {
+    await rm(join(root, '.codex-plugin'), { recursive: true, force: true })
+    const report = await doctorPlugin(root, { runtime: 'skip', requireGenerated: true })
+    assert.equal(report.ok, false)
+    assert.equal(report.checks.find((check) => check.id === 'manifest.codex-plugin').status, 'FAIL')
+    assert.equal(report.checks.find((check) => check.id === 'skill.integrity').status, 'FAIL')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('reports a browser-plane failure when an ordinary plugin exports a client without dsh.client', async () => {
+  const { parent, root } = await copiedOrdinaryFixture()
+  try {
+    const packagePath = join(root, 'package.json')
+    const packageValue = JSON.parse(await readFile(packagePath, 'utf8'))
+    packageValue.exports['./client'] = { default: './client.js' }
+    await writeFile(packagePath, JSON.stringify(packageValue, null, 2) + '\n', 'utf8')
+    await writeFile(
+      join(root, 'client.js'),
+      'window.__ModuleLoader__.load({ id: "ordinary-dsh-plugin", factory: () => ({}) })\n',
+      'utf8',
+    )
+
+    const report = await doctorPlugin(root, { runtime: 'skip' })
+    const failed = report.checks.filter((check) => check.status === 'FAIL')
+    assert.deepEqual(failed.map((check) => check.id), ['web.client-bundle'])
+    assert.equal(failed[0].evidence.code, 'CLIENT_DECLARATION_MISSING')
+    assert.match(failed[0].message, /"\.\/client" browser entry/u)
+    assert.match(failed[0].message, /package\.json dsh\.client declaration/u)
+    assert.match(failed[0].recovery, /platform "web"/u)
+    assert.equal(report.ok, false)
+  } finally {
+    await rm(parent, { recursive: true, force: true })
+  }
+})
 
 test('accepts exact generated bytes and blocks post-generation drift', async () => {
   const root = await generatedFixture()

@@ -52,6 +52,8 @@ Audit a repository from DSH Web:
 /dsh-developer-preflight {"source":"C:/path/to/plugin","profile":"web"}
 ```
 
+Point Doctor at any DSH plugin—hand-written or generated. It reports the DSH failures that matter without burying them under requirements from another toolchain; promoted release bundles still face the full provenance gate.
+
 Doctor catches the failures that brick real DSH profiles: broken package and bundle contracts, unsafe repository content, Host/Client injection mixups, browser-service collisions, invalid Web artifacts, unreproducible output, and failed clean-profile lifecycle proof. The repository stays read-only during inspection.
 
 Turn a saved Creator export into an installable bundle:

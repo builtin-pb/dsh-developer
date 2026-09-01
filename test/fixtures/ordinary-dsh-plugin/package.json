@@ -1,0 +1,26 @@
+{
+  "name": "ordinary-dsh-plugin",
+  "version": "1.0.0",
+  "description": "A minimal hand-written DSH plugin used for Doctor regression coverage.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": {
+      "default": "./index.js"
+    }
+  },
+  "files": [
+    "cordis.patch.yml",
+    "index.js",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "license": "MIT"
+}
