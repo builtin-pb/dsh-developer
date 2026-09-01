@@ -22,6 +22,8 @@ test('keeps both human-facing READMEs strong, concise, linked, and package-visib
   }
   assert.match(english, /browser-service collisions/u)
   assert.match(chinese, /Client 服务冲突/u)
+  assert.match(english, /raw plugin-owned Web routes outside the authenticated connection boundary/u)
+  assert.match(chinese, /宿主认证 connection 边界之外的插件自建原始 Web 路由/u)
   assert.ok(manifest.files.includes('README.md'))
   assert.ok(manifest.files.includes('README.zh-CN.md'))
 })

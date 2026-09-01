@@ -542,3 +542,51 @@ test('keeps computed client service ownership visible instead of claiming a clea
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('reviews raw plugin-owned Web routes without blocking intentional public intent', async () => {
+  const { parent, root } = await copiedOrdinaryFixture()
+  try {
+    await writeFile(join(root, 'index.js'), [
+      "export const inject = ['webServer']",
+      'export function apply(ctx) {',
+      '  ctx.webServer.register({',
+      "    kind: 'prefix',",
+      "    path: '/ping',",
+      '    handler: (_req, res) => { res.writeHead(200); res.end("pong") },',
+      '  })',
+      '}',
+      '',
+    ].join('\n'), 'utf8')
+
+    const rawReport = await doctorPlugin(root, { runtime: 'skip' })
+    const rawCheck = rawReport.checks.find((candidate) => candidate.id === 'web.raw-route-auth')
+    assert.equal(rawCheck.status, 'WARN')
+    assert.equal(rawCheck.blocking, false)
+    assert.equal(rawReport.ok, true, JSON.stringify(rawReport.checks, null, 2))
+    assert.equal(rawCheck.evidence.rawRoutes[0].routePath, '/ping')
+    assert.equal(rawCheck.evidence.repositoryCodeExecuted, false)
+    assert.equal(rawCheck.evidence.lanes.release.target, '0.1.1-rc.2')
+    assert.equal(rawCheck.evidence.lanes.preview.target, '0.1.2-alpha.3')
+    assert.match(rawCheck.message, /not claiming every raw route is unsafe/u)
+    assert.match(rawCheck.recovery, /intentionally public/u)
+    assert.match(rawCheck.recovery, /upstream connection service/u)
+
+    await writeFile(join(root, 'index.js'), [
+      "export const inject = ['connection']",
+      'export function apply(ctx) {',
+      "  ctx.connection.rpc.handle('/ping', async () => ({ ok: true }))",
+      '}',
+      '',
+    ].join('\n'), 'utf8')
+
+    const connectionReport = await doctorPlugin(root, { runtime: 'skip' })
+    const connectionCheck = connectionReport.checks.find((candidate) => candidate.id === 'web.raw-route-auth')
+    assert.equal(connectionCheck.status, 'PASS')
+    assert.equal(connectionCheck.blocking, false)
+    assert.deepEqual(connectionCheck.evidence.rawRoutes, [])
+    assert.equal(connectionCheck.evidence.connectionRoutes[0].authBoundary, 'host-connection')
+    assert.match(connectionCheck.message, /local absence is not a safety proof/u)
+  } finally {
+    await rm(parent, { recursive: true, force: true })
+  }
+})

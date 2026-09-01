@@ -72,7 +72,7 @@ dsh web
 
 不管插件是手写还是生成，直接交给 Doctor。它只盯住真正影响 DSH 的问题，不会让另一套工具链的规则淹没结果；进入正式版 promotion 的 bundle 仍必须过完整的来源证明门禁。
 
-Doctor 会在插件拖垮真实 DSH profile 前发现问题：错误的 package 与 bundle 契约、冷启动必需的 package 被错标为 optional、Host/Client 注入混用、会让 Web 白屏的 Client 服务冲突、浏览器端模块泄漏、不可复现的输出，以及无法通过干净 profile 生命周期验证的构建。整个审计过程保持目标仓库只读。
+Doctor 会在插件拖垮真实 DSH profile 前发现问题：错误的 package 与 bundle 契约、冷启动必需的 package 被错标为 optional、Host/Client 注入混用、会让 Web 白屏的 Client 服务冲突、位于宿主认证 connection 边界之外的插件自建原始 Web 路由、浏览器端模块泄漏、不可复现的输出，以及无法通过干净 profile 生命周期验证的构建。整个审计过程保持目标仓库只读。
 
 把 Creator 中保存的导出直接变成可安装 bundle：
 
