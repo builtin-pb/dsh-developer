@@ -186,7 +186,10 @@ test('maps a declared service to exact package owners and emits stable scoped im
   const source = join(root, 'source')
   try {
     await mkdir(source)
-    await sourceFixture(source)
+    await sourceFixture(source, {
+      peerDependencies: { '@deepseek-ai/dsh-skill': '^0.1.1-rc.2 || ^0.1.2-alpha.3' },
+      devDependencies: { '@deepseek-ai/dsh-skill': '^0.1.1-rc.2 || ^0.1.2-alpha.3' },
+    })
     const releaseDsh = await installedPackage(
       join(root, 'release-dsh'),
       '@deepseek-ai/dsh',
@@ -244,6 +247,11 @@ test('maps a declared service to exact package owners and emits stable scoped im
       preview: ['@deepseek-ai/dsh-skill'],
     }])
     assert.equal(first.changes.find((value) => value.package === '@deepseek-ai/dsh-skill').classification, 'contract')
+    assert.equal(first.cohortRanges.length, 2)
+    assert.deepEqual(first.cohortRanges.map((value) => value.acceptedLanes), [
+      ['release', 'preview'],
+      ['release', 'preview'],
+    ])
     assert.equal(first.evidenceDigest, second.evidenceDigest)
     assert.match(formatUpstreamImpactReport(first), /^PASS DSH upstream impact impact-fixture/u)
 
@@ -275,6 +283,45 @@ test('maps a declared service to exact package owners and emits stable scoped im
     const contextFailure = dynamicContext.checks.find((value) => value.id === 'source.inject-contract')
     assert.equal(contextFailure.status, 'FAIL')
     assert.deepEqual(contextFailure.evidence.paths, ['index.js'])
+
+    await sourceFixture(source, {
+      peerDependencies: { '@deepseek-ai/dsh-skill': '^0.1.0-rc.8' },
+      devDependencies: { '@deepseek-ai/dsh-skill': '^0.1.0-rc.8' },
+    })
+    const stale = await inspectUpstreamImpactInternal(source, {
+      releaseDsh: 'release',
+      previewDsh: 'preview',
+    }, dependencies)
+    assert.equal(stale.ok, false)
+    assert.equal(stale.checks.find((value) => value.id === 'source.release-cohort-coverage').status, 'FAIL')
+    assert.equal(stale.checks.find((value) => value.id === 'source.preview-cohort-coverage').status, 'WARN')
+    assert.match(formatUpstreamImpactReport(stale), /\^0\.1\.0-rc\.8 \[release:miss, preview:miss\]/u)
+
+    await sourceFixture(source, {
+      peerDependencies: { '@deepseek-ai/dsh-skill': '^0.1.2-alpha.2' },
+      devDependencies: { '@deepseek-ai/dsh-skill': '^0.1.2-alpha.2' },
+    })
+    const upgraded = await inspectUpstreamImpactInternal(source, {
+      releaseDsh: 'release',
+      previewDsh: 'preview',
+    }, dependencies)
+    assert.equal(upgraded.ok, false)
+    assert.equal(upgraded.checks.find((value) => value.id === 'source.release-cohort-coverage').status, 'FAIL')
+    assert.equal(upgraded.checks.find((value) => value.id === 'source.preview-cohort-coverage').status, 'PASS')
+    assert.deepEqual(upgraded.cohortRanges.map((value) => value.acceptedLanes), [['preview'], ['preview']])
+
+    await sourceFixture(source, {
+      peerDependencies: { '@deepseek-ai/dsh-skill': 'workspace:^' },
+      devDependencies: { '@deepseek-ai/dsh-skill': 'workspace:^' },
+    })
+    const unknown = await inspectUpstreamImpactInternal(source, {
+      releaseDsh: 'release',
+      previewDsh: 'preview',
+    }, dependencies)
+    assert.equal(unknown.ok, false)
+    assert.equal(unknown.checks.find((value) => value.id === 'source.release-cohort-coverage').status, 'FAIL')
+    assert.equal(unknown.checks.find((value) => value.id === 'source.preview-cohort-coverage').status, 'WARN')
+    assert.equal(unknown.cohortRanges.every((value) => value.status === 'unknown'), true)
   } finally {
     await rm(root, { recursive: true, force: true })
   }

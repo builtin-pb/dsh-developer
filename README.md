@@ -25,6 +25,7 @@ The verified path uses Windows, Node.js 22.18+, pnpm 11.7.0, and DSH 0.1.1-rc.2.
 ```powershell
 git clone https://github.com/builtin-pb/dsh-developer.git
 cd dsh-developer
+npm ci --ignore-scripts
 npm test
 dsh plugin --profile web add .
 dsh web
@@ -77,7 +78,7 @@ Run impact analysis before an upgrade:
 node bin/dsh-developer.js impact --source C:\path\to\plugin --release-dsh D:\release\dsh.cmd --preview-dsh D:\preview\dsh.cmd
 ```
 
-It follows the packages and Cordis services your plugin actually touches, then compares their public declarations, entries, dependencies, and DSH metadata across both lanes. Compatibility takes the next step and runs the same trusted bytes through both exact runtimes:
+It follows the packages and Cordis services your plugin actually touches, then compares their public declarations, entries, dependencies, and DSH metadata across both lanes. It proves offline whether declared DSH peer and development ranges admit the exact installed release and preview versions under npm prerelease semantics; registry publication and the project lock remain separate install evidence. Compatibility takes the next step and runs the same trusted bytes through both exact runtimes:
 
 ```powershell
 node bin/dsh-developer.js compatibility --source C:\path\to\plugin --release-dsh D:\release\dsh.cmd --preview-dsh D:\preview\dsh.cmd

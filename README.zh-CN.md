@@ -27,6 +27,7 @@ Doctor、promotion、profile preflight、compatibility、upstream impact、capab
 ```powershell
 git clone https://github.com/builtin-pb/dsh-developer.git
 cd dsh-developer
+npm ci --ignore-scripts
 npm test
 dsh plugin --profile web add .
 dsh web
@@ -79,7 +80,7 @@ dsh --profile headless --dump-config
 node bin/dsh-developer.js impact --source C:\path\to\plugin --release-dsh D:\release\dsh.cmd --preview-dsh D:\preview\dsh.cmd
 ```
 
-它只追踪插件真正触及的 package 与 Cordis 服务，再比较两个通道中的公开声明、入口、依赖和 DSH 元数据。Compatibility 随后把同一份可信字节分别放进两套精确运行时：
+它只追踪插件真正触及的 package 与 Cordis 服务，再比较两个通道中的公开声明、入口、依赖和 DSH 元数据。它会离线证明声明的 DSH peer/dev 范围是否覆盖实际安装的正式版与预览版精确版本，并严格遵循 npm 的预发布版本规则；registry 发布状态与项目 lockfile 仍由安装证据单独确认。Compatibility 随后把同一份可信字节分别放进两套精确运行时：
 
 ```powershell
 node bin/dsh-developer.js compatibility --source C:\path\to\plugin --release-dsh D:\release\dsh.cmd --preview-dsh D:\preview\dsh.cmd
