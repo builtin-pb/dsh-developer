@@ -128,7 +128,7 @@ The global `dsh_developer` tool reaches Web, headless, ACP, Code Mode, and JSON-
 {"operation":"doctor","source":"C:/path/to/plugin","skipRuntime":true}
 ```
 
-Its operation is one of `authority`, `capabilities`, `doctor`, `preflight`, `impact`, `compatibility`, `delegation`, `ui`, `cell-plan`, `cell-run`, or `cell-discard`. One schema keeps the catalogue small. Blocked CLI JSON and native results add at most three closed `nextActions`; text shows the first. They neither execute nor grant authority, leave evidence digests unchanged, and keep preview evidence advisory.
+One schema covers every audit and isolated-cell operation while keeping the catalogue small. Blocked results add at most three closed `nextActions`; text shows one. Actions never execute, grant authority, alter evidence digests, or promote preview evidence.
 
 Delegated and fixed-authority agents also receive truthful shell and file schemas. Impossible escalation arguments disappear, stale arguments are removed before execution, and real denials explain the fixed boundary instead of sending the model into another retry loop.
 
