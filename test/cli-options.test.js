@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { assertCliCommandOptions, parseCliArguments } from '../lib/cli-options.js'
 
@@ -82,6 +83,14 @@ test('parses only the explicit Hook Bridge Doctor lane and dialect surface', () 
   assert.throws(
     () => assertCliCommandOptions('hook-doctor', { source: 'hooks.json', dialect: 'codex', dsh: 'dsh', skipRuntime: true }),
     /hook-doctor does not accept --skip-runtime/u,
+  )
+})
+
+test('keeps Hook Doctor CLI human output on the exact redacted formatter', async () => {
+  const source = await readFile(new URL('../bin/dsh-developer.js', import.meta.url), 'utf8')
+  assert.match(
+    source,
+    /printFormattedReport\(report, options\.json, command, formatHookBridgeReport\)/u,
   )
 })
 

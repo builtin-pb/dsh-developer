@@ -136,7 +136,13 @@ test('classifies the exact reviewed Codex subset without executing DSH, bridge, 
   assert.equal(first.evidenceDigest, second.evidenceDigest)
   assert.equal(await readFile(sentinel, 'utf8').catch(() => undefined), undefined)
   assert.doesNotMatch(JSON.stringify(first), /writeFileSync|must-not-exist/u)
-  assert.match(formatHookBridgeReport(first), /^PASS Hook Bridge Doctor codex/u)
+  const formatted = formatHookBridgeReport(first)
+  assert.match(formatted, /^PASS Hook Bridge Doctor codex/u)
+  assert.match(
+    formatted,
+    /REGISTRATION classified: 5 effective handlers survive exact bridge parsing; activation remains uninspected\./u,
+  )
+  assert.doesNotMatch(formatted, /registers zero hooks|writeFileSync|must-not-exist/u)
 })
 
 test('classifies all seven reviewed Claude Code events and exact matcher subjects', async (t) => {
@@ -182,6 +188,14 @@ test('separates strict acceptance from bridge-runtime parsing and catches whole-
   assert.ok(report.config.issues.some((value) => value.code === 'HOOK_HANDLER_TYPE_INVALID'))
   assert.ok(report.config.issues.some((value) => value.code === 'HOOK_TIMEOUT_INVALID'))
   assert.ok(report.config.issues.some((value) => value.code === 'HOOK_MATCHER_INVALID_REGEX'))
+  const formatted = formatHookBridgeReport(report)
+  assert.match(
+    formatted,
+    /REGISTRATION none-invalid-matcher: the exact bridge rejects the whole config and registers zero hooks \(0 effective handlers\)\./u,
+  )
+  assert.match(formatted, /EVENT PreToolUse \[mapped-partial\] 0 subset-accepted, 2 individually bridge-runnable/u)
+  assert.match(formatted, /EVENT PostToolUse \[mapped-partial\] 1 subset-accepted, 1 individually bridge-runnable/u)
+  assert.doesNotMatch(formatted, /echo timeout|echo inspected-only/u)
 })
 
 test('distinguishes Codex async skip from Claude async synchronous runtime behavior', async (t) => {

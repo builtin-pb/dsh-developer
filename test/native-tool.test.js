@@ -143,6 +143,46 @@ test('renders static Hook Bridge scope and nonclaims on the existing native sche
   assert.match(definition.output.render({}, value)[0].text, /^FAIL Hook Bridge Doctor codex \[static compatibility; activation not inspected\]/u)
 })
 
+test('renders whole-config Hook Bridge rejection without leaking redacted input', async () => {
+  const marker = 'DO_NOT_RENDER_HOOK_INPUT'
+  const definition = createNativeToolDefinition(async () => ({
+    operation: 'hook-doctor',
+    ok: false,
+    report: {
+      kind: 'doctor-hook-bridge',
+      ok: false,
+      dialect: 'codex',
+      lane: { status: 'reviewed-partial', activation: 'not-inspected' },
+      checks: [{ id: 'config.compatibility', status: 'FAIL', message: 'incompatible' }],
+      config: {
+        status: 'inspected',
+        registration: 'none-invalid-matcher',
+        totals: { effectiveRunnable: 0 },
+        events: [{
+          eventIndex: 0,
+          support: 'unknown',
+          handlers: { runnable: 1, runtimeRunnable: 1, skipped: 0, invalid: 0 },
+          redactedInput: marker,
+        }],
+        issues: [{ code: 'HOOK_MATCHER_INVALID_REGEX', blocking: true, redactedInput: marker }],
+      },
+      evidenceDigest: 'sha256:test',
+      redactedInput: marker,
+    },
+  }))
+  const value = await definition.execute({ operation: 'hook-doctor', source: 'hooks.json', dialect: 'codex' }, {
+    signal: new AbortController().signal,
+  })
+  const rendered = definition.output.render({}, value)[0].text
+  assert.match(
+    rendered,
+    /REGISTRATION none-invalid-matcher: the exact bridge rejects the whole config and registers zero hooks \(0 effective handlers\)\./u,
+  )
+  assert.match(rendered, /redacted-event-0/u)
+  assert.doesNotMatch(rendered, new RegExp(marker, 'u'))
+  assert.match(rendered, /Next action \[hook-doctor\.resolve-config\]/u)
+})
+
 test('renders delegated fixed-authority evidence without adding another tool schema', async () => {
   const definition = createNativeToolDefinition(async () => ({
     operation: 'delegation',
