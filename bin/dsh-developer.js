@@ -15,6 +15,7 @@ import { conformExecutionLab, formatExecutionLabReport } from '../lib/execution-
 import { formatProfilePreflightReport, inspectProfilePreflight } from '../lib/profile-preflight.js'
 import { formatProfileAttestationReport, inspectProfileAttestation } from '../lib/profile-attestation.js'
 import { promoteCreatorExport } from '../lib/promote.js'
+import { appendFirstNextAction, withNextActions } from '../lib/recovery-actions.js'
 import { formatSourceMigrationReport, inspectSourceMigration } from '../lib/source-migration.js'
 import { executeUiCliAction, formatUiCliReport } from '../lib/ui-cli.js'
 import { formatUpstreamImpactReport, inspectUpstreamImpact } from '../lib/upstream-impact.js'
@@ -62,16 +63,25 @@ function integerOption(options, key) {
 }
 
 function printReport(report, asJson) {
+  const boundary = withNextActions(report, { operation: 'doctor' })
   if (asJson) {
-    process.stdout.write(JSON.stringify(report, null, 2) + '\n')
+    process.stdout.write(JSON.stringify(boundary, null, 2) + '\n')
     return
   }
-  process.stdout.write((report.ok ? 'PASS' : 'FAIL') + ' ' + report.kind + ' ' + report.source + '\n')
+  const lines = [(report.ok ? 'PASS' : 'FAIL') + ' ' + report.kind + ' ' + report.source]
   for (const check of report.checks) {
     const boundary = check.blocking ? 'blocking' : 'advisory'
-    process.stdout.write('  ' + check.status.padEnd(4) + ' ' + check.id + ' [' + boundary + '] ' + check.message + '\n')
+    lines.push('  ' + check.status.padEnd(4) + ' ' + check.id + ' [' + boundary + '] ' + check.message)
   }
-  if (report.fingerprint) process.stdout.write('Fingerprint: ' + report.fingerprint + '\n')
+  if (report.fingerprint) lines.push('Fingerprint: ' + report.fingerprint)
+  process.stdout.write(appendFirstNextAction(lines.join('\n'), boundary) + '\n')
+}
+
+function printFormattedReport(report, asJson, operation, formatter) {
+  const boundary = withNextActions(report, { operation })
+  process.stdout.write(asJson
+    ? JSON.stringify(boundary, null, 2) + '\n'
+    : appendFirstNextAction(formatter(report), boundary) + '\n')
 }
 
 async function main(argv) {
@@ -89,7 +99,7 @@ async function main(argv) {
       distro: options.wslDistro,
       signal: controller.signal,
     })
-    process.stdout.write(options.json ? JSON.stringify(report, null, 2) + '\n' : formatCellAdmissionReport(report) + '\n')
+    printFormattedReport(report, options.json, command, formatCellAdmissionReport)
     if (!report.ok) process.exitCode = 1
     return
   }
@@ -103,7 +113,7 @@ async function main(argv) {
   }
   if (command === 'capabilities') {
     const report = await inspectDshCapabilities(options.dsh, { signal: controller.signal })
-    process.stdout.write(options.json ? JSON.stringify(report, null, 2) + '\n' : formatCapabilityReport(report) + '\n')
+    printFormattedReport(report, options.json, command, formatCapabilityReport)
     if (!report.ok) process.exitCode = 1
     return
   }
@@ -113,7 +123,7 @@ async function main(argv) {
       previewDsh: required(options, 'previewDsh'),
       signal: controller.signal,
     })
-    process.stdout.write(options.json ? JSON.stringify(report, null, 2) + '\n' : formatCompatibilityMatrix(report) + '\n')
+    printFormattedReport(report, options.json, command, formatCompatibilityMatrix)
     if (!report.ok) process.exitCode = 1
     return
   }
@@ -122,7 +132,7 @@ async function main(argv) {
       distro: options.wslDistro,
       signal: controller.signal,
     })
-    process.stdout.write(options.json ? JSON.stringify(report, null, 2) + '\n' : formatExecutionLabReport(report) + '\n')
+    printFormattedReport(report, options.json, command, formatExecutionLabReport)
     if (!report.ok) process.exitCode = 1
     return
   }
@@ -132,7 +142,7 @@ async function main(argv) {
       previewDsh: required(options, 'previewDsh'),
       signal: controller.signal,
     })
-    process.stdout.write(options.json ? JSON.stringify(report, null, 2) + '\n' : formatUpstreamImpactReport(report) + '\n')
+    printFormattedReport(report, options.json, command, formatUpstreamImpactReport)
     if (!report.ok) process.exitCode = 1
     return
   }
@@ -142,7 +152,7 @@ async function main(argv) {
       toDsh: requiredValue(options, 'toDsh'),
       signal: controller.signal,
     })
-    process.stdout.write(options.json ? JSON.stringify(report, null, 2) + '\n' : formatSourceMigrationReport(report) + '\n')
+    printFormattedReport(report, options.json, command, formatSourceMigrationReport)
     if (!report.ok) process.exitCode = 1
     return
   }
@@ -152,7 +162,7 @@ async function main(argv) {
       profile: options.profile ?? 'headless',
       signal: controller.signal,
     })
-    process.stdout.write(options.json ? JSON.stringify(report, null, 2) + '\n' : formatProfilePreflightReport(report) + '\n')
+    printFormattedReport(report, options.json, command, formatProfilePreflightReport)
     if (!report.ok) process.exitCode = 1
     return
   }
@@ -212,14 +222,22 @@ async function main(argv) {
       input,
       { signal: controller.signal },
     )
-    process.stdout.write(options.json ? JSON.stringify(report, null, 2) + '\n' : formatUiCliReport(report) + '\n')
+    printFormattedReport(report, options.json, command, formatUiCliReport)
     return
   }
   throw new DshDeveloperError('CLI_USAGE', 'Unknown command "' + command + '".\n\n' + USAGE)
 }
 
-main(process.argv.slice(2)).catch((error) => {
+const argv = process.argv.slice(2)
+
+main(argv).catch((error) => {
   const diagnostic = asDiagnostic(error)
-  process.stderr.write(JSON.stringify(diagnostic, null, 2) + '\n')
+  const boundary = withNextActions(diagnostic, {
+    operation: typeof argv[0] === 'string' ? argv[0] : undefined,
+    diagnostic,
+  })
+  process.stderr.write(argv.includes('--json')
+    ? JSON.stringify(boundary, null, 2) + '\n'
+    : appendFirstNextAction(diagnostic.code + ': ' + diagnostic.message, boundary) + '\n')
   process.exitCode = error instanceof DshDeveloperError && error.code === 'CANCELLED' ? 130 : 1
 })

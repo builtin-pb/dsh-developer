@@ -130,7 +130,7 @@ node bin/dsh-developer.js compatibility --source C:\path\to\plugin --release-dsh
 {"operation":"doctor","source":"C:/path/to/plugin","skipRuntime":true}
 ```
 
-`operation` 可选 `authority`、`capabilities`、`doctor`、`preflight`、`impact`、`compatibility`、`delegation`、`ui`、`cell-plan`、`cell-run` 或 `cell-discard`。一个 schema 保持模型看到的工具目录足够小，同时在每个入口返回同一套标准化证据。
+`operation` 可选 `authority`、`capabilities`、`doctor`、`preflight`、`impact`、`compatibility`、`delegation`、`ui`、`cell-plan`、`cell-run` 或 `cell-discard`。一个 schema 保持目录足够小。被阻塞的 CLI JSON 与原生结果最多附带三个封闭的 `nextActions`，文本只显示第一个；它们不会自动执行或授予权限，不改变证据 digest，也不会把预览证据当成发布证据。
 
 被委派的 agent 与固定权限边界的 agent 也能拿到真实的 shell 和文件 schema：不可能获批的升级参数不会出现，过期参数会在执行前被删除，真实拒绝会明确说明不可跨越的边界，不再让模型掉进无效重试。
 

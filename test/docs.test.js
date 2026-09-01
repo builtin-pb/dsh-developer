@@ -28,6 +28,8 @@ test('keeps both human-facing READMEs strong, concise, linked, and package-visib
   assert.match(chinese, /源码走廊/u)
   assert.match(english, /It never edits source/u)
   assert.match(chinese, /绝不修改源码/u)
+  assert.match(english, /at most three closed `nextActions`/u)
+  assert.match(chinese, /最多附带三个封闭的 `nextActions`/u)
   assert.ok(manifest.files.includes('README.md'))
   assert.ok(manifest.files.includes('README.zh-CN.md'))
 })
