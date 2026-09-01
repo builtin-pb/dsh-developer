@@ -7,6 +7,11 @@ import { fileURLToPath } from 'node:url'
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const skillRoot = path.join(repositoryRoot, 'skills', 'dsh-developer')
 const ACTIVE_SET_CHARACTER_LIMIT = 8_000
+const ACTIVE_SET_CHARACTER_MARGIN = 150
+
+function withNewlines(content, newline) {
+  return content.replace(/\r\n?|\n/gu, '\n').replace(/\n/gu, newline)
+}
 
 async function routedInstructionSet(initialReferences) {
   const contents = new Map([['SKILL.md', await readFile(path.join(skillRoot, 'SKILL.md'), 'utf8')]])
@@ -25,7 +30,7 @@ async function routedInstructionSet(initialReferences) {
   return contents
 }
 
-test('keeps every routed skill instruction set within the repository budget', async (t) => {
+test('keeps every LF and CRLF routed skill set below the repository budget with margin', async (t) => {
   const routes = {
     creator: ['references/creator-export.md', 'references/safety.md'],
     audit: ['references/safety.md'],
@@ -39,11 +44,15 @@ test('keeps every routed skill instruction set within the repository budget', as
   for (const [name, references] of Object.entries(routes)) {
     await t.test(name, async () => {
       const contents = await routedInstructionSet(references)
-      const characters = [...contents.values()].reduce((total, content) => total + content.length, 0)
-      assert.ok(
-        characters <= ACTIVE_SET_CHARACTER_LIMIT,
-        `${name} route uses ${characters} characters across ${[...contents.keys()].join(', ')}; limit is ${ACTIVE_SET_CHARACTER_LIMIT}`,
-      )
+      for (const [representation, newline] of [['LF', '\n'], ['CRLF', '\r\n']]) {
+        const characters = [...contents.values()]
+          .reduce((total, content) => total + withNewlines(content, newline).length, 0)
+        assert.ok(
+          characters <= ACTIVE_SET_CHARACTER_LIMIT - ACTIVE_SET_CHARACTER_MARGIN,
+          `${name} ${representation} route uses ${characters} characters across ${[...contents.keys()].join(', ')}; `
+            + `limit is ${ACTIVE_SET_CHARACTER_LIMIT} with ${ACTIVE_SET_CHARACTER_MARGIN} reserved`,
+        )
+      }
     })
   }
 })

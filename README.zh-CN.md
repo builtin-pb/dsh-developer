@@ -95,7 +95,17 @@ dsh --profile headless --dump-config
 node bin/dsh-developer.js impact --source C:\path\to\plugin --release-dsh D:\release\dsh.cmd --preview-dsh D:\preview\dsh.cmd
 ```
 
-它只追踪插件真正触及的 package 与 Cordis 服务，再比较两个通道中的公开声明、入口、依赖和 DSH 元数据。它会离线证明声明的 DSH peer/dev 范围是否覆盖实际安装的正式版与预览版精确版本，并严格遵循 npm 的预发布版本规则；registry 发布状态与项目 lockfile 仍由安装证据单独确认。Compatibility 随后把同一份可信字节分别放进两套精确运行时：
+它只追踪插件真正触及的 package 与 Cordis 服务，再比较两个通道中的公开声明、入口、依赖和 DSH 元数据。它会离线证明声明的 DSH peer/dev 范围是否覆盖实际安装的正式版与预览版精确版本，并严格遵循 npm 的预发布版本规则；registry 发布状态与项目 lockfile 仍由安装证据单独确认。
+
+对于精确的 `0.1.1-rc.2` → `0.1.2-alpha.3` 源码走廊，可用只读 migration ledger 获取文件与行号级行动项：
+
+```powershell
+node bin/dsh-developer.js migration --source C:\path\to\plugin --from-dsh 0.1.1-rc.2 --to-dsh 0.1.2-alpha.3
+```
+
+v1 只报告两个已安装契约规则族：已移除 Web Client runtime 的 dependency、Client inject、字面量 module 触点及已验证 owner 映射；以及直接具名的 `CallId` → `ToolCallId` binding。它绝不修改源码；其他走廊在读取前失败，未映射符号保留 pending，目标端已消失的变化不生成行动项。
+
+Compatibility 随后把同一份可信字节分别放进两套精确运行时：
 
 ```powershell
 node bin/dsh-developer.js compatibility --source C:\path\to\plugin --release-dsh D:\release\dsh.cmd --preview-dsh D:\preview\dsh.cmd
@@ -146,11 +156,11 @@ node bin/dsh-developer.js ui --session codex-task --action close --json
 
 ## 为自主开发而生的隔离
 
-只读分析从不执行目标仓库代码。受控生命周期执行只用于 dsh-developer 自身，以及逐字节可复现的 promotion 输出。凭据不会进入子进程环境与证据。
+只读分析不执行目标代码。受控执行只用于本产品和逐字节可复现的 promotion 输出；凭据不进入子进程或证据。
 
-需要执行代码的任务进入经过准入验证的 WSL2 + Bubblewrap cell：一次性、断网、无凭据，输入有界，命令串行，输出封存，清理结果可验证。
+执行任务使用已准入的 WSL2 + Bubblewrap cell：一次性、断网、无凭据、有界、串行、封存且清理可验证。
 
-在顶层 DSH Agent 中，隔离 Build 是原生且不接收路径的。agent 选择一到四条精确命令；控制器只接受 `agents.roots()` 中完全相同的存活 Agent 对象，只从该 Agent 的工作区权限中推导物理源码，并把源码身份、真实 profile 边界、精确 DSH 通道、指纹、命令、超时、固定策略和所有者绑定到一个会过期的 digest，再由 DSH 发起可审计的一次性批准：
+在顶层 DSH Agent 中，隔离 Build 原生且不接收路径。agent 选择一到四条精确命令；控制器只接受 `agents.roots()` 中的同一存活 Agent，从其工作区推导源码，把源码身份、真实 profile 边界、精确 DSH 通道、指纹、命令、超时、固定策略和所有者绑定到会过期的 digest，再由 DSH 发起可审计的一次性批准：
 
 ```json
 {"operation":"cell-plan","outcome":"运行聚焦测试和仓库检查","commands":[{"command":"node --test","timeoutMs":60000},{"command":"npm run check","timeoutMs":60000}]}
@@ -158,7 +168,7 @@ node bin/dsh-developer.js ui --session codex-task --action close --json
 {"operation":"cell-discard","planDigest":"sha256:<同一个 digest>"}
 ```
 
-`cell-run` 只接受 digest。对话文字和布尔字段不能代替批准；批准通道不可用、拒绝、取消或返回非一次性许可时，都不会启动 cell。全部命令在同一个已准入 cell 中顺序运行，失败或取消即停止，只返回有界且经过凭据扫描的输出；命令非零退出时会附带紧凑、已脱敏的 stdout/stderr 证据。源码和真实 profile 始终不变。变化的字节只经由控制器的不透明能力封存一次，物理位置同时位于源码和 profile 之外，再保留在不可写的隔离根中；文件名前缀从不代表所有权。`cell-discard` 删除前会重新证明祖先、身份和指纹；只有它能释放全进程唯一工作流槽位。暂存根缺失、移动、替换或其他清理含糊都会保持槽位中毒并报告恢复根；一旦经过验证的删除开始，调用方取消也不能把它丢在半途。所有失败诊断都会递归限界、按白名单筛选并扫描凭据。这三个动作有意不提供 CLI 或冷恢复入口。
+`cell-run` 只接受 digest；对话和布尔字段不能批准，批准不可用、拒绝、取消或非一次性时不会启动 cell。一个已准入 cell 顺序执行命令，失败或取消即停，返回有界、凭据扫描的输出及非零命令的紧凑脱敏证据。源码和 profile 不变。变化只经不透明控制器能力在两者之外封存一次，并保留于不可写隔离根；前缀不证明所有权。`cell-discard` 删除前重证祖先、身份和指纹，且只有它释放全进程槽位。暂存缺失、移动、替换或含糊会保持槽位中毒并报告恢复；经验证的删除不受调用方取消影响。诊断递归限界、按白名单筛选并扫描凭据。这些动作无 CLI 或冷恢复入口。
 
 ```powershell
 node bin/dsh-developer.js lab --wsl-distro Ubuntu-22.04

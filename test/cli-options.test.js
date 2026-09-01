@@ -8,6 +8,8 @@ test('normalizes dashed value and flag options to the CLI option vocabulary', ()
     '--source', 'plugin',
     '--release-dsh', 'release',
     '--preview-dsh', 'preview',
+    '--from-dsh', '0.1.1-rc.2',
+    '--to-dsh', '0.1.2-alpha.3',
     '--profile', 'headless',
     '--wsl-distro', 'Ubuntu-22.04',
     '--skip-runtime',
@@ -18,6 +20,8 @@ test('normalizes dashed value and flag options to the CLI option vocabulary', ()
       source: 'plugin',
       releaseDsh: 'release',
       previewDsh: 'preview',
+      fromDsh: '0.1.1-rc.2',
+      toDsh: '0.1.2-alpha.3',
       profile: 'headless',
       wslDistro: 'Ubuntu-22.04',
       skipRuntime: true,
@@ -75,6 +79,12 @@ test('keeps command option surfaces closed after global option parsing', () => {
     dsh: 'dsh',
     json: true,
   }))
+  assert.doesNotThrow(() => assertCliCommandOptions('migration', {
+    source: 'plugin',
+    fromDsh: '0.1.1-rc.2',
+    toDsh: '0.1.2-alpha.3',
+    json: true,
+  }))
   for (const command of [
     'admit-cell',
     'capabilities',
@@ -83,6 +93,7 @@ test('keeps command option surfaces closed after global option parsing', () => {
     'fingerprint',
     'impact',
     'lab',
+    'migration',
     'promote',
   ]) {
     assert.throws(

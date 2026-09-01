@@ -14,6 +14,7 @@ import { asDiagnostic, DshDeveloperError } from '../lib/errors.js'
 import { conformExecutionLab, formatExecutionLabReport } from '../lib/execution-lab.js'
 import { formatProfilePreflightReport, inspectProfilePreflight } from '../lib/profile-preflight.js'
 import { promoteCreatorExport } from '../lib/promote.js'
+import { formatSourceMigrationReport, inspectSourceMigration } from '../lib/source-migration.js'
 import { executeUiCliAction, formatUiCliReport } from '../lib/ui-cli.js'
 import { formatUpstreamImpactReport, inspectUpstreamImpact } from '../lib/upstream-impact.js'
 
@@ -25,6 +26,7 @@ const USAGE = [
   '  dsh-developer capabilities [--dsh <path>] [--json]',
   '  dsh-developer compatibility --source <plugin-dir> --release-dsh <path> --preview-dsh <path> [--json]',
   '  dsh-developer impact --source <plugin-dir> --release-dsh <path> --preview-dsh <path> [--json]',
+  '  dsh-developer migration --source <plugin-dir> --from-dsh 0.1.1-rc.2 --to-dsh 0.1.2-alpha.3 [--json]',
   '  dsh-developer lab [--wsl-distro <name>] [--json]',
   '  dsh-developer preflight --source <plugin-dir> [--profile <name>] [--dsh <path>] [--json]',
   '  dsh-developer doctor --source <creator.json|plugin-dir> [--dsh <path>] [--skip-runtime] [--json]',
@@ -121,6 +123,16 @@ async function main(argv) {
       signal: controller.signal,
     })
     process.stdout.write(options.json ? JSON.stringify(report, null, 2) + '\n' : formatUpstreamImpactReport(report) + '\n')
+    if (!report.ok) process.exitCode = 1
+    return
+  }
+  if (command === 'migration') {
+    const report = await inspectSourceMigration(required(options, 'source'), {
+      fromDsh: requiredValue(options, 'fromDsh'),
+      toDsh: requiredValue(options, 'toDsh'),
+      signal: controller.signal,
+    })
+    process.stdout.write(options.json ? JSON.stringify(report, null, 2) + '\n' : formatSourceMigrationReport(report) + '\n')
     if (!report.ok) process.exitCode = 1
     return
   }

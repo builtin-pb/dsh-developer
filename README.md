@@ -93,7 +93,17 @@ Run impact analysis before an upgrade:
 node bin/dsh-developer.js impact --source C:\path\to\plugin --release-dsh D:\release\dsh.cmd --preview-dsh D:\preview\dsh.cmd
 ```
 
-It follows the packages and Cordis services your plugin actually touches, then compares their public declarations, entries, dependencies, and DSH metadata across both lanes. It proves offline whether declared DSH peer and development ranges admit the exact installed release and preview versions under npm prerelease semantics; registry publication and the project lock remain separate install evidence. Compatibility takes the next step and runs the same trusted bytes through both exact runtimes:
+It follows the packages and Cordis services your plugin actually touches, then compares their public declarations, entries, dependencies, and DSH metadata across both lanes. It proves offline whether declared DSH peer and development ranges admit the exact installed release and preview versions under npm prerelease semantics; registry publication and the project lock remain separate install evidence.
+
+For exact source corridor `0.1.1-rc.2` to `0.1.2-alpha.3`, get file-and-line actions from the advisory ledger:
+
+```powershell
+node bin/dsh-developer.js migration --source C:\path\to\plugin --from-dsh 0.1.1-rc.2 --to-dsh 0.1.2-alpha.3
+```
+
+The v1 ledger reports two installed-contract families: removed Web Client runtime dependency, Client inject, and literal-module touchpoints with owner mappings; and named `CallId` → `ToolCallId` bindings. It never edits source. Other corridors fail before source reads, unmapped symbols stay pending, and changes absent at the target emit no action.
+
+Compatibility takes the next step and runs the same trusted bytes through both exact runtimes:
 
 ```powershell
 node bin/dsh-developer.js compatibility --source C:\path\to\plugin --release-dsh D:\release\dsh.cmd --preview-dsh D:\preview\dsh.cmd
@@ -144,11 +154,11 @@ node bin/dsh-developer.js ui --session codex-task --action close --json
 
 ## Isolation built for autonomous development
 
-Read-only analysis never executes the target repository. Controlled lifecycle execution is reserved for this product and byte-for-byte reproducible promoted output. Credentials stay out of child environments and evidence.
+Read-only analysis never executes target code. Controlled execution is limited to this product and byte-identical promoted output; credentials stay out of child environments and evidence.
 
-Execution-bearing work can use the admitted WSL2 + Bubblewrap cell: a disposable, network-free, credential-free workspace with bounded input, serialized commands, sealed output, and verified cleanup.
+Execution uses an admitted WSL2 + Bubblewrap cell: disposable, offline, credential-free, bounded, serialized, sealed, and verifiably cleaned.
 
-Inside a top-level DSH Agent, isolated Build is native and path-free. The agent chooses one to four exact commands; the controller accepts only the exact live Agent object in `agents.roots()`, derives its physical source exclusively from that Agent's workspace, and binds the source identity, real-profile fence, exact DSH lane, fingerprint, commands, timeouts, fixed policy, and owner into an expiring digest. It then asks DSH for an audited one-time approval:
+In a top-level DSH Agent, isolated Build is native and path-free. The agent selects one to four exact commands. The controller accepts only that live Agent in `agents.roots()`, derives its workspace source, binds identity, profile fence, exact DSH lane, fingerprint, commands, timeouts, fixed policy, and owner into an expiring digest, then asks DSH for audited one-time approval:
 
 ```json
 {"operation":"cell-plan","outcome":"Run focused tests and the repository check","commands":[{"command":"node --test","timeoutMs":60000},{"command":"npm run check","timeoutMs":60000}]}
@@ -156,7 +166,7 @@ Inside a top-level DSH Agent, isolated Build is native and path-free. The agent 
 {"operation":"cell-discard","planDigest":"sha256:<same digest>"}
 ```
 
-`cell-run` accepts only the digest. Conversation text and boolean fields cannot approve it, and unavailable, rejected, cancelled, or non-once approval launches no cell. All commands run sequentially in one admitted cell, stop on failure or cancellation, and return bounded, credential-scanned output; nonzero commands include compact redacted stdout/stderr evidence. The source and real profile stay unchanged. Changed bytes are staged once through an opaque controller capability, physically outside both, then retained under a non-writable quarantine root—filename prefixes never grant ownership. `cell-discard` re-proves ancestry, identities, and fingerprints before deletion and is the only operation that releases the single process-wide slot. Missing, moved, replaced, or otherwise ambiguous staging keeps the slot poisoned and reports the recovery root; once verified deletion begins, caller cancellation cannot abandon it. Failure diagnostics are recursively bounded, allowlisted, and secret-scanned. These three actions intentionally have no CLI or cold-resume surface.
+`cell-run` accepts only the digest; conversation/booleans cannot approve, and unavailable, rejected, cancelled, or non-once approval launches nothing. One admitted cell runs commands in order, stops on failure or cancellation, and returns bounded, secret-scanned output plus redacted nonzero-command evidence. Source and profile stay unchanged. An opaque controller stages changes once outside both under non-writable quarantine; prefixes never prove ownership. `cell-discard` re-proves ancestry, identity, and fingerprint, then alone releases the process-wide slot. Missing, moved, replaced, or ambiguous staging poisons the slot and reports recovery; verified deletion ignores caller cancellation. Diagnostics are bounded, allowlisted, and secret-scanned. These actions have no CLI or cold-resume surface.
 
 ```powershell
 node bin/dsh-developer.js lab --wsl-distro Ubuntu-22.04

@@ -1,0 +1,11 @@
+{
+  "name": "source-migration-clean-fixture",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "notes": "echo @deepseek-ai/dsh-client-runtime/client CallId"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-llm": "^0.1.2-alpha.3"
+  }
+}
