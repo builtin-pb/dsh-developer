@@ -46,7 +46,7 @@ dsh web
 审计这个插件，修完所有 blocker，再给我安装命令。
 ```
 
-自然语言就是主入口。安装后的模型可见描述覆盖上面的每种 DSH 插件意图，DSH 与 Codex 会把它交给宿主选择。选中后，dsh-developer 会读取工作区并提取目标与约束：问答和只读审计直接执行；修改任务先给出一份紧凑的影响与验证计划。只需批准一次，agent 就会接管修改、测试、诊断、修复、Doctor、profile 实证与精确版本通道验证，直到插件通过，或只剩一个明确的外部 blocker。
+自然语言就是主入口。DSH 与 Codex 会为这些插件意图选择 dsh-developer；它读取工作区并提取目标与约束。问答和只读审计直接执行；修改任务先给出一份紧凑的影响与验证计划。批准修改范围后，agent 会接管修改、测试、诊断、修复、Doctor、profile 实证与精确版本通道验证。它只会在真正的权限边界——隔离执行、应用暂存变化、发布——或明确的外部 blocker 前暂停。
 
 需要确定性选择时，DSH 中的 `/dsh-developer` 与 Codex 中的 `$dsh-developer` 可以直接锁定它；用户不需要学习一套命令词汇。
 
@@ -70,7 +70,7 @@ dsh web
 node bin/dsh-developer.js attest-profile --profile C:\Users\you\.dsh\profiles\web --dsh D:\path\to\dsh.cmd --json
 ```
 
-receipt 会绑定公开 DSH package 与 CLI 的精确字节、profile 物理身份、manifest 与 bundle 顺序、配置 digest、pnpm lock integrity，以及有界的直接 package manifest/entry/patch digest。它执行两次扫描来证明 freshness；遇到 link、越界、变化、条件 package、未知布局或凭据会关闭失败，也绝不遍历 pnpm store。稳定 evidence digest 不含时间戳。这只是静态状态证据，不证明 profile 已激活、兼容或可启动。正式版 `0.1.1-rc.2` 阻断，预览版 `0.1.2-alpha.3` 仅提示。接收路径的入口刻意只放在 CLI：当前公开通道没有权威的 live-agent profile seam。
+receipt 把 DSH 可执行文件绑定到你测试过的精确静态 profile 字节。两次扫描会在不启动 package 的前提下捕获 link、越界、变化、未解析状态与凭据。正式版 `0.1.1-rc.2` 阻断，预览版 `0.1.2-alpha.3` 仅提示。
 
 在 DSH Web 中审计仓库：
 
@@ -130,7 +130,7 @@ node bin/dsh-developer.js compatibility --source C:\path\to\plugin --release-dsh
 {"operation":"doctor","source":"C:/path/to/plugin","skipRuntime":true}
 ```
 
-一个 schema 覆盖全部审计和隔离 cell 操作，同时保持目录足够小。被阻塞的结果最多附带三个封闭的 `nextActions`，文本只显示第一个；它们不会自动执行、授予权限、改变证据 digest 或把预览证据当成发布证据。
+一个 schema 覆盖全部审计、Build 和 Apply 操作。被阻塞的结果最多附带三个封闭的 `nextActions`，文本只显示第一个；它们不能执行、授予权限、改变 digest 或把预览证据当成发布证据。
 
 被委派的 agent 与固定权限边界的 agent 也能拿到真实的 shell 和文件 schema：不可能获批的升级参数不会出现，过期参数会在执行前被删除，真实拒绝会明确说明不可跨越的边界，不再让模型掉进无效重试。
 
@@ -169,15 +169,26 @@ node bin/dsh-developer.js ui --session codex-task --action close --json
 
 执行任务使用已准入的 WSL2 + Bubblewrap cell：一次性、断网、无凭据、有界、串行、封存且清理可验证。
 
-在顶层 DSH Agent 中，隔离 Build 原生且不接收路径。agent 选择一到四条精确命令；控制器只接受 `agents.roots()` 中的同一存活 Agent，从其工作区推导源码，把源码身份、真实 profile 边界、精确 DSH 通道、指纹、命令、超时、固定策略和所有者绑定到会过期的 digest，再由 DSH 发起可审计的一次性批准：
+在顶层 DSH Agent 中，隔离 Build 原生且不接收路径。控制器从当前存活的根 Agent 推导源码，把命令和安全策略绑定到会过期的 digest，再由 DSH 发起可审计的一次性批准：
 
 ```json
 {"operation":"cell-plan","outcome":"运行聚焦测试和仓库检查","commands":[{"command":"node --test","timeoutMs":60000},{"command":"npm run check","timeoutMs":60000}]}
 {"operation":"cell-run","planDigest":"sha256:<cell-plan 返回的 digest>"}
+```
+
+如果运行封存了变化，只能二选一：
+
+```json
+{"operation":"cell-apply","planDigest":"sha256:<同一个 digest>"}
+```
+
+或者
+
+```json
 {"operation":"cell-discard","planDigest":"sha256:<同一个 digest>"}
 ```
 
-`cell-run` 只接受已批准的 digest，在断网且无凭据的 cell 中运行一次，并返回有界、经过凭据扫描的证据。源码与 profile 保持不变；只有 `cell-discard` 会验证并删除保留的暂存。这些动作没有 CLI 或冷恢复入口。
+`cell-run` 封存获批的隔离变化。`cell-apply` 重证所有者、源码、stage、检查和路径，再次请求批准。私有备份在不执行代码的前提下应用变化；失败恢复并验证原始字节，成功完成最终 Doctor 并清理。Discard 保持幂等；Apply 已提交后，它只完成清理，绝不会撤销源码变化。回滚含糊或崩溃证据会阻断复用。调用方路径不授予任何权限。
 
 ```powershell
 node bin/dsh-developer.js lab --wsl-distro Ubuntu-22.04

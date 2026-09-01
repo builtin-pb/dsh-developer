@@ -50,10 +50,13 @@ test('keeps operation-specific argument surfaces closed before execution', () =>
   assert.deepEqual(parseNativeToolInput({ operation: 'cell-run', planDigest: digest }), {
     operation: 'cell-run', planDigest: digest,
   })
+  assert.deepEqual(parseNativeToolInput({ operation: 'cell-apply', planDigest: digest }), {
+    operation: 'cell-apply', planDigest: digest,
+  })
   assert.deepEqual(parseNativeToolInput({ operation: 'cell-discard', planDigest: digest }), {
     operation: 'cell-discard', planDigest: digest,
   })
-  for (const operation of ['cell-plan', 'cell-run', 'cell-discard']) {
+  for (const operation of ['cell-plan', 'cell-run', 'cell-apply', 'cell-discard']) {
     const base = operation === 'cell-plan'
       ? { operation, outcome: 'test', commands: [{ command: 'true' }] }
       : { operation, planDigest: digest }

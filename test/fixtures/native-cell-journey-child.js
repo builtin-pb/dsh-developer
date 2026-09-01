@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { cp, lstat, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { cp, lstat, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { watch } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -173,12 +174,26 @@ try {
   assert.equal(stagedDoctor.ok, true)
   assert.equal(stagedDoctor.fingerprint, run.staging.fingerprint)
 
-  const discard = await assertSuccessful(await execute(agent, {
-    operation: 'cell-discard',
+  const applied = await assertSuccessful(await execute(agent, {
+    operation: 'cell-apply',
     planDigest: firstDigest,
-  }), 'cell-discard')
-  assert.equal(discard.cleanup.verified, true)
-  assert.equal(discard.cleanup.capacityReleased, true)
+  }), 'cell-apply')
+  assert.equal(applied.ok, true, JSON.stringify(applied, null, 2))
+  assert.equal(applied.source.fingerprintBefore, plan.source.fingerprint)
+  assert.equal(applied.source.fingerprintAfter, run.staging.fingerprint)
+  assert.equal(applied.cleanup.backupRemoved, true)
+  assert.equal(applied.cleanup.stageRemoved, true)
+  assert.equal(applied.cleanup.capacityReleased, true)
+  assert.equal(await readFile(join(source, 'proof.txt'), 'utf8'), 'after')
+  const applyApproval = approvals.at(-1)
+  for (const evidence of [
+    firstDigest,
+    plan.source.fingerprint,
+    run.staging.fingerprint,
+    'created: proof.txt',
+    'backup/transaction',
+    'Real profile effect: none',
+  ]) assert.match(applyApproval.reason, new RegExp(evidence.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u'))
   await assert.rejects(lstat(retainedRoot), (cause) => cause.code === 'ENOENT')
   retainedRoot = undefined
 
@@ -186,14 +201,39 @@ try {
     operation: 'cell-discard',
     planDigest: firstDigest,
   }), 'cell-discard')
-  assert.equal(repeated.alreadyDiscarded, true)
+  assert.equal(repeated.alreadyApplied, true)
   assert.equal(repeated.cleanup.capacityReleased, true)
 
   const second = await assertSuccessful(await execute(agent, {
     operation: 'cell-plan',
-    outcome: 'Prove the process-wide slot was released after verified discard',
-    commands: [{ command: 'printf unused', timeoutMs: 1_000 }],
+    outcome: 'Force a post-write verification failure and prove byte-identical rollback',
+    commands: [{ command: 'printf rollback > rollback.txt', timeoutMs: 60_000 }],
   }), 'cell-plan')
+  const secondRun = await assertSuccessful(await execute(agent, {
+    operation: 'cell-run',
+    planDigest: second.planDigest,
+  }), 'cell-run')
+  assert.equal(secondRun.ok, true)
+  const beforeRollback = await doctorSource(source, { runtime: 'skip' })
+  let tampered = false
+  const sourceWatcher = watch(source, { persistent: false }, (_event, filename) => {
+    if (tampered || filename?.toString() !== 'rollback.txt') return
+    tampered = true
+    void writeFile(join(source, 'package.json'), '{ invalid rollback probe', 'utf8')
+  })
+  const rolledBack = await assertSuccessful(await execute(agent, {
+    operation: 'cell-apply',
+    planDigest: second.planDigest,
+  }), 'cell-apply')
+  sourceWatcher.close()
+  assert.equal(tampered, true)
+  assert.equal(rolledBack.ok, false)
+  assert.equal(rolledBack.rollback.required, true)
+  assert.equal(rolledBack.rollback.verified, true)
+  assert.equal(rolledBack.cleanup.transactionCleaned, true)
+  const afterRollback = await doctorSource(source, { runtime: 'skip' })
+  assert.equal(afterRollback.fingerprint, beforeRollback.fingerprint)
+  await assert.rejects(lstat(join(source, 'rollback.txt')), (cause) => cause.code === 'ENOENT')
   const secondDiscard = await assertSuccessful(await execute(agent, {
     operation: 'cell-discard',
     planDigest: second.planDigest,
@@ -213,6 +253,8 @@ try {
     sourceUnchanged: true,
     remainingProcesses: run.commands[0].cleanup.remaining,
     cleanupVerified: true,
+    applyVerified: true,
+    rollbackVerified: true,
     secondPlan: true,
   }) + '\n')
 } finally {

@@ -50,6 +50,8 @@ for (const [lane, toolsRoot, dshPath, version] of lanes) {
     assert.equal(report.sourceUnchanged, true)
     assert.equal(report.remainingProcesses, 0)
     assert.equal(report.cleanupVerified, true)
+    assert.equal(report.applyVerified, true)
+    assert.equal(report.rollbackVerified, true)
     assert.equal(report.secondPlan, true)
   })
 }

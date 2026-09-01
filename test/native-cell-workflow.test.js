@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { lstat, mkdir, mkdtemp, rename, rm, symlink, unlink, writeFile } from 'node:fs/promises'
+import { link, lstat, mkdir, mkdtemp, readFile, rename, rm, symlink, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import test from 'node:test'
@@ -90,6 +90,15 @@ function fixture(options = {}) {
       fingerprint: state.fingerprint,
       entries: [],
     })),
+    ...(options.inspectTreeIdentity === null ? {} : {
+      inspectTreeIdentity: options.inspectTreeIdentity ?? (async (_root, tree) => ({
+        root: tree.root,
+        rootIdentity: { dev: '1', ino: '2' },
+        directories: [],
+        files: [],
+        digest: 'sha256:' + (tree.fingerprint === SOURCE_FINGERPRINT ? 'a' : 'b').repeat(64),
+      })),
+    }),
     doctor: options.doctor ?? (async () => report(state.fingerprint, options.plugin)),
     inspectCapabilities: options.inspectCapabilities ?? (async () => ({
       ok: true,
@@ -116,6 +125,7 @@ function fixture(options = {}) {
       evidenceDigest: 'sha256:' + '5'.repeat(64),
     })),
     cleanupBarrier: options.cleanupBarrier,
+    applyBarrier: options.applyBarrier,
   })
   return { controller, owner, state, slot, fakeCell }
 }
@@ -132,7 +142,7 @@ async function grantOnce(f, plan, overrides = {}) {
   const callId = overrides.callId ?? 'call-1'
   const exec = {
     name: 'dsh_developer',
-    arguments: { operation: 'cell-run', planDigest: plan.planDigest },
+    arguments: { operation: overrides.operation ?? 'cell-run', planDigest: plan.planDigest },
     token,
     callId,
     agent: overrides.agent ?? f.owner,
@@ -145,13 +155,25 @@ async function grantOnce(f, plan, overrides = {}) {
 
 let stagedSequence = 0
 
+async function writeFixtureTree(root, files) {
+  for (const [path, content] of Object.entries(files)) {
+    const segments = path.split('/')
+    if (segments.length > 1) await mkdir(join(root, ...segments.slice(0, -1)), { recursive: true })
+    await writeFile(join(root, ...segments), content, 'utf8')
+  }
+}
+
 async function makeStagedWorkflow(options = {}) {
-  const source = await mkdtemp(join(tmpdir(), 'dsh-cell-owned-stage-source-'))
-  const sourceFingerprint = fingerprintFileMap(new Map())
+  const source = options.source ?? await mkdtemp(join(tmpdir(), 'dsh-cell-owned-stage-source-'))
+  if (options.source !== undefined) await mkdir(source, { recursive: true })
+  await writeFixtureTree(source, options.sourceFiles ?? {})
+  const sourceFingerprint = (await scanOrdinaryTree(source)).fingerprint
   const owner = agent('owned-stage-' + (++stagedSequence))
   const value = fixture({
     owner,
+    inspectTreeIdentity: null,
     cleanupBarrier: options.cleanupBarrier,
+    applyBarrier: options.applyBarrier,
     ...(options.getProfileDirectory === undefined ? {} : { getProfileDirectory: options.getProfileDirectory }),
     ...(options.tmpdir === undefined ? {} : { tmpdir: options.tmpdir }),
     inspectWorkspace: async () => ({
@@ -162,10 +184,11 @@ async function makeStagedWorkflow(options = {}) {
       identityDigest: 'sha256:' + '6'.repeat(64),
       rootIdentity: { dev: '1', ino: '2' },
     }),
-    scanTree: async (path, scanOptions) => resolve(path) === resolve(source)
-      ? ({ root: source, fingerprint: sourceFingerprint, entries: [] })
-      : scanOrdinaryTree(path, scanOptions),
-    doctor: async () => report(sourceFingerprint),
+    scanTree: (path, scanOptions) => scanOrdinaryTree(path, scanOptions),
+    doctor: async (path) => {
+      const tree = await scanOrdinaryTree(path)
+      return report(tree.fingerprint)
+    },
     cell: {
       sourceFingerprint,
       provider: { id: 'wsl2-bubblewrap', distro: 'fixture', kernel: 'fixture', bwrapVersion: 'fixture' },
@@ -174,16 +197,17 @@ async function makeStagedWorkflow(options = {}) {
       },
       async stageResult(stageOptions) {
         const authority = await claimCellStageAuthority(stageOptions.authority)
-        await mkdir(join(authority.destination, 'nested'))
-        await writeFile(join(authority.destination, 'result.txt'), 'sealed\n', 'utf8')
-        await writeFile(join(authority.destination, 'nested', 'more.txt'), 'more\n', 'utf8')
+        await writeFixtureTree(authority.destination, options.stageFiles ?? {
+          'result.txt': 'sealed\n',
+          'nested/more.txt': 'more\n',
+        })
         const tree = await scanOrdinaryTree(authority.destination)
         return {
           changed: true,
           staging: authority.destination,
           stagingRoot: authority.root,
           stageAuthority: authority.capability,
-          changes: { created: ['nested/more.txt', 'result.txt'], modified: [], deleted: [] },
+          changes: options.changes ?? { created: ['nested/more.txt', 'result.txt'], modified: [], deleted: [] },
           sourceFingerprint,
           resultFingerprint: tree.fingerprint,
         }
@@ -1008,6 +1032,567 @@ test('drains verified quarantine cleanup after caller cancellation and resumes a
     assert.ok(deleteEntries >= 3)
   } finally {
     await rm(retryWorkflow.source, { recursive: true, force: true })
+  }
+})
+
+test('requires a second exact approval and transactionally applies the sealed tree before verified cleanup', async () => {
+  const workflow = await makeStagedWorkflow()
+  try {
+    assert.equal(workflow.run.ok, true)
+    const approval = await grantOnce(workflow.value, workflow.plan, { operation: 'cell-apply', callId: 'apply-success' })
+    assert.equal(approval.decision.kind, 'ask')
+    for (const evidence of [
+      workflow.plan.planDigest,
+      workflow.run.source.fingerprintBefore,
+      workflow.run.staging.fingerprint,
+      'nested/more.txt',
+      'result.txt',
+      'backup/transaction',
+      'Real profile effect: none',
+    ]) assert.match(approval.decision.reason, new RegExp(evidence.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u'))
+    assert.equal(approval.guard(), undefined)
+    const result = await workflow.value.controller.apply({ planDigest: workflow.plan.planDigest }, {
+      agent: workflow.value.owner,
+      executionToken: approval.token,
+      callId: approval.callId,
+      signal: approval.exec.signal,
+    })
+    assert.equal(result.ok, true, JSON.stringify(result))
+    assert.equal(result.source.fingerprintBefore, workflow.run.source.fingerprintBefore)
+    assert.equal(result.source.fingerprintAfter, workflow.run.staging.fingerprint)
+    assert.equal(result.cleanup.backupRemoved, true)
+    assert.equal(result.cleanup.stageRemoved, true)
+    assert.equal(result.cleanup.capacityReleased, true)
+    assert.equal(await readFile(join(workflow.source, 'result.txt'), 'utf8'), 'sealed\n')
+    const repeatedDiscard = await workflow.value.controller.discard({ planDigest: workflow.plan.planDigest }, {
+      agent: workflow.value.owner,
+    })
+    assert.equal(repeatedDiscard.alreadyApplied, true)
+  } finally {
+    await rm(workflow.source, { recursive: true, force: true })
+  }
+})
+
+test('rolls back byte-identical source after a partial candidate install and retains the sealed stage', async () => {
+  let injected = false
+  const workflow = await makeStagedWorkflow({
+    applyBarrier: async (phase) => {
+      if (phase === 'after-install-candidate' && !injected) {
+        injected = true
+        throw new DshDeveloperError('CELL_INJECTED_PARTIAL_WRITE', 'forced partial write')
+      }
+    },
+  })
+  try {
+    const approval = await grantOnce(workflow.value, workflow.plan, { operation: 'cell-apply', callId: 'apply-rollback' })
+    assert.equal(approval.decision.kind, 'ask')
+    assert.equal(approval.guard(), undefined)
+    const result = await workflow.value.controller.apply({ planDigest: workflow.plan.planDigest }, {
+      agent: workflow.value.owner,
+      executionToken: approval.token,
+      callId: approval.callId,
+      signal: approval.exec.signal,
+    })
+    assert.equal(result.ok, false)
+    assert.equal(result.failure.code, 'CELL_INJECTED_PARTIAL_WRITE')
+    assert.equal(result.rollback.required, true)
+    assert.equal(result.rollback.verified, true)
+    assert.equal(result.cleanup.transactionCleaned, true)
+    assert.equal(result.cleanup.stageRetained, true)
+    assert.equal((await scanOrdinaryTree(workflow.source)).fingerprint, workflow.run.source.fingerprintBefore)
+    await assert.rejects(lstat(join(workflow.source, 'result.txt')), (cause) => cause.code === 'ENOENT')
+    const discard = await workflow.value.controller.discard({ planDigest: workflow.plan.planDigest }, {
+      agent: workflow.value.owner,
+    })
+    assert.equal(discard.cleanup.capacityReleased, true)
+  } finally {
+    await rm(workflow.source, { recursive: true, force: true })
+  }
+})
+
+test('restores same-identity external content drift in place before verifying rollback', async () => {
+  let tampered = false
+  const workflow = await makeStagedWorkflow({
+    sourceFiles: { 'stable.txt': 'original\n' },
+    stageFiles: { 'stable.txt': 'original\n', 'result.txt': 'created\n' },
+    changes: { created: ['result.txt'], modified: [], deleted: [] },
+    applyBarrier: async (phase, context) => {
+      if (phase === 'after-install-candidate' && context.path === 'result.txt' && !tampered) {
+        tampered = true
+        await writeFile(join(context.record.workspace.root, 'stable.txt'), 'tampered\n', 'utf8')
+      }
+    },
+  })
+  try {
+    const approval = await grantOnce(workflow.value, workflow.plan, {
+      operation: 'cell-apply', callId: 'apply-content-drift-rollback',
+    })
+    assert.equal(approval.guard(), undefined)
+    const result = await workflow.value.controller.apply({ planDigest: workflow.plan.planDigest }, {
+      agent: workflow.value.owner,
+      executionToken: approval.token,
+      callId: approval.callId,
+      signal: approval.exec.signal,
+    })
+    assert.equal(result.ok, false)
+    assert.equal(result.failure.code, 'CELL_APPLY_RESULT_MISMATCH', JSON.stringify(result))
+    assert.equal(result.rollback.required, true)
+    assert.equal(result.rollback.verified, true)
+    assert.equal(await readFile(join(workflow.source, 'stable.txt'), 'utf8'), 'original\n')
+    await assert.rejects(lstat(join(workflow.source, 'result.txt')), (cause) => cause.code === 'ENOENT')
+    assert.equal((await scanOrdinaryTree(workflow.source)).fingerprint, workflow.run.source.fingerprintBefore)
+    const discard = await workflow.value.controller.discard({ planDigest: workflow.plan.planDigest }, {
+      agent: workflow.value.owner,
+    })
+    assert.equal(discard.cleanup.capacityReleased, true)
+  } finally {
+    await rm(workflow.source, { recursive: true, force: true })
+  }
+})
+
+test('does not mistake a high-entropy workspace suffix for a credential but blocks explicit token paths', async () => {
+  const safeParent = await mkdtemp(join(tmpdir(), 'dsh-cell-approval-path-'))
+  const safe = await makeStagedWorkflow({
+    source: join(safeParent, ['dsh', 'developer', 'native', 'journey', 'source', 'X8SJG3'].join('-')),
+  })
+  try {
+    const approval = await grantOnce(safe.value, safe.plan, {
+      operation: 'cell-apply', callId: 'apply-high-entropy-path',
+    })
+    assert.equal(approval.decision.kind, 'ask')
+    await safe.value.controller.discard({ planDigest: safe.plan.planDigest }, { agent: safe.value.owner })
+  } finally {
+    await rm(safeParent, { recursive: true, force: true })
+  }
+
+  const secretParent = await mkdtemp(join(tmpdir(), 'dsh-cell-approval-secret-'))
+  const secret = await makeStagedWorkflow({
+    source: join(secretParent, ['sk', '-', 'abcdefghijklmnop', 'SECRET'].join('')),
+  })
+  try {
+    const approval = await grantOnce(secret.value, secret.plan, {
+      operation: 'cell-apply', callId: 'apply-explicit-secret-path',
+    })
+    assert.equal(approval.decision.kind, 'deny')
+    assert.match(approval.decision.reason, /CELL_APPLY_APPROVAL_SECRET/u)
+  } finally {
+    await rm(secret.run.staging.root, { recursive: true, force: true })
+    await rm(secretParent, { recursive: true, force: true })
+  }
+})
+
+test('applies created, modified, deleted, and unchanged paths as one verified staged tree', async () => {
+  const workflow = await makeStagedWorkflow({
+    sourceFiles: {
+      'delete.txt': 'remove me\n',
+      'keep.txt': 'before\n',
+      'nested/same.txt': 'unchanged\n',
+    },
+    stageFiles: {
+      'created.txt': 'created\n',
+      'keep.txt': 'after\n',
+      'nested/same.txt': 'unchanged\n',
+    },
+    changes: { created: ['created.txt'], modified: ['keep.txt'], deleted: ['delete.txt'] },
+  })
+  try {
+    const approval = await grantOnce(workflow.value, workflow.plan, {
+      operation: 'cell-apply', callId: 'apply-all-change-types',
+    })
+    assert.equal(approval.guard(), undefined)
+    const result = await workflow.value.controller.apply({ planDigest: workflow.plan.planDigest }, {
+      agent: workflow.value.owner,
+      executionToken: approval.token,
+      callId: approval.callId,
+      signal: approval.exec.signal,
+    })
+    assert.equal(result.ok, true, JSON.stringify(result))
+    assert.deepEqual(result.source.changedPaths, {
+      created: ['created.txt'], modified: ['keep.txt'], deleted: ['delete.txt'],
+    })
+    assert.equal(await readFile(join(workflow.source, 'created.txt'), 'utf8'), 'created\n')
+    assert.equal(await readFile(join(workflow.source, 'keep.txt'), 'utf8'), 'after\n')
+    assert.equal(await readFile(join(workflow.source, 'nested', 'same.txt'), 'utf8'), 'unchanged\n')
+    await assert.rejects(lstat(join(workflow.source, 'delete.txt')), (cause) => cause.code === 'ENOENT')
+    assert.equal((await scanOrdinaryTree(workflow.source)).fingerprint, workflow.run.staging.fingerprint)
+  } finally {
+    await rm(workflow.source, { recursive: true, force: true })
+  }
+})
+
+test('serializes pre-approved Apply calls and tombstones every later replay', async () => {
+  let releaseBarrier
+  let enterBarrier
+  const entered = new Promise((resolvePromise) => { enterBarrier = resolvePromise })
+  const released = new Promise((resolvePromise) => { releaseBarrier = resolvePromise })
+  let held = false
+  let transactionRoot
+  const workflow = await makeStagedWorkflow({
+    applyBarrier: async (phase, context) => {
+      if (phase === 'after-candidate-copy' && !held) {
+        held = true
+        transactionRoot = context.transaction.root
+        enterBarrier()
+        await released
+      }
+    },
+  })
+  try {
+    const first = await grantOnce(workflow.value, workflow.plan, {
+      operation: 'cell-apply', callId: 'apply-serialized-1',
+    })
+    const second = await grantOnce(workflow.value, workflow.plan, {
+      operation: 'cell-apply', callId: 'apply-serialized-2',
+    })
+    assert.equal(first.guard(), undefined)
+    assert.equal(second.guard(), undefined)
+    const running = workflow.value.controller.apply({ planDigest: workflow.plan.planDigest }, {
+      agent: workflow.value.owner,
+      executionToken: first.token,
+      callId: first.callId,
+      signal: first.exec.signal,
+    })
+    const overlapping = workflow.value.controller.apply({ planDigest: workflow.plan.planDigest }, {
+      agent: workflow.value.owner,
+      executionToken: second.token,
+      callId: second.callId,
+      signal: second.exec.signal,
+    })
+    await assert.rejects(overlapping, (cause) => cause.code === 'CELL_APPLY_IN_PROGRESS')
+    await entered
+    const prepared = JSON.parse(await readFile(join(transactionRoot, 'state-prepared.json'), 'utf8'))
+    assert.equal(prepared.kind, 'dsh-developer-cell-apply-recovery')
+    assert.equal(prepared.state, 'prepared')
+    assert.equal(prepared.source, workflow.source)
+    assert.equal(prepared.sourceFingerprint, workflow.run.source.fingerprintBefore)
+    assert.equal(prepared.stageFingerprint, workflow.run.staging.fingerprint)
+    releaseBarrier()
+    assert.equal((await running).ok, true)
+    await assert.rejects(
+      workflow.value.controller.apply({ planDigest: workflow.plan.planDigest }, {
+        agent: workflow.value.owner,
+        executionToken: second.token,
+        callId: second.callId,
+        signal: second.exec.signal,
+      }),
+      (cause) => cause.code === 'CELL_PLAN_ALREADY_APPLIED',
+    )
+  } finally {
+    releaseBarrier?.()
+    await rm(workflow.source, { recursive: true, force: true })
+  }
+})
+
+test('caller cancellation after source mutation drains byte-identical rollback before return', async () => {
+  const cancellation = new AbortController()
+  let aborted = false
+  const workflow = await makeStagedWorkflow({
+    applyBarrier: async (phase) => {
+      if (phase === 'after-install-candidate' && !aborted) {
+        aborted = true
+        cancellation.abort('cancel after the first source mutation')
+      }
+    },
+  })
+  try {
+    const approval = await grantOnce(workflow.value, workflow.plan, {
+      operation: 'cell-apply', callId: 'apply-cancelled', signal: cancellation.signal,
+    })
+    assert.equal(approval.guard(), undefined)
+    const result = await workflow.value.controller.apply({ planDigest: workflow.plan.planDigest }, {
+      agent: workflow.value.owner,
+      executionToken: approval.token,
+      callId: approval.callId,
+      signal: cancellation.signal,
+    })
+    assert.equal(result.ok, false)
+    assert.equal(result.failure.code, 'CANCELLED')
+    assert.equal(result.rollback.required, true)
+    assert.equal(result.rollback.verified, true)
+    assert.equal((await scanOrdinaryTree(workflow.source)).fingerprint, workflow.run.source.fingerprintBefore)
+    const discard = await workflow.value.controller.discard({ planDigest: workflow.plan.planDigest }, {
+      agent: workflow.value.owner,
+    })
+    assert.equal(discard.cleanup.capacityReleased, true)
+  } finally {
+    await rm(workflow.source, { recursive: true, force: true })
+  }
+})
+
+test('reports an already-applied tree truthfully and resumes post-commit cleanup through discard', async () => {
+  let failCleanup = true
+  let committedMarker
+  const workflow = await makeStagedWorkflow({
+    applyBarrier: async (phase, context) => {
+      if (phase === 'before-delete-transaction-entry'
+          && context.path === 'state-committed.json' && failCleanup) {
+        failCleanup = false
+        committedMarker = JSON.parse(await readFile(
+          join(context.transaction.root, 'state-committed.json'),
+          'utf8',
+        ))
+        throw new DshDeveloperError('EBUSY', 'forced transient post-commit cleanup failure')
+      }
+    },
+  })
+  try {
+    const approval = await grantOnce(workflow.value, workflow.plan, {
+      operation: 'cell-apply', callId: 'apply-cleanup-resume',
+    })
+    assert.equal(approval.guard(), undefined)
+    const result = await workflow.value.controller.apply({ planDigest: workflow.plan.planDigest }, {
+      agent: workflow.value.owner,
+      executionToken: approval.token,
+      callId: approval.callId,
+      signal: approval.exec.signal,
+    })
+    assert.equal(result.ok, false)
+    assert.equal(result.alreadyApplied, true)
+    assert.equal(result.failure.code, 'CELL_APPLY_CLEANUP_FAILED')
+    assert.equal(result.source.effect, 'exact-staged-tree-applied')
+    assert.equal(result.source.fingerprintAfter, workflow.run.staging.fingerprint)
+    assert.equal(result.rollback.required, false)
+    assert.equal(result.cleanup.resumable, true)
+    assert.equal(result.cleanup.capacityReleased, false)
+    assert.equal(committedMarker.state, 'committed')
+    assert.equal(committedMarker.stageFingerprint, workflow.run.staging.fingerprint)
+    assert.equal(await readFile(join(workflow.source, 'result.txt'), 'utf8'), 'sealed\n')
+    const repeated = await grantOnce(workflow.value, workflow.plan, {
+      operation: 'cell-apply', callId: 'apply-after-commit',
+    })
+    assert.equal(repeated.decision.kind, 'deny')
+    assert.match(repeated.decision.reason, /CELL_PLAN_ALREADY_APPLIED/u)
+    const recovered = await workflow.value.controller.discard({ planDigest: workflow.plan.planDigest }, {
+      agent: workflow.value.owner,
+    })
+    assert.equal(recovered.alreadyApplied, true)
+    assert.equal(recovered.cleanup.transactionRemoved, true)
+    assert.equal(recovered.cleanup.stageRemoved, true)
+    assert.equal(recovered.cleanup.capacityReleased, true)
+    assert.equal(await readFile(join(workflow.source, 'result.txt'), 'utf8'), 'sealed\n')
+  } finally {
+    await rm(workflow.source, { recursive: true, force: true })
+  }
+})
+
+test('preserves post-commit integrity failure when caller cancellation races cleanup', async () => {
+  const cancellation = new AbortController()
+  let transactionRoot
+  let injected = false
+  const workflow = await makeStagedWorkflow({
+    applyBarrier: async (phase, context) => {
+      if (phase === 'before-delete-transaction-entry' && !injected) {
+        injected = true
+        transactionRoot = context.transaction.root
+        await writeFile(join(transactionRoot, 'unexpected.txt'), 'tampered\n', 'utf8')
+        cancellation.abort('cancel while transaction integrity is failing')
+      }
+    },
+  })
+  try {
+    const approval = await grantOnce(workflow.value, workflow.plan, {
+      operation: 'cell-apply', callId: 'apply-cancel-integrity-race', signal: cancellation.signal,
+    })
+    assert.equal(approval.guard(), undefined)
+    const result = await workflow.value.controller.apply({ planDigest: workflow.plan.planDigest }, {
+      agent: workflow.value.owner,
+      executionToken: approval.token,
+      callId: approval.callId,
+      signal: cancellation.signal,
+    })
+    assert.equal(result.ok, false)
+    assert.equal(result.alreadyApplied, true)
+    assert.equal(result.failure.code, 'CELL_APPLY_CLEANUP_FAILED')
+    assert.equal(result.failure.cleanup.code, 'CELL_TRANSACTION_CLEANUP_AMBIGUOUS')
+    assert.equal(result.cleanup.resumable, false)
+    assert.equal(result.cleanup.capacityReleased, false)
+  } finally {
+    if (transactionRoot !== undefined) await rm(transactionRoot, { recursive: true, force: true })
+    await rm(workflow.run.staging.root, { recursive: true, force: true })
+    await rm(workflow.source, { recursive: true, force: true })
+  }
+})
+
+test('rejects a hardlink-swapped candidate and verifies rollback before cleanup', async () => {
+  const externalRoot = await mkdtemp(join(tmpdir(), 'dsh-cell-apply-hardlink-'))
+  const external = join(externalRoot, 'external.txt')
+  await writeFile(external, 'sealed\n', 'utf8')
+  let swapped = false
+  let restored = false
+  const workflow = await makeStagedWorkflow({
+    applyBarrier: async (phase, context) => {
+      if (phase === 'before-install-candidate' && context.path === 'result.txt' && !swapped) {
+        const candidate = join(context.transaction.candidate, 'result.txt')
+        await unlink(candidate)
+        await link(external, candidate)
+        swapped = true
+      } else if (phase === 'before-rollback' && swapped && !restored) {
+        const candidate = join(context.transaction.candidate, 'result.txt')
+        await unlink(candidate)
+        await writeFile(candidate, 'sealed\n', 'utf8')
+        restored = true
+      }
+    },
+  })
+  try {
+    const approval = await grantOnce(workflow.value, workflow.plan, {
+      operation: 'cell-apply', callId: 'apply-hardlink-swap',
+    })
+    assert.equal(approval.guard(), undefined)
+    const result = await workflow.value.controller.apply({ planDigest: workflow.plan.planDigest }, {
+      agent: workflow.value.owner,
+      executionToken: approval.token,
+      callId: approval.callId,
+      signal: approval.exec.signal,
+    })
+    assert.equal(result.ok, false)
+    assert.equal(result.failure.code, 'CELL_APPLY_CANDIDATE_IDENTITY_CHANGED')
+    assert.equal(result.rollback.required, true)
+    assert.equal(result.rollback.verified, true)
+    assert.equal(result.cleanup.transactionCleaned, true)
+    assert.equal((await scanOrdinaryTree(workflow.source)).fingerprint, workflow.run.source.fingerprintBefore)
+    const discard = await workflow.value.controller.discard({ planDigest: workflow.plan.planDigest }, {
+      agent: workflow.value.owner,
+    })
+    assert.equal(discard.cleanup.capacityReleased, true)
+  } finally {
+    await rm(workflow.source, { recursive: true, force: true })
+    await rm(externalRoot, { recursive: true, force: true })
+  }
+})
+
+test('never claims rollback after a source hardlink race changes physical identity', async () => {
+  const externalRoot = await mkdtemp(join(tmpdir(), 'dsh-cell-source-hardlink-'))
+  const external = join(externalRoot, 'held-link.txt')
+  let linked = false
+  const workflow = await makeStagedWorkflow({
+    sourceFiles: { 'locked.txt': 'before\n' },
+    stageFiles: { 'locked.txt': 'after\n' },
+    changes: { created: [], modified: ['locked.txt'], deleted: [] },
+    applyBarrier: async (phase, context) => {
+      if (phase === 'before-move-original' && context.path === 'locked.txt' && !linked) {
+        await link(join(context.record.workspace.root, 'locked.txt'), external)
+        linked = true
+      }
+    },
+  })
+  let retainedTransaction
+  try {
+    const approval = await grantOnce(workflow.value, workflow.plan, {
+      operation: 'cell-apply', callId: 'apply-source-hardlink-race',
+    })
+    assert.equal(approval.guard(), undefined)
+    const result = await workflow.value.controller.apply({ planDigest: workflow.plan.planDigest }, {
+      agent: workflow.value.owner,
+      executionToken: approval.token,
+      callId: approval.callId,
+      signal: approval.exec.signal,
+    })
+    retainedTransaction = result.cleanup.retainedRoot
+    assert.equal(result.ok, false)
+    assert.equal(result.failure.code, 'CELL_APPLY_ROLLBACK_FAILED')
+    assert.equal(result.rollback.required, true)
+    assert.equal(result.rollback.verified, false)
+    assert.equal(result.cleanup.capacityReleased, false)
+    assert.equal(await readFile(join(workflow.source, 'locked.txt'), 'utf8'), 'before\n')
+    await assert.rejects(
+      workflow.value.controller.discard({ planDigest: workflow.plan.planDigest }, {
+        agent: workflow.value.owner,
+      }),
+      (cause) => cause.code === 'CELL_APPLY_RECOVERY_REQUIRED',
+    )
+  } finally {
+    await rm(externalRoot, { recursive: true, force: true })
+    if (retainedTransaction !== undefined) await rm(retainedTransaction, { recursive: true, force: true })
+    await rm(workflow.run.staging.root, { recursive: true, force: true })
+    await rm(workflow.source, { recursive: true, force: true })
+  }
+})
+
+test('blocks a fresh controller while a crash-recovery transaction remains beside source', async () => {
+  const parent = await mkdtemp(join(tmpdir(), 'dsh-cell-orphan-recovery-'))
+  const source = join(parent, 'source')
+  const orphan = join(parent, '.dsh-developer-cell-apply-crash-evidence')
+  await mkdir(source)
+  await mkdir(orphan)
+  await writeFile(join(orphan, 'state-committing.json'), JSON.stringify({
+    kind: 'dsh-developer-cell-apply-recovery', version: 1, state: 'committing', source,
+  }) + '\n', 'utf8')
+  const owner = agent('orphan-recovery-owner')
+  const f = fixture({
+    owner,
+    inspectTreeIdentity: null,
+    inspectWorkspace: async () => ({
+      root: source,
+      headerPath: source,
+      sessionId: owner.session.header.id,
+      pathIdentity: [],
+      identityDigest: 'sha256:' + '7'.repeat(64),
+      rootIdentity: { dev: '1', ino: '2' },
+    }),
+    scanTree: (path, options) => scanOrdinaryTree(path, options),
+    doctor: async (path) => {
+      const tree = await scanOrdinaryTree(path)
+      return report(tree.fingerprint)
+    },
+  })
+  try {
+    await assert.rejects(
+      makePlan(f),
+      (cause) => cause.code === 'CELL_APPLY_RECOVERY_PENDING'
+        && cause.details.retainedRoot === orphan
+        && cause.details.retainedTransactions === 1
+        && cause.details.recoveryState === 'committing',
+    )
+    assert.deepEqual(f.controller.status(), { phase: 'idle' })
+    await rm(orphan, { recursive: true, force: true })
+    const plan = await makePlan(f)
+    const discard = await f.controller.discard({ planDigest: plan.planDigest }, { agent: owner })
+    assert.equal(discard.cleanup.capacityReleased, true)
+  } finally {
+    await rm(parent, { recursive: true, force: true })
+  }
+})
+
+test('owner disposal during Apply aborts mutation, rolls back, and releases capacity', async () => {
+  let releaseBarrier
+  let enterBarrier
+  const entered = new Promise((resolvePromise) => { enterBarrier = resolvePromise })
+  const released = new Promise((resolvePromise) => { releaseBarrier = resolvePromise })
+  let held = false
+  const workflow = await makeStagedWorkflow({
+    applyBarrier: async (phase) => {
+      if (phase === 'after-install-candidate' && !held) {
+        held = true
+        enterBarrier()
+        await released
+      }
+    },
+  })
+  try {
+    const approval = await grantOnce(workflow.value, workflow.plan, {
+      operation: 'cell-apply', callId: 'apply-owner-dispose',
+    })
+    assert.equal(approval.guard(), undefined)
+    const applying = workflow.value.controller.apply({ planDigest: workflow.plan.planDigest }, {
+      agent: workflow.value.owner,
+      executionToken: approval.token,
+      callId: approval.callId,
+      signal: approval.exec.signal,
+    })
+    await entered
+    const disposing = workflow.value.controller.disposeOwner(workflow.value.owner)
+    releaseBarrier()
+    const result = await applying
+    assert.equal(result.ok, false)
+    assert.equal(result.failure.code, 'CANCELLED')
+    assert.equal(result.rollback.verified, true)
+    await disposing
+    assert.deepEqual(workflow.value.controller.status(), { phase: 'idle' })
+    assert.equal((await scanOrdinaryTree(workflow.source)).fingerprint, workflow.run.source.fingerprintBefore)
+  } finally {
+    releaseBarrier?.()
+    await rm(workflow.source, { recursive: true, force: true })
   }
 })
 

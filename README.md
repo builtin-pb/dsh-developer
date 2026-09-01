@@ -44,7 +44,7 @@ Upgrade this repository without breaking the current release lane.
 Audit this plugin, repair every blocker, and give me the install command.
 ```
 
-Natural language is the primary entry. The installed model-facing description covers every DSH plugin intent above, and DSH and Codex expose it for host selection. Once selected, dsh-developer reads the workspace and extracts the goal and constraints. Answers and read-only audits act immediately; changes produce one compact effects-and-proof plan. Approve it once, and the agent owns edit, test, diagnosis, repair, Doctor, profile proof, and exact-lane evidence until the plugin passes or a precise external blocker remains.
+Natural language is the primary entry. DSH and Codex select dsh-developer for these plugin intents; it reads the workspace and extracts the goal and constraints. Answers and read-only audits act immediately. Changes produce one compact effects-and-proof plan. Approve its edit scope and the agent owns edit, test, diagnosis, repair, Doctor, profile proof, and exact-lane evidence. It pauses only for isolated execution, staged Apply, publishing, or a precise external blocker.
 
 `/dsh-developer` in DSH and `$dsh-developer` in Codex pin deterministic selection whenever you want it; they are not a command vocabulary users must learn.
 
@@ -68,7 +68,7 @@ Attest an existing physical profile without booting it or loading packages:
 node bin/dsh-developer.js attest-profile --profile C:\Users\you\.dsh\profiles\web --dsh D:\path\to\dsh.cmd --json
 ```
 
-The receipt binds exact public DSH/CLI bytes, physical profile identity, manifest and bundle order, config, lock integrity, and bounded direct-package files. Two scans prove freshness; links, escapes, mutation, conditional/unknown state, and secrets fail closed without walking a pnpm store. The stable digest excludes timestamps. It proves static state—not activation, compatibility, or boot. Release `0.1.1-rc.2` blocks; preview `0.1.2-alpha.3` advises. Paths stay CLI-only because public lanes expose no authoritative live-agent profile seam.
+The receipt binds the DSH executable to the exact static profile bytes you tested. Two scans catch links, escapes, mutation, unresolved state, and secrets without booting packages. Release `0.1.1-rc.2` blocks; preview `0.1.2-alpha.3` advises.
 
 Audit a repository from DSH Web:
 
@@ -128,7 +128,7 @@ The global `dsh_developer` tool reaches Web, headless, ACP, Code Mode, and JSON-
 {"operation":"doctor","source":"C:/path/to/plugin","skipRuntime":true}
 ```
 
-One schema covers every audit and isolated-cell operation while keeping the catalogue small. Blocked results add at most three closed `nextActions`; text shows one. Actions never execute, grant authority, alter evidence digests, or promote preview evidence.
+One schema covers every audit, Build, and Apply operation. Blocked results add at most three closed `nextActions`; text shows one. They cannot execute, grant authority, alter digests, or promote previews.
 
 Delegated and fixed-authority agents also receive truthful shell and file schemas. Impossible escalation arguments disappear, stale arguments are removed before execution, and real denials explain the fixed boundary instead of sending the model into another retry loop.
 
@@ -161,15 +161,26 @@ Read-only analysis never executes target code. Controlled execution is limited t
 
 Execution uses an admitted WSL2 + Bubblewrap cell: disposable, offline, credential-free, bounded, serialized, sealed, and verifiably cleaned.
 
-In a top-level DSH Agent, isolated Build is native and path-free. The agent selects one to four exact commands. The controller accepts only that live Agent in `agents.roots()`, derives its workspace source, binds identity, profile fence, exact DSH lane, fingerprint, commands, timeouts, fixed policy, and owner into an expiring digest, then asks DSH for audited one-time approval:
+In a top-level DSH Agent, isolated Build is native and path-free. The controller derives source from the live root Agent, binds the commands and safety policy into an expiring digest, and asks DSH for audited one-time approval:
 
 ```json
 {"operation":"cell-plan","outcome":"Run focused tests and the repository check","commands":[{"command":"node --test","timeoutMs":60000},{"command":"npm run check","timeoutMs":60000}]}
 {"operation":"cell-run","planDigest":"sha256:<digest returned by cell-plan>"}
+```
+
+If the run seals changes, choose exactly one:
+
+```json
+{"operation":"cell-apply","planDigest":"sha256:<same digest>"}
+```
+
+or
+
+```json
 {"operation":"cell-discard","planDigest":"sha256:<same digest>"}
 ```
 
-`cell-run` accepts only the approved digest, runs one offline credential-free cell, and returns bounded secret-scanned evidence. Source and profile stay unchanged; `cell-discard` alone verifies and removes retained staging. These actions have no CLI or cold-resume surface.
+`cell-run` seals approved isolated changes. `cell-apply` re-proves owner, source, stage, checks, and paths, then asks again. A private backup applies without execution; failure restores verified bytes, success final-Doctors and cleans. Discard is idempotent. After a committed Apply it only finishes cleanup—it never undoes source. Ambiguous rollback or crash evidence blocks reuse. Caller paths grant nothing.
 
 ```powershell
 node bin/dsh-developer.js lab --wsl-distro Ubuntu-22.04

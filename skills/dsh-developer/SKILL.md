@@ -25,6 +25,7 @@ Load one reference family per response; safety may join it. Resolve authority fi
 - Permission/fixed-authority/delegated issue: load [authority safety](references/authority-safety.md).
 - Core gap: load [core-gap rules](references/core-incubation.md), or [the lab gate](references/execution-lab.md) if execution-bearing.
 - Owned child: load [the isolated-cell contract](references/isolated-cell.md).
+- Apply or recovery: load [the transaction contract](references/cell-apply.md).
 - UI: load [the agent-native route](references/agent-native-ui.md); admit its browser.
 
 Approval covers edits, not execution trust. DeepSeek runs untrusted source only in an admitted Bubblewrap-backed cell. Codex/GPT requires proven credential/network/write/process/cleanup isolation. Otherwise use static proof; never execute to inspect.
@@ -37,7 +38,7 @@ For approved execution in the current top-level DSH Agent:
 
 1. `cell-plan`: outcome plus 1–4 exact commands/timeouts. It accepts no path/cwd/profile/env/provider/mount/network/session; source is the exact live `exec.agent` in `agents.roots()`, never cwd.
 2. A plan is not approval. `cell-run` accepts only its digest after audited `tools/pre-execute` grants the displayed plan once; conversation/fields cannot. One admitted offline, credential-free cell runs commands in order without source/profile writes.
-3. Return allowlisted, bounded, secret-scanned diagnostics and redacted nonzero-command evidence. Changes use one opaque controller-owned stage outside source/profile; prefixes never prove ownership. Only `cell-discard` releases capacity after identity/fingerprint proof. Missing, moved, replaced, or ambiguous roots stay poisoned; verified deletion ignores caller cancellation. Native actions reject missing/delegated Agents, drift, reruns, and resume.
+3. Bound diagnostics. Changed runs remain in a controller stage. Apply only through the exact-digest next action and fresh allowed-once approval; load its transaction contract. Discard exits. Caller paths grant nothing.
 
 Use every applicable gate in order:
 

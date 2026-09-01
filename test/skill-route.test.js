@@ -37,6 +37,7 @@ test('keeps every LF and CRLF routed skill set below the repository budget with 
     core: ['references/core-incubation.md', 'references/safety.md'],
     'execution-bearing-core': ['references/execution-lab.md', 'references/safety.md'],
     'isolated-cell': ['references/isolated-cell.md', 'references/safety.md'],
+    'cell-apply': ['references/cell-apply.md', 'references/safety.md'],
     authority: ['references/authority-safety.md', 'references/safety.md'],
     ui: ['references/agent-native-ui.md', 'references/safety.md'],
   }
