@@ -61,6 +61,30 @@ test('parses the closed agent-native UI command surface', () => {
   )
 })
 
+test('parses only the explicit Hook Bridge Doctor lane and dialect surface', () => {
+  const parsed = parseCliArguments([
+    'hook-doctor',
+    '--source', 'hooks.json',
+    '--dialect', 'codex',
+    '--dsh', 'D:/runtime/dsh.cmd',
+    '--json',
+  ])
+  assert.deepEqual(parsed, {
+    command: 'hook-doctor',
+    options: {
+      source: 'hooks.json',
+      dialect: 'codex',
+      dsh: 'D:/runtime/dsh.cmd',
+      json: true,
+    },
+  })
+  assert.doesNotThrow(() => assertCliCommandOptions(parsed.command, parsed.options))
+  assert.throws(
+    () => assertCliCommandOptions('hook-doctor', { source: 'hooks.json', dialect: 'codex', dsh: 'dsh', skipRuntime: true }),
+    /hook-doctor does not accept --skip-runtime/u,
+  )
+})
+
 test('rejects unknown options and missing values', () => {
   assert.throws(
     () => parseCliArguments(['doctor', '--source']),
@@ -97,6 +121,7 @@ test('keeps command option surfaces closed after global option parsing', () => {
     'doctor',
     'fingerprint',
     'impact',
+    'hook-doctor',
     'lab',
     'migration',
     'promote',

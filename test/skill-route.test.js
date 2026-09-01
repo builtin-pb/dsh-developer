@@ -69,6 +69,7 @@ test('owns a conversational plan-to-proof development loop', async () => {
   assert.match(skill, /implement, test, diagnose, and repair autonomously/u)
   assert.match(skill, /Load one reference family per response/u)
   assert.match(skill, /DeepSeek runs untrusted source only in an admitted Bubblewrap-backed cell/u)
+  assert.match(skill, /Hook Bridge Doctor first; classify exact installed bytes statically/u)
   assert.match(skill, /rerun that gate and all downstream gates/u)
   assert.match(skill, /Answer ends with the answer and assumptions/u)
   assert.match(skill, /Inspect ends with findings, evidence, and risks/u)

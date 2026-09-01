@@ -42,6 +42,7 @@ Build a DSH plugin that exposes our local search service as a model tool.
 Fix this plugin so it cold-boots in the web profile.
 Upgrade this repository without breaking the current release lane.
 Audit this plugin, repair every blocker, and give me the install command.
+Check whether these Claude hooks still deny tools on this DSH install.
 ```
 
 Natural language is the primary entry. DSH and Codex select dsh-developer for these plugin intents; it reads the workspace and extracts the goal and constraints. Answers and read-only audits act immediately. Changes produce one compact effects-and-proof plan. Approve its edit scope and the agent owns edit, test, diagnosis, repair, Doctor, profile proof, and exact-lane evidence. It pauses only for isolated execution, staged Apply, publishing, or a precise external blocker.
@@ -61,6 +62,9 @@ Start with the route that matches what you have:
 | A trusted release candidate | `compatibility` | Witnessed behavior on release and preview DSH lanes |
 | An unfamiliar DSH install | `capabilities` | Exact runtime identity and supported development paths |
 | An installed profile | `attest-profile` | Canonical receipt for the exact static bytes you tested |
+| Codex or Claude Code hooks | `hook-doctor` | Static compatibility before any hook command runs |
+
+`hook-doctor` binds a config to reviewed bytes without import, execution, expansion, or activation claims. Release `0.1.1-rc.2` has no bridge; exact `0.1.2-alpha.3` is partial.
 
 Attest an existing physical profile without booting it or loading packages:
 

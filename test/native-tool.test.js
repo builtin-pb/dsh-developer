@@ -37,6 +37,17 @@ test('keeps operation-specific argument surfaces closed before execution', () =>
     () => parseNativeToolInput({ operation: 'doctor', source: 'plugin', skipRuntime: 'yes' }),
     /skipRuntime must be boolean/u,
   )
+  assert.deepEqual(parseNativeToolInput({ operation: 'hook-doctor', source: 'hooks.json', dialect: 'codex' }), {
+    operation: 'hook-doctor', source: 'hooks.json', dialect: 'codex',
+  })
+  assert.throws(
+    () => parseNativeToolInput({ operation: 'hook-doctor', source: 'hooks.json', dialect: 'other' }),
+    /dialect must be/u,
+  )
+  assert.throws(
+    () => parseNativeToolInput({ operation: 'hook-doctor', source: 'hooks.json', dialect: 'codex', dshPath: 'forged' }),
+    /Field "dshPath" is not valid/u,
+  )
   const digest = 'sha256:' + 'a'.repeat(64)
   assert.deepEqual(parseNativeToolInput({
     operation: 'cell-plan',
@@ -111,6 +122,25 @@ test('renders scoped UI admission evidence without adding another tool schema', 
   const value = await definition.execute({ operation: 'ui' }, { signal: new AbortController().signal })
   assert.equal(value.operation, 'ui')
   assert.match(definition.output.render({}, value)[0].text, /^FAIL UI capabilities/u)
+})
+
+test('renders static Hook Bridge scope and nonclaims on the existing native schema', async () => {
+  const definition = createNativeToolDefinition(async () => ({
+    operation: 'hook-doctor',
+    ok: false,
+    report: {
+      kind: 'doctor-hook-bridge',
+      ok: false,
+      dialect: 'codex',
+      checks: [{ id: 'bridge.activation', status: 'SKIP', message: 'not inspected' }],
+      config: { status: 'not-inspected' },
+      evidenceDigest: 'sha256:test',
+    },
+  }))
+  const value = await definition.execute({ operation: 'hook-doctor', source: 'hooks.json', dialect: 'codex' }, {
+    signal: new AbortController().signal,
+  })
+  assert.match(definition.output.render({}, value)[0].text, /^FAIL Hook Bridge Doctor codex \[static compatibility; activation not inspected\]/u)
 })
 
 test('renders delegated fixed-authority evidence without adding another tool schema', async () => {

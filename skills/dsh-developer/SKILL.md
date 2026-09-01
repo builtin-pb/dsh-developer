@@ -18,6 +18,7 @@ whenToUse: "For requests to create, change, diagnose, test, harden, upgrade, pac
 Load one reference family per response; safety may join it. Resolve authority first.
 
 - Audit: Doctor first; load [safety](references/safety.md) for untrusted source.
+- Codex/Claude hooks: Hook Bridge Doctor first; classify exact installed bytes statically, never run or expand handlers, and keep activation unclaimed.
 - Creator export: load [the contract](references/creator-export.md); state its new-directory effect.
 - Upgrade: impact before edits; declare attachments when inference is incomplete.
 - Target profile: preflight before installation.

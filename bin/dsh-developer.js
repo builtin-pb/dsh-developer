@@ -14,6 +14,7 @@ import { asDiagnostic, DshDeveloperError } from '../lib/errors.js'
 import { conformExecutionLab, formatExecutionLabReport } from '../lib/execution-lab.js'
 import { formatProfilePreflightReport, inspectProfilePreflight } from '../lib/profile-preflight.js'
 import { formatProfileAttestationReport, inspectProfileAttestation } from '../lib/profile-attestation.js'
+import { formatHookBridgeReport, inspectHookBridge } from '../lib/hook-bridge-doctor.js'
 import { promoteCreatorExport } from '../lib/promote.js'
 import { appendFirstNextAction, withNextActions } from '../lib/recovery-actions.js'
 import { formatSourceMigrationReport, inspectSourceMigration } from '../lib/source-migration.js'
@@ -35,6 +36,7 @@ const USAGE = [
   '  dsh-developer doctor --source <creator.json|plugin-dir> [--dsh <path>] [--skip-runtime] [--json]',
   '  dsh-developer promote --source <creator.json> --output <new-dir> [--dsh <path>] [--json]',
   '  dsh-developer fingerprint --source <creator-draft.json> [--json]',
+  '  dsh-developer hook-doctor --source <hooks.json|settings.json> --dialect <codex|claude-code> --dsh <path> [--json]',
   '  dsh-developer ui --session <name> --action <operation> [operation options] [--json]',
   '',
   'Promotion only creates a new, absent destination and requires public DSH 0.1.1-rc.2.',
@@ -143,6 +145,16 @@ async function main(argv) {
       signal: controller.signal,
     })
     printFormattedReport(report, options.json, command, formatUpstreamImpactReport)
+    if (!report.ok) process.exitCode = 1
+    return
+  }
+  if (command === 'hook-doctor') {
+    const report = await inspectHookBridge(required(options, 'source'), {
+      dialect: requiredValue(options, 'dialect'),
+      dshPath: required(options, 'dsh'),
+      signal: controller.signal,
+    })
+    printFormattedReport(report, options.json, command, formatHookBridgeReport)
     if (!report.ok) process.exitCode = 1
     return
   }

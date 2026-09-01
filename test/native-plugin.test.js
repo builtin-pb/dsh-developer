@@ -74,6 +74,7 @@ test('registers the canonical skill through the native DSH service', async () =>
     'dsh-developer-compatibility',
     'dsh-developer-lab',
     'dsh-developer-impact',
+    'dsh-developer-hook-doctor',
     'dsh-developer-preflight',
     'dsh-developer-doctor',
     'dsh-developer-promote',
@@ -95,6 +96,32 @@ test('registers the canonical skill through the native DSH service', async () =>
   })
   assert.equal(result.kind, 'success')
   assert.match(result.text, /^PASS Doctor/u)
+
+  const confinedHook = await commands.get('dsh-developer-hook-doctor').handler({
+    rawInput: JSON.stringify({ source: '../outside-hooks.json', dialect: 'codex' }),
+    signal: new AbortController().signal,
+  })
+  assert.equal(confinedHook.kind, 'error')
+  assert.match(confinedHook.text, /source\.authority/u)
+  assert.doesNotMatch(confinedHook.text, /outside-hooks/u)
+
+  const nativeHook = await nativeTool.execute({
+    operation: 'hook-doctor',
+    source: 'package.json',
+    dialect: 'codex',
+  }, {
+    signal: new AbortController().signal,
+    agent: { session: { header: { cwd: process.cwd() } } },
+  })
+  assert.equal(nativeHook.operation, 'hook-doctor')
+  assert.equal(nativeHook.report.checks[0].id, 'lane.identity')
+  await assert.rejects(() => nativeTool.execute({
+    operation: 'hook-doctor',
+    source: 'package.json',
+    dialect: 'codex',
+  }, {
+    signal: new AbortController().signal,
+  }), (error) => error.code === 'HOOK_PROJECT_UNAVAILABLE')
 
   const arbitraryLab = await commands.get('dsh-developer-lab').handler({
     rawInput: JSON.stringify({ command: ['/usr/bin/true'] }),

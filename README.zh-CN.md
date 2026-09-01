@@ -44,6 +44,7 @@ dsh web
 修好这个插件，让它能在 web profile 中冷启动。
 升级这个仓库，但不能破坏当前正式版通道。
 审计这个插件，修完所有 blocker，再给我安装命令。
+检查这些 Claude hooks 在这套 DSH 上是否仍会拒绝工具调用。
 ```
 
 自然语言就是主入口。DSH 与 Codex 会为这些插件意图选择 dsh-developer；它读取工作区并提取目标与约束。问答和只读审计直接执行；修改任务先给出一份紧凑的影响与验证计划。批准修改范围后，agent 会接管修改、测试、诊断、修复、Doctor、profile 实证与精确版本通道验证。它只会在真正的权限边界——隔离执行、应用暂存变化、发布——或明确的外部 blocker 前暂停。
@@ -63,6 +64,9 @@ dsh web
 | 一个可信的发布候选 | `compatibility` | 正式版与预览版 DSH 上的运行实证 |
 | 一套陌生的 DSH 安装 | `capabilities` | 精确的运行时身份与可用开发路径 |
 | 一个已安装的 profile | `attest-profile` | 你实际测试过的静态字节的规范 receipt |
+| Codex 或 Claude Code hooks | `hook-doctor` | 任何 hook 命令运行前的静态兼容性 |
+
+`hook-doctor` 把配置绑定到受审字节，不导入、执行、展开或声称激活。正式版 `0.1.1-rc.2` 没有 bridge；精确 `0.1.2-alpha.3` 仅有部分支持。
 
 不启动 profile、也不加载 package，即可证明一个现有物理 profile：
 
