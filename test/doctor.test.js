@@ -125,6 +125,30 @@ test('blocks an incomplete upstream attachment claim for dynamic inject source',
   }
 })
 
+test('blocks DSH Client package identifiers in Host inject with targeted recovery', async () => {
+  const root = await generatedFixture()
+  try {
+    await writeFile(join(root, 'index.js'), [
+      "export const name = 'doctor-fixture'",
+      "export const inject = ['@deepseek-ai/dsh-client-runtime', '@deepseek-ai/dsh-client-ui-conversation']",
+      'export async function apply() {}',
+      '',
+    ].join('\n'), 'utf8')
+    const report = await doctorPlugin(root, { runtime: 'skip' })
+    const failed = report.checks.find((value) => value.id === 'dsh.host-client-inject')
+    assert.equal(failed.status, 'FAIL')
+    assert.equal(failed.evidence.code, 'HOST_CLIENT_PACKAGE_INJECT')
+    assert.deepEqual(failed.evidence.injections.map((value) => value.value), [
+      '@deepseek-ai/dsh-client-runtime',
+      '@deepseek-ai/dsh-client-ui-conversation',
+    ])
+    assert.match(failed.recovery, /package\.json dsh\.client\.inject/u)
+    assert.equal(report.ok, false)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('keeps release-valid Web bundles nonblocking when only the preview module table drifts', async () => {
   const root = await generatedFixture()
   try {

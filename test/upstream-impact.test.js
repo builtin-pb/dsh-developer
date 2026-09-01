@@ -6,6 +6,7 @@ import test from 'node:test'
 import { scanOrdinaryTree } from '../lib/files.js'
 import { formatUpstreamImpactReport, inspectUpstreamImpact } from '../lib/upstream-impact.js'
 import {
+  classifyHostInjectContract,
   comparePackageSurfaces,
   discoverUpstreamReferences,
   inspectUpstreamImpactInternal,
@@ -143,6 +144,38 @@ test('rejects malformed attachment declarations instead of silently widening inf
       () => discoverUpstreamReferences(tree),
       (error) => error.code === 'IMPACT_DECLARATION_INVALID',
     )
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('distinguishes browser package metadata from invalid Host Cordis injections', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-developer-impact-client-inject-'))
+  try {
+    await sourceFixture(root, {
+      dsh: {
+        bundle: { patch: './cordis.patch.yml' },
+        client: { inject: ['@deepseek-ai/dsh-client-runtime'] },
+      },
+    })
+    let references = discoverUpstreamReferences(await scanOrdinaryTree(root))
+    assert.equal(classifyHostInjectContract(references).ok, true)
+
+    await writeFile(join(root, 'index.js'), [
+      "export const inject = ['@deepseek-ai/dsh-client-runtime']",
+      'export async function apply() {}',
+      '',
+    ].join('\n'), 'utf8')
+    references = discoverUpstreamReferences(await scanOrdinaryTree(root))
+    const contract = classifyHostInjectContract(references)
+    assert.equal(contract.ok, false)
+    assert.deepEqual(contract.unparsedDeclarations, [])
+    assert.deepEqual(contract.invalidValues, [])
+    assert.deepEqual(contract.clientPackageInjections, [{
+      path: 'index.js',
+      kind: 'inject',
+      value: '@deepseek-ai/dsh-client-runtime',
+    }])
   } finally {
     await rm(root, { recursive: true, force: true })
   }

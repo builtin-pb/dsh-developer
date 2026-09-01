@@ -201,6 +201,36 @@ test('fails closed when a quoted inject value is not a valid Cordis service name
   }
 })
 
+test('fails before composition when Host inject contains DSH Client package identifiers', async () => {
+  const root = await fixture()
+  await writeFile(join(root, 'index.js'), [
+    "export const inject = ['@deepseek-ai/dsh-client-runtime']",
+    'export function apply() {}',
+    '',
+  ].join('\n'), 'utf8')
+  let composed = false
+  try {
+    const report = await inspectProfilePreflightInternal(root, {
+      dshPath: 'fake-dsh',
+      profile: 'web',
+    }, runtimeDependencies(async () => {
+      composed = true
+    }))
+    const failed = report.checks.find((value) => value.id === 'source.inject-contract')
+    assert.equal(failed.status, 'FAIL')
+    assert.match(failed.message, /package\.json dsh\.client\.inject/u)
+    assert.deepEqual(failed.evidence.clientPackageInjections, [{
+      path: 'index.js',
+      kind: 'inject',
+      value: '@deepseek-ai/dsh-client-runtime',
+    }])
+    assert.equal(composed, false)
+    assert.equal(report.checks.find((value) => value.id === 'profile.service-contract').status, 'SKIP')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('keeps a profile composition failure actionable without executing repository code', async () => {
   const root = await fixture()
   try {
