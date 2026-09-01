@@ -88,13 +88,58 @@ test('accepts a DSH profile bundle that mounts dependencies instead of its own p
       "      name: '@example/dependency-plugin'",
       '',
     ].join('\n'), 'utf8')
-    await writeFile(join(root, 'index.js'), 'export {}\n', 'utf8')
+    const packagePath = join(root, 'package.json')
+    const packageValue = JSON.parse(await readFile(packagePath, 'utf8'))
+    packageValue.optionalDependencies = { '@example/entry-only': '1.0.0' }
+    await writeFile(packagePath, JSON.stringify(packageValue, null, 2) + '\n', 'utf8')
+    await writeFile(join(root, 'index.js'), "import '@example/entry-only'\n", 'utf8')
 
     const report = await doctorPlugin(root, { runtime: 'skip' })
     assert.equal(report.ok, true, JSON.stringify(report.checks, null, 2))
     const entrypoint = report.checks.find((check) => check.id === 'dsh.entrypoint')
     assert.equal(entrypoint.status, 'PASS')
     assert.equal(entrypoint.evidence.mounted, false)
+    const coldBoot = report.checks.find((check) => check.id === 'dependencies.cold-boot')
+    assert.equal(coldBoot.status, 'PASS')
+    assert.deepEqual(coldBoot.evidence.roots, [])
+
+    await writeFile(join(root, 'cordis.patch.yml'), [
+      '- insert:',
+      "    - name: '@example/dependency-plugin'",
+      '      config: {}',
+      '      id: dependency-plugin',
+      '',
+    ].join('\n'), 'utf8')
+    packageValue.optionalDependencies['@example/dependency-plugin'] = '1.0.0'
+    await writeFile(packagePath, JSON.stringify(packageValue, null, 2) + '\n', 'utf8')
+    const brokenProfile = await doctorPlugin(root, { runtime: 'skip' })
+    const failed = brokenProfile.checks.find((check) => check.id === 'dependencies.cold-boot')
+    assert.equal(failed.status, 'FAIL')
+    assert.deepEqual(failed.evidence.collisions, [{
+      package: '@example/dependency-plugin',
+      range: '1.0.0',
+      paths: ['cordis.patch.yml'],
+    }])
+  } finally {
+    await rm(parent, { recursive: true, force: true })
+  }
+})
+
+test('resolves the imported root export before a legacy main entry', async () => {
+  const { parent, root } = await copiedOrdinaryFixture()
+  try {
+    const packagePath = join(root, 'package.json')
+    const packageValue = JSON.parse(await readFile(packagePath, 'utf8'))
+    packageValue.main = './legacy.js'
+    packageValue.exports = { '.': { import: './index.js', default: './legacy.js' } }
+    await writeFile(packagePath, JSON.stringify(packageValue, null, 2) + '\n', 'utf8')
+    await writeFile(join(root, 'legacy.js'), 'throw new Error("legacy entry must not load")\n', 'utf8')
+
+    const report = await doctorPlugin(root, { runtime: 'skip' })
+    assert.equal(report.ok, true, JSON.stringify(report.checks, null, 2))
+    const entrypoint = report.checks.find((check) => check.id === 'dsh.entrypoint')
+    assert.equal(entrypoint.evidence.entryPath, 'index.js')
+    assert.equal(entrypoint.evidence.entryVia, 'exports.import')
   } finally {
     await rm(parent, { recursive: true, force: true })
   }
@@ -134,6 +179,181 @@ test('reports a browser-plane failure when an ordinary plugin exports a client w
     assert.match(failed[0].message, /package\.json dsh\.client declaration/u)
     assert.match(failed[0].recovery, /platform "web"/u)
     assert.equal(report.ok, false)
+  } finally {
+    await rm(parent, { recursive: true, force: true })
+  }
+})
+
+test('blocks eager imports from optional packages without rejecting a gated dynamic import', async () => {
+  const { parent, root } = await copiedOrdinaryFixture()
+  try {
+    const packagePath = join(root, 'package.json')
+    const packageValue = JSON.parse(await readFile(packagePath, 'utf8'))
+    packageValue.optionalDependencies = { '@deepseek-ai/dsh-util-time': '0.1.1-rc.2' }
+    await writeFile(packagePath, JSON.stringify(packageValue, null, 2) + '\n', 'utf8')
+    await writeFile(join(root, 'index.js'), [
+      'import {',
+      '  canonicalClientTimeZone,',
+      "} from '@deepseek-ai/dsh-util-time'",
+      'export function apply() { canonicalClientTimeZone("Asia/Shanghai") }',
+      '',
+    ].join('\n'), 'utf8')
+
+    const eager = await doctorPlugin(root, { runtime: 'skip' })
+    const failed = eager.checks.find((check) => check.id === 'dependencies.cold-boot')
+    assert.equal(failed.status, 'FAIL')
+    assert.equal(failed.evidence.code, 'OPTIONAL_EAGER_IMPORT')
+    assert.deepEqual(failed.evidence.collisions, [{
+      package: '@deepseek-ai/dsh-util-time',
+      range: '0.1.1-rc.2',
+      paths: ['index.js'],
+    }])
+    assert.match(failed.recovery, /Move every boot-required package to dependencies/u)
+
+    await writeFile(join(root, 'index.js'), [
+      "const ready = true; import '@deepseek-ai/dsh-util-time'",
+      'export function apply() { return ready }',
+      '',
+    ].join('\n'), 'utf8')
+    const sameLineStatic = await doctorPlugin(root, { runtime: 'skip' })
+    assert.equal(
+      sameLineStatic.checks.find((check) => check.id === 'dependencies.cold-boot').status,
+      'FAIL',
+    )
+
+    await writeFile(join(root, 'index.js'), [
+      "const runtime = await import('@deepseek-ai/dsh-util-time')",
+      'export function apply() { return runtime }',
+      '',
+    ].join('\n'), 'utf8')
+    const topLevel = await doctorPlugin(root, { runtime: 'skip' })
+    const topLevelFailure = topLevel.checks.find((check) => check.id === 'dependencies.cold-boot')
+    assert.equal(topLevelFailure.status, 'FAIL')
+    assert.equal(topLevelFailure.evidence.code, 'OPTIONAL_EAGER_IMPORT')
+
+    await writeFile(join(root, 'index.js'), [
+      'const runtime = await (/* still cold boot */ import(',
+      "  '@deepseek-ai/dsh-util-time'",
+      '))',
+      'export function apply() { return runtime }',
+      '',
+    ].join('\n'), 'utf8')
+    const parenthesized = await doctorPlugin(root, { runtime: 'skip' })
+    const parenthesizedFailure = parenthesized.checks.find((check) => check.id === 'dependencies.cold-boot')
+    assert.equal(parenthesizedFailure.status, 'FAIL')
+    assert.equal(parenthesizedFailure.evidence.code, 'OPTIONAL_EAGER_IMPORT')
+
+    await writeFile(join(root, 'index.js'), [
+      "const runtime = (await import('@deepseek-ai/dsh-util-time'))",
+      'export function apply() { return runtime }',
+      '',
+    ].join('\n'), 'utf8')
+    const outerParentheses = await doctorPlugin(root, { runtime: 'skip' })
+    assert.equal(
+      outerParentheses.checks.find((check) => check.id === 'dependencies.cold-boot').status,
+      'FAIL',
+    )
+
+    await writeFile(join(root, 'index.js'), [
+      'const runtime = import(`@deepseek-ai/dsh-util-time`)',
+      'export function apply() { return runtime }',
+      '',
+    ].join('\n'), 'utf8')
+    const templateImport = await doctorPlugin(root, { runtime: 'skip' })
+    const templateImportFailure = templateImport.checks.find((check) => check.id === 'dependencies.cold-boot')
+    assert.equal(templateImportFailure.status, 'FAIL')
+    assert.equal(templateImportFailure.evidence.code, 'OPTIONAL_EAGER_IMPORT')
+
+    await writeFile(join(root, 'index.js'), [
+      "const state = { pending: import('@deepseek-ai/dsh-util-time') }",
+      'export function apply() { return state }',
+      '',
+    ].join('\n'), 'utf8')
+    const objectImport = await doctorPlugin(root, { runtime: 'skip' })
+    assert.equal(objectImport.checks.find((check) => check.id === 'dependencies.cold-boot').status, 'FAIL')
+
+    await writeFile(join(root, 'index.js'), [
+      "const state = `${import('@deepseek-ai/dsh-util-time')}`",
+      'export function apply() { return state }',
+      '',
+    ].join('\n'), 'utf8')
+    const templateExpression = await doctorPlugin(root, { runtime: 'skip' })
+    assert.equal(templateExpression.checks.find((check) => check.id === 'dependencies.cold-boot').status, 'FAIL')
+
+    await writeFile(join(root, 'index.js'), [
+      "const load = async () => await import('@deepseek-ai/dsh-util-time')",
+      'export function apply() { return load }',
+      '',
+    ].join('\n'), 'utf8')
+    const lazyArrow = await doctorPlugin(root, { runtime: 'skip' })
+    const lazyArrowCheck = lazyArrow.checks.find((check) => check.id === 'dependencies.cold-boot')
+    assert.equal(lazyArrowCheck.status, 'PASS')
+
+    await writeFile(join(root, 'index.js'), [
+      'const enabled = false',
+      'if (enabled)',
+      '  console.log("disabled")',
+      'else',
+      "  await import('@deepseek-ai/dsh-util-time')",
+      'export function apply() {}',
+      '',
+    ].join('\n'), 'utf8')
+    const gatedStatement = await doctorPlugin(root, { runtime: 'skip' })
+    const gatedStatementCheck = gatedStatement.checks.find((check) => check.id === 'dependencies.cold-boot')
+    assert.equal(gatedStatementCheck.status, 'PASS')
+
+    await writeFile(join(root, 'index.js'), [
+      'const enabled = false',
+      'if (enabled)',
+      '  await',
+      "    import('@deepseek-ai/dsh-util-time')",
+      'const stringLookalike = "; import \'@deepseek-ai/dsh-util-time\'"',
+      'const regexLookalike = /; import "@deepseek-ai\\/dsh-util-time"/',
+      'export function apply() { return { stringLookalike, regexLookalike } }',
+      '',
+    ].join('\n'), 'utf8')
+    const splitGate = await doctorPlugin(root, { runtime: 'skip' })
+    const splitGateCheck = splitGate.checks.find((check) => check.id === 'dependencies.cold-boot')
+    assert.equal(splitGateCheck.status, 'PASS')
+
+    packageValue.main = 'index.ts'
+    await writeFile(packagePath, JSON.stringify(packageValue, null, 2) + '\n', 'utf8')
+    await writeFile(join(root, 'index.ts'), [
+      'import',
+      "  type { Clock } from '@deepseek-ai/dsh-util-time'",
+      "import { type Clock as ClockAlias } from '@deepseek-ai/dsh-util-time'",
+      'export function apply() { return /** @type {Clock | ClockAlias | undefined} */ (undefined) }',
+      '',
+    ].join('\n'), 'utf8')
+    const typeOnly = await doctorPlugin(root, { runtime: 'skip' })
+    const typeOnlyCheck = typeOnly.checks.find((check) => check.id === 'dependencies.cold-boot')
+    assert.equal(typeOnlyCheck.status, 'PASS')
+
+    packageValue.main = 'index.js'
+    await writeFile(packagePath, JSON.stringify(packageValue, null, 2) + '\n', 'utf8')
+    await writeFile(join(root, 'index.js'), [
+      'export async function apply(enabled) {',
+      '  const note = `',
+      "  import { fake } from '@deepseek-ai/dsh-util-time'",
+      '  `',
+      '  /*',
+      "  import { fake } from '@deepseek-ai/dsh-util-time'",
+      '  */',
+      '  if (enabled) await import("./optional-feature.js")',
+      '  return note',
+      '}',
+      '',
+    ].join('\n'), 'utf8')
+    await writeFile(join(root, 'optional-feature.js'), [
+      "import { canonicalClientTimeZone } from '@deepseek-ai/dsh-util-time'",
+      'export const zone = canonicalClientTimeZone("Asia/Shanghai")',
+      '',
+    ].join('\n'), 'utf8')
+    const gated = await doctorPlugin(root, { runtime: 'skip' })
+    const passed = gated.checks.find((check) => check.id === 'dependencies.cold-boot')
+    assert.equal(passed.status, 'PASS')
+    assert.deepEqual(passed.evidence.collisions, [])
+    assert.equal(gated.ok, true, JSON.stringify(gated.checks, null, 2))
   } finally {
     await rm(parent, { recursive: true, force: true })
   }
@@ -190,6 +410,7 @@ test('requires the declared package entry on the matching DSH row', async () => 
     ].join('\n'), 'utf8')
     const report = await doctorPlugin(root, { runtime: 'skip' })
     assert.equal(report.checks.find((value) => value.id === 'dsh.entrypoint').status, 'FAIL')
+    assert.equal(report.checks.find((value) => value.id === 'dependencies.cold-boot').status, 'SKIP')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
