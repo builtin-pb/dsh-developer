@@ -179,3 +179,38 @@ test('blocks Web bundles that leak Node imports into the browser module table', 
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('keeps proven DSH-owned client service replacement visible and nonblocking', async () => {
+  const root = await generatedFixture()
+  try {
+    await addClientBundle(root, 'ctx.provide("chatFileMentions", {}); return {}')
+    const report = await doctorPlugin(root, { runtime: 'skip' })
+    const check = report.checks.find((candidate) => candidate.id === 'web.client-bundle')
+    assert.equal(check.status, 'WARN')
+    assert.equal(check.blocking, false)
+    assert.equal(check.evidence.coreServiceCollisions[0].service, 'chatFileMentions')
+    assert.equal(
+      check.evidence.coreServiceCollisions[0].lanes[0].owner,
+      '@deepseek-ai/dsh-client-ui-deliverables',
+    )
+    assert.match(check.recovery, /Rename the provided services/u)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('keeps computed client service ownership visible instead of claiming a clean boundary', async () => {
+  const root = await generatedFixture()
+  try {
+    await addClientBundle(root, 'const name = "feature"; ctx.provide(name, {}); return {}')
+    const report = await doctorPlugin(root, { runtime: 'skip' })
+    const check = report.checks.find((candidate) => candidate.id === 'web.client-bundle')
+    assert.equal(check.status, 'WARN')
+    assert.equal(check.blocking, false)
+    assert.equal(check.evidence.dynamicProvides, 1)
+    assert.match(check.message, /prevent static ownership proof/u)
+    assert.match(check.recovery, /Use literal provider names/u)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})

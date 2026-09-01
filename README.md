@@ -1,10 +1,12 @@
 # dsh-developer
 
+**English** · [简体中文](README.zh-CN.md)
+
 > **The single plugin you need for DSH**
 
 Proudly designed and implemented by [MetaFlow](https://github.com/builtin-pb/metaflow), **dsh-developer** turns DSH plugin development into one native workflow: create, diagnose, verify, isolate, and ship from inside DSH or Codex.
 
-DSH plugins fail in places ordinary linters never see: Host and Client services get mixed up, Web bundles load the wrong modules, target profiles miss required services, and a DSH upgrade changes the contract underneath a working checkout. dsh-developer catches those failures before users do, proves the result against exact DSH release and preview lanes, and gives agents the same structured evidence humans get.
+DSH plugins fail in places ordinary linters never see: Host and Client contracts get mixed up, browser services collide, Web bundles load the wrong modules, and a DSH upgrade changes the ground underneath a working checkout. dsh-developer catches those failures before users do, proves the result against exact DSH release and preview lanes, and gives agents the same structured evidence humans get.
 
 [![CI](https://github.com/builtin-pb/dsh-developer/actions/workflows/ci.yml/badge.svg)](https://github.com/builtin-pb/dsh-developer/actions/workflows/ci.yml) [![Node.js 22.18+](https://img.shields.io/badge/Node.js-22.18%2B-339933?logo=nodedotjs&logoColor=white)](package.json) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -50,7 +52,7 @@ Audit a repository from DSH Web:
 /dsh-developer-preflight {"source":"C:/path/to/plugin","profile":"web"}
 ```
 
-Doctor catches the failures that brick real DSH profiles: broken package and bundle contracts, unsafe repository content, Host/Client injection mixups, invalid Web artifacts, browser module leaks, unreproducible output, and failed clean-profile lifecycle proof. The repository stays read-only during inspection.
+Doctor catches the failures that brick real DSH profiles: broken package and bundle contracts, unsafe repository content, Host/Client injection mixups, browser-service collisions, invalid Web artifacts, unreproducible output, and failed clean-profile lifecycle proof. The repository stays read-only during inspection.
 
 Turn a saved Creator export into an installable bundle:
 

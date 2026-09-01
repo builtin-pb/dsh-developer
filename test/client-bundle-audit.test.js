@@ -198,3 +198,62 @@ test('ignores regex literal text while auditing template-expression code', () =>
   const result = inspectClientBundle(new Map([['lib/client.js', source]]), manifest())
   assert.deepEqual(result.requests, ['react'])
 })
+
+test('reports direct replacement of a DSH-owned client service without executing the bundle', () => {
+  const result = inspectClientBundle(
+    new Map([['lib/client.js', bundle('ctx.provide("chatFileMentions", {}); return {}')]]),
+    manifest(),
+  )
+  assert.deepEqual(result.providedServices, ['chatFileMentions'])
+  assert.deepEqual(result.coreServiceCollisions, [{
+    service: 'chatFileMentions',
+    lanes: [
+      { target: '0.1.1-rc.2', owner: '@deepseek-ai/dsh-client-ui-deliverables' },
+      { target: '0.1.2-alpha.3', owner: '@deepseek-ai/dsh-client-ui-deliverables' },
+    ],
+  }])
+  assert.equal(result.repositoryCodeExecuted, false)
+})
+
+test('recognizes official ownership across release and preview service moves', () => {
+  const owner = manifest()
+  owner.name = '@deepseek-ai/dsh-client-runtime'
+  const result = inspectClientBundle(
+    new Map([['lib/client.js', 'window.__ModuleLoader__.load({ id: "@deepseek-ai/dsh-client-runtime", factory: (require) => { ctx.reflect.provide("sessions", {}); return {} } })\n']]),
+    owner,
+  )
+  assert.deepEqual(result.providedServices, ['sessions'])
+  assert.deepEqual(result.coreServiceCollisions, [])
+})
+
+test('ignores non-executable, unrelated, and dynamic service-provider lookalikes', () => {
+  const source = [
+    'window.__ModuleLoader__.load({ id: "client-fixture", factory: (require) => {',
+    '  const message = `ctx.provide("theme", value)`;',
+    '  const pattern = /ctx\\.provide\\("locale"/;',
+    '  // ctx.reflect.provide("layout", value)',
+    '  service.ctx.provide("connection", value);',
+    '  other.provide("chatFileMentions", value);',
+    '  const name = "theme";',
+    '  ctx.provide(name, value);',
+    '  return { message, pattern };',
+    '} })',
+    '',
+  ].join('\n')
+  const result = inspectClientBundle(new Map([['lib/client.js', source]]), manifest())
+  assert.deepEqual(result.providedServices, [])
+  assert.deepEqual(result.coreServiceCollisions, [])
+  assert.equal(result.dynamicProvides, 1)
+})
+
+test('decodes quoted service names and scans executable template expressions', () => {
+  const source = [
+    'window.__ModuleLoader__.load({ id: "client-fixture", factory: (require) => {',
+    '  return `${ctx.provide("chatFile\\x4dentions", {})}`;',
+    '} })',
+    '',
+  ].join('\n')
+  const result = inspectClientBundle(new Map([['lib/client.js', source]]), manifest())
+  assert.deepEqual(result.providedServices, ['chatFileMentions'])
+  assert.equal(result.coreServiceCollisions.length, 1)
+})

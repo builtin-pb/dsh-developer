@@ -42,6 +42,7 @@
     "LICENSE",
     "presets",
     "README.md",
+    "README.zh-CN.md",
     "skills"
   ],
   "scripts": {

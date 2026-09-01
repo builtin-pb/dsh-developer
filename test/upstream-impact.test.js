@@ -73,7 +73,7 @@ test('discovers declared packages, injected services, static imports, and the ba
     await writeFile(join(root, 'index.js'), [
       "import '@deepseek-ai/dsh-shell-env'",
       "export const inject = { required: ['skills', 'commands', 'remote.workspace'] }",
-      "export async function apply(ctx) { ctx.commands.register({}); ctx.get('appExit'); ctx.inject(['agentLoop'], () => {}); ctx.logger.info('ready') }",
+      "export async function apply(ctx) { ctx.commands.register({}); ctx.reflect.provide('fixture', {}); ctx.get('appExit'); ctx.inject(['agentLoop'], () => {}); ctx.logger.info('ready') }",
       '',
     ].join('\n'), 'utf8')
     const references = discoverUpstreamReferences(await scanOrdinaryTree(root))
