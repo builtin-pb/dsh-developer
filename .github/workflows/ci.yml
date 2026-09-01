@@ -35,7 +35,7 @@ jobs:
         include:
           - dsh: 0.1.1-rc.2
             claim: blocking
-          - dsh: 0.1.2-alpha.2
+          - dsh: 0.1.2-alpha.3
             claim: preview
     steps:
       - uses: actions/checkout@v7
@@ -93,7 +93,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $release, $preview | Out-Null
           pnpm --dir $release --store-dir $store add --ignore-scripts --save-exact '@deepseek-ai/dsh@0.1.1-rc.2'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pnpm --dir $preview --store-dir $store add --ignore-scripts --save-exact '@deepseek-ai/dsh@0.1.2-alpha.2'
+          pnpm --dir $preview --store-dir $store add --ignore-scripts --save-exact '@deepseek-ai/dsh@0.1.2-alpha.3'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "DSH_RELEASE=$release" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "DSH_PREVIEW=$preview" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8

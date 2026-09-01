@@ -115,7 +115,7 @@ test('classifies exact public-surface facts without treating version churn as a 
     digest: 'sha256:release',
   }
   const versionOnly = structuredClone(base)
-  versionOnly.version = '0.1.2-alpha.2'
+  versionOnly.version = '0.1.2-alpha.3'
   versionOnly.digest = 'sha256:preview'
   assert.equal(comparePackageSurfaces(base.name, base, versionOnly).classification, 'package-version')
 
@@ -163,7 +163,7 @@ test('maps a declared service to exact package owners and emits stable scoped im
     const previewDsh = await installedPackage(
       join(root, 'preview-dsh'),
       '@deepseek-ai/dsh',
-      '0.1.2-alpha.2',
+      '0.1.2-alpha.3',
       'export interface Dsh {}\n',
     )
     const releaseSkill = await installedPackage(
@@ -175,7 +175,7 @@ test('maps a declared service to exact package owners and emits stable scoped im
     const previewSkill = await installedPackage(
       join(root, 'preview-skill'),
       '@deepseek-ai/dsh-skill',
-      '0.1.2-alpha.2',
+      '0.1.2-alpha.3',
       "declare module '@deepseek-ai/cordis' { interface Context { skills: { register(value: unknown): void } } }\n",
     )
     const inventories = {
@@ -183,7 +183,7 @@ test('maps a declared service to exact package owners and emits stable scoped im
         ['@deepseek-ai/dsh', releaseDsh],
         ['@deepseek-ai/dsh-skill', releaseSkill],
       ]),
-      '0.1.2-alpha.2': new Map([
+      '0.1.2-alpha.3': new Map([
         ['@deepseek-ai/dsh', previewDsh],
         ['@deepseek-ai/dsh-skill', previewSkill],
       ]),

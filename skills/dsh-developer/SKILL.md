@@ -48,7 +48,7 @@ Treat changes as scope, not behavior; preserve undeclared inference. Then run:
 
     node bin/dsh-developer.js compatibility --source <plugin-directory> --release-dsh <path> --preview-dsh <path>
 
-The matrix verifies entries, capabilities, and clean-profile lifecycle. DSH 0.1.1-rc.2 blocks; 0.1.2-alpha.2 is advisory. Keep preview failure visible; finish with fingerprint, drift, and digest.
+The matrix verifies entries, capabilities, and clean-profile lifecycle. DSH 0.1.1-rc.2 blocks; 0.1.2-alpha.3 is advisory. Keep preview failure visible; finish with fingerprint, drift, and digest.
 
 ## Promote
 

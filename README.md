@@ -80,7 +80,7 @@ Doctor is more than a manifest linter. Its release catalogue covers:
 
 - stable ordinary-file snapshots, portable paths, case collisions, binary content, dependency trees, size limits, and credential-shaped material;
 - npm, DSH bundle, Codex plugin, Agent Skill, local-reference, documentation, test-guidance, compatibility, and MIT-license contracts;
-- exact DSH 0.1.1-rc.2 compatibility, with DSH 0.1.2-alpha.2 treated only as preview evidence;
+- exact DSH 0.1.1-rc.2 compatibility, with DSH 0.1.2-alpha.3 treated only as preview evidence;
 - byte-for-byte reproduction of promoted bundles from their fingerprinted Creator provenance;
 - native module registration plus a witnessed clean-profile DSH install, load, discovery, and uninstall, with package installation offline and lifecycle scripts disabled; and
 - a fresh final tree fingerprint so a passing report cannot silently describe earlier bytes.
@@ -123,7 +123,7 @@ From the CLI, name both installations explicitly:
 node bin/dsh-developer.js compatibility --source C:\path\to\plugin --release-dsh D:\release\dsh.cmd --preview-dsh D:\preview\dsh.cmd
 ```
 
-The matrix first runs non-runtime Doctor, accepts only package-declared official DSH 0.1.1-rc.2 and 0.1.2-alpha.2 entries, and reruns each lane's capability and self-lifecycle evidence. It exercises the target plugin lifecycle only for dsh-developer itself or byte-for-byte reproducible promoted output—never an arbitrary repository. Release failure is blocking; preview failure remains visible but advisory. A report also requires an unchanged final source fingerprint, classifies each drift trigger as `contract` or `package-version`, and ends with a stable digest.
+The matrix first runs non-runtime Doctor, accepts only package-declared official DSH 0.1.1-rc.2 and 0.1.2-alpha.3 entries, and reruns each lane's capability and self-lifecycle evidence. It exercises the target plugin lifecycle only for dsh-developer itself or byte-for-byte reproducible promoted output—never an arbitrary repository. Release failure is blocking; preview failure remains visible but advisory. A report also requires an unchanged final source fingerprint, classifies each drift trigger as `contract` or `package-version`, and ends with a stable digest.
 
 ## Give DSH and Codex agents a safe, efficient UI path
 
@@ -252,7 +252,7 @@ The checkout already contains `.codex-plugin/plugin.json` and exposes the same c
 ## Compatibility and safety boundaries
 
 - **Blocking release lane:** public DSH 0.1.1-rc.2.
-- **Preview lane:** DSH 0.1.2-alpha.2 is inspectable but not blocking release evidence.
+- **Preview lane:** DSH 0.1.2-alpha.3 is inspectable but not blocking release evidence.
 - **Other versions:** capabilities remain inspectable, but dsh-developer makes no compatibility claim.
 - **Compatibility execution:** the matrix executes only exact product source or reproducible promoted bytes; arbitrary repositories receive no behavior claim.
 - **Untrusted repositories:** Doctor reads bounded text snapshots and does not execute arbitrary repository code. Controlled execution is reserved for reproducible generated output and this product's own lifecycle proof.

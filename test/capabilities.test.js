@@ -113,7 +113,7 @@ test('reports exact lane evidence without turning absent optional capabilities i
 })
 
 test('recognizes the declared preview lane without promoting it to blocking evidence', async () => {
-  const fixture = await fakeDsh('0.1.2-alpha.2')
+  const fixture = await fakeDsh('0.1.2-alpha.3')
   try {
     const report = await inspectDshCapabilities(fixture.entry, inspectionOptions(fixture))
     assert.equal(report.ok, true)
@@ -140,7 +140,7 @@ test('does not apply reviewed package semantics to an unrecognized DSH lane', as
 
 test('fails conformance when CLI and package identity disagree', async () => {
   const fixture = await fakeDsh('0.1.1-rc.2', {
-    packageVersion: '0.1.2-alpha.2',
+    packageVersion: '0.1.2-alpha.3',
     help: 'Usage: dsh --profile <name>\n',
   })
   try {
