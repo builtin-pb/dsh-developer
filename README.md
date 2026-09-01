@@ -33,6 +33,21 @@ dsh web
 
 That installs a real DSH bundle. It registers the shared Agent Skill, one compact `dsh_developer` tool for every agent surface, and direct commands in DSH Web.
 
+## Tell it what you want
+
+Open a DSH or Codex agent in your plugin workspace and talk normally:
+
+```text
+Build a DSH plugin that exposes our local search service as a model tool.
+Fix this plugin so it cold-boots in the web profile.
+Upgrade this repository without breaking the current release lane.
+Audit this plugin, repair every blocker, and give me the install command.
+```
+
+Natural language is the primary entry. The installed model-facing description covers every DSH plugin intent above, and DSH and Codex expose it for host selection. Once selected, dsh-developer reads the workspace and extracts the goal and constraints. Answers and read-only audits act immediately; changes produce one compact effects-and-proof plan. Approve it once, and the agent owns edit, test, diagnosis, repair, Doctor, profile proof, and exact-lane evidence until the plugin passes or a precise external blocker remains.
+
+`/dsh-developer` in DSH and `$dsh-developer` in Codex pin deterministic selection whenever you want it; they are not a command vocabulary users must learn.
+
 ## Ship a plugin
 
 Start with the route that matches what you have:

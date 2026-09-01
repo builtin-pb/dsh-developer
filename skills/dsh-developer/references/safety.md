@@ -1,9 +1,9 @@
 # Safety boundary
 
-Deterministic promotion needs no model or provider key.
+Exports and repositories stay untrusted and read-only until Build approval. Approval permits scoped edits, not execution trust. Use Doctor's stable snapshot; reject links, special files, mutation, unsafe paths, dependency trees, credential config, secrets, and oversized content.
 
-Treat Creator exports and repositories as untrusted, read-only input. Use only Doctor's stable snapshot. Reject links, special files, mutation, unsafe paths, dependency trees, credential-bearing configuration, detected secrets, and content outside documented limits.
+Run untrusted commands only under the main skill's admitted isolation rule. Missing controls or uncertain cleanup blocks execution. Transfer only bounded ordinary UTF-8 trees.
 
-Promotion creates one absent destination through private staging. It never replaces, merges, installs, publishes, or changes GitHub state.
+Promotion privately stages one absent destination; it never replaces, merges, installs, publishes, or changes GitHub.
 
-Do not request a provider credential or improvise model-backed repair. Never put credentials in inputs, plugin trees, child environments, logs, reports, or bundles.
+Request no provider credential or model repair. Put no credentials in inputs, trees, child environments, logs, reports, or bundles.

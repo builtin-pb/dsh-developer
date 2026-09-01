@@ -1,80 +1,60 @@
 ---
 name: dsh-developer
-description: "Develop DSH plugins with Doctor, promotion, compatibility proof, fixed-authority safety, and evidence-gated core work."
+description: "Use for any DSH plugin idea, repository, bug, upgrade, audit, UI, test, or release request. Answer or inspect directly when no change is needed; for changes, extract the goal, propose an effects-and-proof plan, then implement, repair, and verify it in DSH or Codex."
+whenToUse: "Whenever the user asks about creating, changing, diagnosing, testing, hardening, upgrading, packaging, or shipping a DSH plugin, even when they do not name this skill."
 ---
 
 # DSH Developer
 
 The single plugin you need for DSH
 
-Own through handoff; return evidence or blocker.
+Own the request from first sentence to useful handoff.
 
-## Route the request
+## Start from conversation
 
-- Creator export: **Promote**; load [the export contract](references/creator-export.md).
-- Existing repository: **Audit**; propose one bounded, authorized change.
-- Permission-argument failure, escalation loop, Full Access, disabled approvals, or delegated-child verification: load [the fixed-authority route](references/authority-safety.md) first; it overrides core incubation.
-- Other core lifecycle, communication, permission, or isolation: inspect and load [the core-gap rules](references/core-incubation.md). For execution, load [the lab gate](references/execution-lab.md) instead.
-- Separately owned child workspace: load [the isolated-cell contract](references/isolated-cell.md), which includes admission.
-- Exact release/preview: compatibility only for product or reproducible output.
-- DSH upgrade: impact first; declare attachments if inference is incomplete.
+1. From the request and workspace, extract outcome, target, constraints, profile, trust, effects, and available DSH lanes. Discover facts before asking.
+2. Choose one mode:
+   - **Answer**: explain or advise directly.
+   - **Inspect**: audit read-only and report evidence directly.
+   - **Build**: create, change, repair, upgrade, test, or package.
+3. For Build, inspect enough to propose a compact plan: outcome, files/effects, proof path, and material choices. Ask only what changes result or authority. Obtain approval before mutation; existing approval of the same scoped plan counts.
+4. Then implement, test, diagnose, and repair autonomously. Never make the user select commands or perform mechanical steps.
+
+Keep one accountable agent. Expose no internal design process or development diary.
+
+## Route specialized work
+
+Load one reference family per response; safety may accompany it. Resolve authority first, otherwise use the smallest family for the next action, then re-enter here.
+
+- Repository/audit: Doctor first; for untrusted source load [safety](references/safety.md).
+- Creator export: load [the export contract](references/creator-export.md); state the new-directory effect.
+- Upgrade: impact before edits; declare attachments when inference is incomplete.
 - Target profile: preflight before installation.
-- Local UI or visual quality: load [the agent-native UI route](references/agent-native-ui.md); admit it first.
-- Unstructured idea: shape in Creator; stop at canonical export.
+- Trusted candidate: exact compatibility; execute only product or reproducible promoted bytes.
+- Permission, escalation, fixed-authority, or delegated-child issue: load [authority safety](references/authority-safety.md) first.
+- Non-executing core gap: load [core-gap rules](references/core-incubation.md). Execution-bearing core work loads [the lab gate](references/execution-lab.md) instead.
+- Owned child workspace: load [the isolated-cell contract](references/isolated-cell.md).
+- UI/visual work: load [the agent-native UI route](references/agent-native-ui.md); admit the protected browser first.
 
-Load [the safety boundary](references/safety.md) before untrusted plugins or exports. For repository-plus-core work: inspect, Doctor, one authorized edit set. UI content follows its route.
+Approval permits edits, not execution trust. DeepSeek runs untrusted source only in an admitted Bubblewrap-backed cell. Codex/GPT may use its harness sandbox only after proving credential isolation, network control, confined writes, bounded processes/time, and cleanup. Otherwise use static proof and report the blocker. Never execute merely to inspect.
 
-In DSH use `dsh_developer` for evidence and optional `dsh_ui` for protected UI. Else use `bin/dsh-developer.js` (`DSH_DEVELOPER_BIN` in shells).
+## Implement, prove, repair
 
-## Inspect and compose
+Implement with workspace tools. In DSH use `dsh_developer` and optional protected `dsh_ui`; elsewhere use `bin/dsh-developer.js` or `DSH_DEVELOPER_BIN`.
 
-Use `/dsh-developer-capabilities {}` in DSH Web, `dsh_developer {"operation":"capabilities"}` in an agent, or:
+Use every applicable gate in order:
 
-    node bin/dsh-developer.js capabilities --dsh <path-to-dsh>
+1. Inspect; run Doctor without execution if trust is unproven.
+2. Make one coherent authorized edit set; preserve unrelated work.
+3. Run narrow tests, then complete validation.
+4. Run Doctor on the final unchanged tree.
+5. Run profile preflight, upgrade impact, and trusted-candidate compatibility as relevant.
+6. On failure, repair and rerun that gate and all downstream gates. Never weaken safety, delete a failing test, or relabel missing evidence.
 
-Record runtime, lane, identity, evidence strength, and digest. `behavior` is exercised; `inventory` is metadata. Absence is local; preview is advisory.
+DSH 0.1.1-rc.2 blocks; 0.1.2-alpha.3 is advisory. `--skip-runtime` is exploration only. Inventory is metadata, behavior is exercised, absence is local, and upstream change is revalidation scope.
 
-Preflight before installation without loading source:
+## Authority and finish
 
-    node bin/dsh-developer.js preflight --source <plugin-directory> --profile headless --dsh <path>
+Approved edits need no repeated approval. Publishing, registry access, real-profile installation, provider use, GitHub mutation, and wider targets need separate authority. Promotion creates one absent directory and does nothing external.
 
-PASS proves composition, not activation or behavior. Reject dynamic requirements and profile-local host-service copies.
-
-Locate changed upstream surfaces without executing either lane:
-
-    node bin/dsh-developer.js impact --source <plugin-directory> --release-dsh <path> --preview-dsh <path>
-
-Treat changes as scope, not behavior; preserve undeclared inference. Then run:
-
-    node bin/dsh-developer.js compatibility --source <plugin-directory> --release-dsh <path> --preview-dsh <path>
-
-The matrix verifies entries, capabilities, and clean-profile lifecycle. DSH 0.1.1-rc.2 blocks; 0.1.2-alpha.3 is advisory. Keep preview failure visible; finish with fingerprint, drift, and digest.
-
-## Promote
-
-1. Run Doctor on one stable snapshot. The release lane is blocking; preview is advisory.
-2. State fingerprint, absent destination, and effects. Obtain approval before materialization.
-3. After approval, use DSH Web:
-
-       /dsh-developer-promote {"source":"<creator.json>","output":"<new-directory>"}
-
-   Or CLI:
-
-       node bin/dsh-developer.js promote --source <creator.json> --output <new-directory> --dsh <path-to-dsh>
-
-4. Trust final Doctor. Report destination, fingerprints, digest, target, install command, and retained recovery directory.
-
-Promotion creates one absent export-named directory. It never replaces, merges, publishes, installs, or changes GitHub state.
-
-## Audit
-
-    node bin/dsh-developer.js doctor --source <export-or-plugin> --dsh <path-to-dsh>
-
-Use `--skip-runtime` only for exploration, never release or promotion. Report failures first. Do not execute arbitrary repositories; controlled execution is only for byte-reproducible generated output.
-
-## Failure and authority
-
-- Stop on invalid fingerprints, credentials, unsafe paths/files/links, mutation, incompatible DSH, failed tests, or failed lifecycle evidence.
-- Preserve started staging. On cancellation, schedule nothing new or replay an ambiguous request.
-- Never weaken a safety rule to pass.
-- Publishing, real-profile installation, repository edits, registries, provider use, and GitHub mutations require separate authority.
+Answer ends with the answer and assumptions. Inspect ends with findings, evidence, and risks. Build ends with a tested outcome, paths, gates, lanes, digests, risks, and relevant install/release command—or an exact blocker and recovery. Preserve staging after ambiguity; schedule nothing after cancellation.

@@ -158,6 +158,23 @@ test('keeps generated bundles strict when their Codex manifest is missing', asyn
   }
 })
 
+test('accepts the native DSH whenToUse skill hint', async () => {
+  const root = await generatedFixture()
+  try {
+    const skillPath = join(root, 'skills', 'doctor-fixture', 'SKILL.md')
+    const skill = await readFile(skillPath, 'utf8')
+    await writeFile(
+      skillPath,
+      skill.replace('\n---\n\n#', '\nwhenToUse: "Use for every doctor fixture request."\n---\n\n#'),
+      'utf8',
+    )
+    const report = await doctorPlugin(root, { runtime: 'skip' })
+    assert.equal(report.checks.find((check) => check.id === 'skill.integrity').status, 'PASS')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('reports a browser-plane failure when an ordinary plugin exports a client without dsh.client', async () => {
   const { parent, root } = await copiedOrdinaryFixture()
   try {

@@ -17,12 +17,13 @@ const uiPatchPath = fileURLToPath(new URL('./presets/playwright-mcp.cordis.yml',
 const LOAD_WITNESS_FILENAME = '.dsh-developer-load-witness'
 
 function parseSkill(markdown) {
-  const match = /^---\r?\nname:\s*([a-z0-9-]+)\r?\ndescription:\s*"((?:[^"\\]|\\.)*)"\r?\n---\r?\n([\s\S]+)$/u.exec(markdown)
+  const match = /^---\r?\nname:\s*([a-z0-9-]+)\r?\ndescription:\s*"((?:[^"\\]|\\.)*)"\r?\nwhenToUse:\s*"((?:[^"\\]|\\.)*)"\r?\n---\r?\n([\s\S]+)$/u.exec(markdown)
   if (!match) throw new Error('dsh-developer: bundled SKILL.md has invalid frontmatter')
   return {
     name: match[1],
     description: JSON.parse('"' + match[2] + '"'),
-    content: match[3],
+    whenToUse: JSON.parse('"' + match[3] + '"'),
+    content: match[4],
   }
 }
 

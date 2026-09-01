@@ -8,11 +8,11 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "DSH Developer",
-    "shortDescription": "Develop, test, and ship DSH plugins",
-    "longDescription": "Develop, inspect, test, harden, and package DSH plugins through one native DSH and Codex workflow.",
+    "shortDescription": "Describe the DSH plugin. It builds and proves it.",
+    "longDescription": "Own any DSH plugin request: answer or inspect directly, and turn changes into an approved plan and tested result.",
     "developerName": "MetaFlow contributors",
     "category": "Developer Tools",
     "capabilities": [],
-    "defaultPrompt": "Use $dsh-developer to develop, audit, test, or package this DSH plugin."
+    "defaultPrompt": "Use $dsh-developer to own this DSH plugin request: answer or inspect directly if read-only; for changes, plan, implement, repair, and prove the result after approval."
   }
 }

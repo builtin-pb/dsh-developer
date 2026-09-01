@@ -61,7 +61,12 @@ test('registers the canonical skill through the native DSH service', async () =>
   assert.equal(registration.name, 'dsh-developer')
   assert.equal(registration.source, 'bundled')
   assert.equal(registration.invocation.modelInvocable, true)
-  assert.match(registration.content, /Promote/u)
+  assert.match(registration.description, /any DSH plugin idea/u)
+  assert.match(registration.description, /Answer or inspect directly when no change is needed/u)
+  assert.match(registration.whenToUse, /even when they do not name this skill/u)
+  assert.match(registration.content, /Start from conversation/u)
+  assert.match(registration.content, /compact plan/u)
+  assert.match(registration.content, /implement, test, diagnose, and repair autonomously/u)
   assert.equal(registration.resourceBase.kind, 'directory')
   assert.deepEqual([...commands.keys()], [
     'dsh-developer-admit-cell',
