@@ -73,6 +73,11 @@ test('rejects unknown options and missing values', () => {
 })
 
 test('keeps command option surfaces closed after global option parsing', () => {
+  assert.doesNotThrow(() => assertCliCommandOptions('attest-profile', {
+    profile: 'C:/profiles/web',
+    dsh: 'dsh',
+    json: true,
+  }))
   assert.doesNotThrow(() => assertCliCommandOptions('preflight', {
     source: 'plugin',
     profile: 'headless',

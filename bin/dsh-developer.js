@@ -13,6 +13,7 @@ import {
 import { asDiagnostic, DshDeveloperError } from '../lib/errors.js'
 import { conformExecutionLab, formatExecutionLabReport } from '../lib/execution-lab.js'
 import { formatProfilePreflightReport, inspectProfilePreflight } from '../lib/profile-preflight.js'
+import { formatProfileAttestationReport, inspectProfileAttestation } from '../lib/profile-attestation.js'
 import { promoteCreatorExport } from '../lib/promote.js'
 import { formatSourceMigrationReport, inspectSourceMigration } from '../lib/source-migration.js'
 import { executeUiCliAction, formatUiCliReport } from '../lib/ui-cli.js'
@@ -23,6 +24,7 @@ const USAGE = [
   '',
   'Usage:',
   '  dsh-developer admit-cell [--dsh <path>] [--wsl-distro <name>] [--json]',
+  '  dsh-developer attest-profile --profile <directory> [--dsh <path>] [--json]',
   '  dsh-developer capabilities [--dsh <path>] [--json]',
   '  dsh-developer compatibility --source <plugin-dir> --release-dsh <path> --preview-dsh <path> [--json]',
   '  dsh-developer impact --source <plugin-dir> --release-dsh <path> --preview-dsh <path> [--json]',
@@ -89,6 +91,14 @@ async function main(argv) {
     })
     process.stdout.write(options.json ? JSON.stringify(report, null, 2) + '\n' : formatCellAdmissionReport(report) + '\n')
     if (!report.ok) process.exitCode = 1
+    return
+  }
+  if (command === 'attest-profile') {
+    const report = await inspectProfileAttestation(required(options, 'profile'), {
+      dshPath: options.dsh,
+      signal: controller.signal,
+    })
+    process.stdout.write(options.json ? JSON.stringify(report, null, 2) + '\n' : formatProfileAttestationReport(report) + '\n')
     return
   }
   if (command === 'capabilities') {

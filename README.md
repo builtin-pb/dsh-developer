@@ -60,6 +60,15 @@ Start with the route that matches what you have:
 | A DSH upgrade ahead | `impact` | The exact upstream contracts your plugin must revalidate |
 | A trusted release candidate | `compatibility` | Witnessed behavior on release and preview DSH lanes |
 | An unfamiliar DSH install | `capabilities` | Exact runtime identity and supported development paths |
+| An installed profile | `attest-profile` | Canonical receipt for the exact static bytes you tested |
+
+Attest an existing physical profile without booting it or loading packages:
+
+```powershell
+node bin/dsh-developer.js attest-profile --profile C:\Users\you\.dsh\profiles\web --dsh D:\path\to\dsh.cmd --json
+```
+
+The receipt binds exact public DSH/CLI bytes, physical profile identity, manifest and bundle order, config, lock integrity, and bounded direct-package files. Two scans prove freshness; links, escapes, mutation, conditional/unknown state, and secrets fail closed without walking a pnpm store. The stable digest excludes timestamps. It proves static state—not activation, compatibility, or boot. Release `0.1.1-rc.2` blocks; preview `0.1.2-alpha.3` advises. Paths stay CLI-only because public lanes expose no authoritative live-agent profile seam.
 
 Audit a repository from DSH Web:
 
@@ -144,13 +153,7 @@ dsh_ui {"operation":"close"}
 
 Configure the exact Playwright CLI entry, Chrome or Edge executable, and an absolute state directory before DSH starts. The full setup and operation contract lives in [Agent-native UI](skills/dsh-developer/references/agent-native-ui.md).
 
-Codex and other shell-capable agents use the same controller directly:
-
-```powershell
-node bin/dsh-developer.js ui --session codex-task --action open --url http://127.0.0.1:4173/ --json
-node bin/dsh-developer.js ui --session codex-task --action snapshot --depth 6 --json
-node bin/dsh-developer.js ui --session codex-task --action close --json
-```
+Shell-capable agents can use the same `ui --session <name> --action <operation>` controller directly.
 
 ## Isolation built for autonomous development
 
@@ -166,7 +169,7 @@ In a top-level DSH Agent, isolated Build is native and path-free. The agent sele
 {"operation":"cell-discard","planDigest":"sha256:<same digest>"}
 ```
 
-`cell-run` accepts only the digest; conversation/booleans cannot approve, and unavailable, rejected, cancelled, or non-once approval launches nothing. One admitted cell runs commands in order, stops on failure or cancellation, and returns bounded, secret-scanned output plus redacted nonzero-command evidence. Source and profile stay unchanged. An opaque controller stages changes once outside both under non-writable quarantine; prefixes never prove ownership. `cell-discard` re-proves ancestry, identity, and fingerprint, then alone releases the process-wide slot. Missing, moved, replaced, or ambiguous staging poisons the slot and reports recovery; verified deletion ignores caller cancellation. Diagnostics are bounded, allowlisted, and secret-scanned. These actions have no CLI or cold-resume surface.
+`cell-run` accepts only the approved digest, runs one offline credential-free cell, and returns bounded secret-scanned evidence. Source and profile stay unchanged; `cell-discard` alone verifies and removes retained staging. These actions have no CLI or cold-resume surface.
 
 ```powershell
 node bin/dsh-developer.js lab --wsl-distro Ubuntu-22.04

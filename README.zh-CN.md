@@ -62,6 +62,15 @@ dsh web
 | 一次即将到来的 DSH 升级 | `impact` | 这个插件真正需要重验的上游契约 |
 | 一个可信的发布候选 | `compatibility` | 正式版与预览版 DSH 上的运行实证 |
 | 一套陌生的 DSH 安装 | `capabilities` | 精确的运行时身份与可用开发路径 |
+| 一个已安装的 profile | `attest-profile` | 你实际测试过的静态字节的规范 receipt |
+
+不启动 profile、也不加载 package，即可证明一个现有物理 profile：
+
+```powershell
+node bin/dsh-developer.js attest-profile --profile C:\Users\you\.dsh\profiles\web --dsh D:\path\to\dsh.cmd --json
+```
+
+receipt 会绑定公开 DSH package 与 CLI 的精确字节、profile 物理身份、manifest 与 bundle 顺序、配置 digest、pnpm lock integrity，以及有界的直接 package manifest/entry/patch digest。它执行两次扫描来证明 freshness；遇到 link、越界、变化、条件 package、未知布局或凭据会关闭失败，也绝不遍历 pnpm store。稳定 evidence digest 不含时间戳。这只是静态状态证据，不证明 profile 已激活、兼容或可启动。正式版 `0.1.1-rc.2` 阻断，预览版 `0.1.2-alpha.3` 仅提示。接收路径的入口刻意只放在 CLI：当前公开通道没有权威的 live-agent profile seam。
 
 在 DSH Web 中审计仓库：
 
@@ -168,7 +177,7 @@ node bin/dsh-developer.js ui --session codex-task --action close --json
 {"operation":"cell-discard","planDigest":"sha256:<同一个 digest>"}
 ```
 
-`cell-run` 只接受 digest；对话和布尔字段不能批准，批准不可用、拒绝、取消或非一次性时不会启动 cell。一个已准入 cell 顺序执行命令，失败或取消即停，返回有界、凭据扫描的输出及非零命令的紧凑脱敏证据。源码和 profile 不变。变化只经不透明控制器能力在两者之外封存一次，并保留于不可写隔离根；前缀不证明所有权。`cell-discard` 删除前重证祖先、身份和指纹，且只有它释放全进程槽位。暂存缺失、移动、替换或含糊会保持槽位中毒并报告恢复；经验证的删除不受调用方取消影响。诊断递归限界、按白名单筛选并扫描凭据。这些动作无 CLI 或冷恢复入口。
+`cell-run` 只接受已批准的 digest，在断网且无凭据的 cell 中运行一次，并返回有界、经过凭据扫描的证据。源码与 profile 保持不变；只有 `cell-discard` 会验证并删除保留的暂存。这些动作没有 CLI 或冷恢复入口。
 
 ```powershell
 node bin/dsh-developer.js lab --wsl-distro Ubuntu-22.04
