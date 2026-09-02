@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { link, lstat, mkdir, mkdtemp, readFile, rename, rm, symlink, unlink, writeFile } from 'node:fs/promises'
+import { link, lstat, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import test from 'node:test'
@@ -1601,7 +1601,7 @@ test('live workspace authority rejects missing, child, relative, and junction-ma
   try {
     const top = { ctx: {}, session: { header: { id: 'top', cwd: root, origin: 'user', delegationDepth: 0 } } }
     const workspace = await inspectLiveAgentWorkspace(top, { isRootAgent: (candidate) => candidate === top })
-    assert.equal(workspace.root, resolve(root))
+    assert.equal(workspace.root, resolve(await realpath(root)))
     const cleanHeaderChild = {
       ctx: {}, session: { header: { id: 'clean-child', cwd: root, origin: 'user', delegationDepth: 0 } },
     }
