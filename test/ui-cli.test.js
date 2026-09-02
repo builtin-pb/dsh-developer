@@ -11,7 +11,7 @@ import {
   uiCliSessionIdentity,
 } from '../lib/ui-cli-internal.js'
 import { createUiCliController } from '../lib/ui-cli.js'
-import { createUiCliToolDefinition } from '../lib/ui-cli-tool.js'
+import { createUiCliToolDefinition, hasUiCliTool } from '../lib/ui-cli-tool.js'
 
 test('keeps the safe UI action vocabulary closed and credential-free', () => {
   assert.deepEqual(parseUiCliInput({
@@ -262,6 +262,9 @@ test('binds the native UI tool to the calling DSH agent identity', async () => {
     },
   })
   const signal = new AbortController().signal
+  const scopedTools = { get: () => definition }
+  assert.equal(hasUiCliTool(scopedTools), true)
+  assert.equal(hasUiCliTool({ tools: scopedTools }), true)
   await assert.rejects(
     definition.execute({ operation: 'status' }, { signal }),
     (error) => error.code === 'UI_AGENT_REQUIRED',

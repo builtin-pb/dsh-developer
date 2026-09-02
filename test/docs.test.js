@@ -37,3 +37,34 @@ test('keeps both human-facing READMEs strong, concise, linked, and package-visib
   assert.ok(manifest.files.includes('README.md'))
   assert.ok(manifest.files.includes('README.zh-CN.md'))
 })
+
+test('pins the AST runtime and records its direct MIT license evidence', async () => {
+  const [manifestText, lockText, english, chinese, templates, doctor] = await Promise.all([
+    readFile(new URL('../package.json', import.meta.url), 'utf8'),
+    readFile(new URL('../package-lock.json', import.meta.url), 'utf8'),
+    readFile(new URL('../README.md', import.meta.url), 'utf8'),
+    readFile(new URL('../README.zh-CN.md', import.meta.url), 'utf8'),
+    readFile(new URL('../lib/templates.js', import.meta.url), 'utf8'),
+    readFile(new URL('../lib/doctor.js', import.meta.url), 'utf8'),
+  ])
+  const manifest = JSON.parse(manifestText)
+  const lock = JSON.parse(lockText)
+  const babelEngine = '^22.18.0 || >=24.11.0'
+  assert.equal(manifest.engines.node, babelEngine)
+  assert.equal(lock.packages[''].engines.node, babelEngine)
+  assert.ok(english.includes(babelEngine))
+  assert.ok(chinese.includes(babelEngine))
+  assert.match(templates, /engines: \{ node: '>=22\.18' \}/u)
+  assert.match(doctor, /expectedNodeRange = options\.productSource[\s\S]*: '>=22\.18'/u)
+  for (const [name, version] of [
+    ['@babel/parser', '8.0.4'],
+    ['@babel/traverse', '8.0.4'],
+  ]) {
+    assert.equal(manifest.dependencies[name], version)
+    const installed = lock.packages[`node_modules/${name}`]
+    assert.equal(installed.version, version)
+    assert.equal(installed.license, 'MIT')
+    assert.match(installed.resolved, /^https:\/\/registry\.npmjs\.org\//u)
+    assert.match(installed.integrity, /^sha512-/u)
+  }
+})

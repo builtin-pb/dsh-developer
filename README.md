@@ -8,7 +8,7 @@ Proudly designed and implemented by [MetaFlow](https://github.com/builtin-pb/met
 
 DSH plugins fail in places ordinary linters never see: Host and Client contracts get mixed up, browser services collide, Web bundles load the wrong modules, and a DSH upgrade changes the ground underneath a working checkout. dsh-developer catches those failures before users do, proves the result against exact DSH release and preview lanes, and gives agents the same structured evidence humans get.
 
-[![CI](https://github.com/builtin-pb/dsh-developer/actions/workflows/ci.yml/badge.svg)](https://github.com/builtin-pb/dsh-developer/actions/workflows/ci.yml) [![Node.js 22.18+](https://img.shields.io/badge/Node.js-22.18%2B-339933?logo=nodedotjs&logoColor=white)](package.json) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/builtin-pb/dsh-developer/actions/workflows/ci.yml/badge.svg)](https://github.com/builtin-pb/dsh-developer/actions/workflows/ci.yml) [![Node.js ^22.18.0 or >=24.11.0](https://img.shields.io/badge/Node.js-%5E22.18.0%20or%20%3E%3D24.11.0-339933?logo=nodedotjs&logoColor=white)](package.json) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ```text
 idea or repository  ->  Doctor + profile proof  ->  tested DSH plugin
@@ -20,7 +20,7 @@ No model or provider key is required for Doctor, promotion, profile preflight, c
 
 ## Install
 
-The verified path uses Windows, Node.js 22.18+, pnpm 11.7.0, and DSH 0.1.1-rc.2.
+The verified path uses Windows, Node.js `^22.18.0 || >=24.11.0`, pnpm 11.7.0, and DSH 0.1.1-rc.2.
 
 ```powershell
 git clone https://github.com/builtin-pb/dsh-developer.git
@@ -201,7 +201,7 @@ This repository is a native Codex plugin too. Add the existing folder to a perso
 
 - Release lane: DSH 0.1.1-rc.2.
 - Preview lane: DSH 0.1.2-alpha.3.
-- Node.js: 22.18 or newer.
+- Node.js: `^22.18.0 || >=24.11.0`.
 - Platform: Windows-first, with WSL2 + Bubblewrap for the strongest execution boundary.
 
 Release failures block. Preview drift stays visible so it gets fixed before the next DSH release lands.

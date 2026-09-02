@@ -80,6 +80,39 @@ test('assesses an ordinary hand-written DSH plugin without generated Codex bundl
   assert.equal(report.checks.find((check) => check.id === 'dsh.entrypoint').status, 'PASS')
 })
 
+test('audits an extensionless non-dot main and blocks a missing declared entry', async () => {
+  const { parent, root } = await copiedOrdinaryFixture()
+  try {
+    const packagePath = join(root, 'package.json')
+    const packageValue = JSON.parse(await readFile(packagePath, 'utf8'))
+    delete packageValue.exports
+    packageValue.main = 'dist/plugin'
+    await writeFile(packagePath, JSON.stringify(packageValue, null, 2) + '\n', 'utf8')
+    await mkdir(join(root, 'dist'), { recursive: true })
+    await writeFile(join(root, 'dist', 'plugin.js'), [
+      "import '@deepseek-ai/dsh-commands'",
+      'export function apply(ctx) { ctx.commands.register({}) }',
+      '',
+    ].join('\n'), 'utf8')
+
+    const exact = await doctorPlugin(root, { runtime: 'skip' })
+    const impact = exact.checks.find((value) => value.id === 'compatibility.upstream-attachments')
+    assert.equal(impact.status, 'WARN')
+    assert.deepEqual(impact.evidence.undeclaredPackages, ['@deepseek-ai/dsh-commands'])
+    assert.deepEqual(impact.evidence.undeclaredServices, ['commands'])
+
+    packageValue.main = 'dist/missing'
+    await writeFile(packagePath, JSON.stringify(packageValue, null, 2) + '\n', 'utf8')
+    const missing = await doctorPlugin(root, { runtime: 'skip' })
+    const failed = missing.checks.find((value) => value.id === 'compatibility.upstream-attachments')
+    assert.equal(failed.status, 'FAIL')
+    assert.equal(failed.evidence.code, 'UNSCOPED_INJECT_CONTRACT')
+    assert.deepEqual(failed.evidence.paths, ['package.json'])
+  } finally {
+    await rm(parent, { recursive: true, force: true })
+  }
+})
+
 test('accepts a DSH profile bundle that mounts dependencies instead of its own package', async () => {
   const { parent, root } = await copiedOrdinaryFixture()
   try {
@@ -454,6 +487,142 @@ test('blocks an incomplete upstream attachment claim for dynamic inject source',
   }
 })
 
+test('blocks opaque runtime loaders while accepting an exact declared literal import', async () => {
+  const root = await generatedFixture()
+  try {
+    for (const loader of [
+      "const packageName = '@deepseek-ai/dsh-unknown'; import(packageName)",
+      "const moduleName = '@deepseek-ai/dsh-unknown'; require(moduleName)",
+      "eval(\"import('@deepseek-ai/dsh-unknown')\")",
+    ]) {
+      await writeFile(join(root, 'index.js'), [
+        "export const name = 'doctor-fixture'",
+        "export const inject = ['skills']",
+        loader,
+        "export async function apply(ctx) { ctx.skills.register({ name: 'visible' }) }",
+        '',
+      ].join('\n'), 'utf8')
+      const report = await doctorPlugin(root, { runtime: 'skip' })
+      const failed = report.checks.find((value) => value.id === 'compatibility.upstream-attachments')
+      assert.equal(failed.status, 'FAIL', loader)
+      assert.equal(failed.evidence.code, 'UNSCOPED_INJECT_CONTRACT', loader)
+      assert.deepEqual(failed.evidence.paths, ['index.js'], loader)
+    }
+
+    const packagePath = join(root, 'package.json')
+    const packageValue = JSON.parse(await readFile(packagePath, 'utf8'))
+    packageValue.dshDeveloper.upstream.packages = ['@deepseek-ai/dsh-unknown']
+    await writeFile(packagePath, JSON.stringify(packageValue, null, 2) + '\n', 'utf8')
+    await writeFile(join(root, 'index.js'), [
+      "export const name = 'doctor-fixture'",
+      "export const inject = ['skills']",
+      "import('@deepseek-ai/dsh-unknown')",
+      "export async function apply(ctx) { ctx.skills.register({ name: 'visible' }) }",
+      '',
+    ].join('\n'), 'utf8')
+    const exact = await doctorPlugin(root, { runtime: 'skip' })
+    assert.equal(
+      exact.checks.find((value) => value.id === 'compatibility.upstream-attachments').status,
+      'PASS',
+    )
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('warns on deferred opaque loaders but blocks activation-reachable helper loaders', async () => {
+  const root = await generatedFixture()
+  try {
+    const shared = [
+      "export const name = 'doctor-fixture'",
+      "export const inject = ['skills']",
+      "const packageName = '@deepseek-ai/dsh-hidden'",
+      'function load() { return import(packageName) }',
+    ]
+    await writeFile(join(root, 'index.js'), [
+      ...shared,
+      "export async function apply(ctx) { ctx.skills.register({ name: 'visible' }) }",
+      '',
+    ].join('\n'), 'utf8')
+    const deferred = await doctorPlugin(root, { runtime: 'skip' })
+    const deferredCheck = deferred.checks
+      .find((value) => value.id === 'compatibility.upstream-attachments')
+    assert.equal(deferredCheck.status, 'WARN')
+    assert.equal(deferredCheck.blocking, false)
+    assert.deepEqual(deferredCheck.evidence.unparsedInjectDeclarations, [])
+    assert.deepEqual(deferredCheck.evidence.unparsedModuleClosure, ['index.js'])
+
+    await writeFile(join(root, 'index.js'), [
+      ...shared,
+      "export async function apply(ctx) { load(); ctx.skills.register({ name: 'visible' }) }",
+      '',
+    ].join('\n'), 'utf8')
+    const activated = await doctorPlugin(root, { runtime: 'skip' })
+    const failed = activated.checks
+      .find((value) => value.id === 'compatibility.upstream-attachments')
+    assert.equal(failed.status, 'FAIL')
+    assert.equal(failed.blocking, true)
+    assert.equal(failed.evidence.code, 'UNSCOPED_INJECT_CONTRACT')
+    assert.deepEqual(failed.evidence.paths, ['index.js'])
+    assert.equal(activated.ok, false)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('resolves Host inject only through exact named exports', async () => {
+  const root = await generatedFixture()
+  try {
+    await writeFile(join(root, 'attachment.js'), [
+      "export const deps = ['@deepseek-ai/dsh-client-runtime']",
+      '',
+    ].join('\n'), 'utf8')
+    await writeFile(join(root, 'index.js'), [
+      "export const name = 'doctor-fixture'",
+      "export { deps as inject } from './attachment.js'",
+      'export async function apply() {}',
+      '',
+    ].join('\n'), 'utf8')
+    const reexported = await doctorPlugin(root, { runtime: 'skip' })
+    const hostFailure = reexported.checks.find((value) => value.id === 'dsh.host-client-inject')
+    assert.equal(hostFailure.status, 'FAIL')
+    assert.equal(hostFailure.evidence.code, 'HOST_CLIENT_PACKAGE_INJECT')
+    assert.deepEqual(hostFailure.evidence.injections.map((value) => value.value), [
+      '@deepseek-ai/dsh-client-runtime',
+    ])
+
+    await writeFile(join(root, 'index.js'), [
+      "export const name = 'doctor-fixture'",
+      '// export const inject = Object.freeze(dynamicServices)',
+      'const inert = `export const inject = ["@deepseek-ai/dsh-client-runtime"]`',
+      'export async function apply() { return inert }',
+      '',
+    ].join('\n'), 'utf8')
+    const inert = await doctorPlugin(root, { runtime: 'skip' })
+    assert.equal(inert.checks.find((value) => value.id === 'dsh.host-client-inject').status, 'PASS')
+    assert.equal(
+      inert.checks.find((value) => value.id === 'compatibility.upstream-attachments').status,
+      'PASS',
+    )
+
+    await writeFile(join(root, 'index.js'), [
+      "export const name = 'doctor-fixture'",
+      "const deps = ['skills']",
+      'consume(deps)',
+      'export { deps as inject }',
+      'export async function apply() {}',
+      '',
+    ].join('\n'), 'utf8')
+    const escaped = await doctorPlugin(root, { runtime: 'skip' })
+    assert.equal(
+      escaped.checks.find((value) => value.id === 'compatibility.upstream-attachments').status,
+      'FAIL',
+    )
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('blocks DSH Client package identifiers in Host inject with targeted recovery', async () => {
   const root = await generatedFixture()
   try {
@@ -587,6 +756,21 @@ test('reviews raw plugin-owned Web routes without blocking intentional public in
     assert.deepEqual(connectionCheck.evidence.rawRoutes, [])
     assert.equal(connectionCheck.evidence.connectionRoutes[0].authBoundary, 'host-connection')
     assert.match(connectionCheck.message, /local absence is not a safety proof/u)
+
+    await writeFile(join(root, 'index.js'), [
+      'export function apply(ctx) {',
+      '  const broken = ([)]',
+      '}',
+      '',
+    ].join('\n'), 'utf8')
+    const incompleteReport = await doctorPlugin(root, { runtime: 'skip' })
+    const incompleteCheck = incompleteReport.checks
+      .find((candidate) => candidate.id === 'web.raw-route-auth')
+    assert.equal(incompleteCheck.status, 'WARN')
+    assert.equal(incompleteCheck.blocking, false)
+    assert.deepEqual(incompleteCheck.evidence.coverage.incompletePaths, ['index.js'])
+    assert.match(incompleteCheck.message, /not claiming clean route absence/u)
+    assert.match(incompleteCheck.recovery, /Repair malformed or unsupported reachable source/u)
   } finally {
     await rm(parent, { recursive: true, force: true })
   }

@@ -10,7 +10,7 @@ Proudly designed and implemented by [MetaFlow](https://github.com/builtin-pb/met
 
 DSH 插件最棘手的问题，普通 linter 根本看不到：Host 和 Client 服务混在一起、Web bundle 引用了错误模块、目标 profile 缺少依赖服务，或一次 DSH 升级悄悄改变了原有契约。dsh-developer 会在这些问题抵达用户之前拦住它们，用正式版与预览版 DSH 的精确运行环境证明结果，并把同一份结构化证据交给人和 agent。
 
-[![CI](https://github.com/builtin-pb/dsh-developer/actions/workflows/ci.yml/badge.svg)](https://github.com/builtin-pb/dsh-developer/actions/workflows/ci.yml) [![Node.js 22.18+](https://img.shields.io/badge/Node.js-22.18%2B-339933?logo=nodedotjs&logoColor=white)](package.json) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/builtin-pb/dsh-developer/actions/workflows/ci.yml/badge.svg)](https://github.com/builtin-pb/dsh-developer/actions/workflows/ci.yml) [![Node.js ^22.18.0 or >=24.11.0](https://img.shields.io/badge/Node.js-%5E22.18.0%20or%20%3E%3D24.11.0-339933?logo=nodedotjs&logoColor=white)](package.json) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ```text
 想法或现有仓库  ->  Doctor + profile 实证  ->  可安装、已测试的 DSH 插件
@@ -22,7 +22,7 @@ Doctor、promotion、profile preflight、compatibility、upstream impact、capab
 
 ## 安装
 
-已验证环境：Windows、Node.js 22.18+、pnpm 11.7.0、DSH 0.1.1-rc.2。
+已验证环境：Windows、Node.js `^22.18.0 || >=24.11.0`、pnpm 11.7.0、DSH 0.1.1-rc.2。
 
 ```powershell
 git clone https://github.com/builtin-pb/dsh-developer.git
@@ -209,7 +209,7 @@ node bin/dsh-developer.js admit-cell --dsh D:\path\to\dsh.cmd --wsl-distro Ubunt
 
 - 正式版通道：DSH 0.1.1-rc.2
 - 预览版通道：DSH 0.1.2-alpha.3
-- Node.js：22.18 或更高
+- Node.js：`^22.18.0 || >=24.11.0`
 - 平台：Windows 优先；最强执行边界使用 WSL2 + Bubblewrap
 
 正式版失败会阻止交付；预览版漂移会持续可见，并在下一版 DSH 正式发布前完成修复。

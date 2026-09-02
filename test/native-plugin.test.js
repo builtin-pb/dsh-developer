@@ -1,6 +1,24 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { apply, inject, name } from '../index.js'
+import { hasNativeTool } from '../lib/native-tool.js'
+import { inspectExecutableContextReferences } from '../lib/web-route-audit.js'
+
+test('keeps every activation path context-complete through narrow capability projection', async () => {
+  const activationPaths = [
+    '../index.js',
+    '../lib/delegation-probe.js',
+    '../lib/delegation-safety.js',
+    '../lib/native-commands.js',
+    '../lib/native-tool.js',
+  ]
+  for (const relativePath of activationPaths) {
+    const source = await readFile(new URL(relativePath, import.meta.url), 'utf8')
+    const report = inspectExecutableContextReferences(source, { sourcePath: relativePath })
+    assert.equal(report.complete, true, relativePath + ' must not retain or forward a bare DSH context')
+  }
+})
 
 test('registers the canonical skill through the native DSH service', async () => {
   let registration
@@ -84,6 +102,9 @@ test('registers the canonical skill through the native DSH service', async () =>
   assert.match(shellContribution.resolve().DSH_DEVELOPER_BIN, /bin[\\/]dsh-developer\.js$/u)
   assert.match(shellContribution.resolve().DSH_DEVELOPER_UI_PATCH, /presets[\\/]playwright-mcp\.cordis\.yml$/u)
   assert.equal(nativeTool.name, 'dsh_developer')
+  const scopedTools = { get: () => nativeTool }
+  assert.equal(hasNativeTool(scopedTools), true)
+  assert.equal(hasNativeTool({ tools: scopedTools }), true)
   assert.equal(typeof nativeGuard, 'function')
   assert.deepEqual(nativeTool.parameters.required, ['operation'])
   assert.equal(nativeTool.output.schema.additionalProperties, false)
