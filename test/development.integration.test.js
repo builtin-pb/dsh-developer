@@ -126,12 +126,8 @@ test('background Web development and verification never launch the default brows
   } finally { controller.abort(); await rm(temporary, { recursive: true, force: true }) }
 })
 
-test('current DSH startup must finish before invocation or Web readiness', { timeout: 60_000 }, async t => {
+test('DSH launcher startup must finish before verification; current Web also waits for readiness', { timeout: 60_000 }, async () => {
   const knowledge = await inspectDshKnowledge({ dshPath, topic: 'tool' })
-  if (knowledge.installed?.version === '0.1.1-rc.2') {
-    t.skip('This older launcher has no native appReady service; only registration and process outcome are observed.')
-    return
-  }
   const temporary = await mkdtemp(join(tmpdir(), 'dsh-startup-runtime-'))
   const controller = new AbortController()
   try {
@@ -155,6 +151,9 @@ test('current DSH startup must finish before invocation or Web readiness', { tim
     assert.match(JSON.stringify(failed.diagnostic), /delayed fixture startup failed/u)
     await assert.rejects(stat(callMarker), { code: 'ENOENT' })
 
+    // Older Web launchers expose no appReady service. Verification above uses
+    // completed CLI evaluation; Web startup has a separate native readiness path.
+    if (knowledge.installed?.version === '0.1.1-rc.2') return
     let announced = false
     await assert.rejects(runDevelopmentServer(archive, { dshPath, patchPath, online: true, signal: controller.signal,
       onReady() { announced = true; controller.abort() },

@@ -12,6 +12,8 @@ Integrated local validation passed **603 tests**, with **33 optional checks skip
 
 Setup and workflow instructions now distinguish ordinary current-runtime development from the exact reviewed audit and isolated-execution lanes. Installation examples select the v0.1.0 tag. These repairs strengthen the implemented workflow; they do not guarantee correctness of arbitrary generated projects.
 
+The first release CI run then exposed a Windows verification race on DSH 0.1.1-rc.2: native cases passed, but an early exit interrupted the launcher's unfinished startup. Verification now waits for the official CLI entry to complete startup before invoking tools or requesting exit. Older launchers evaluate that entry directly; current launchers expose `runCli`. Real delayed-startup and failed-startup fixtures cover both versions, including the older lane that previously lacked readiness coverage. This does not change the separately observed Web readiness boundary.
+
 ## Follow-up fixes from the Chrome evaluation
 
 The recall-plugin reconstruction exposed two Doctor syntax false positives, both repaired by DeepSeek through Chrome and independently reviewed. Subsequent diagnosis found that inherited `NODE_PATH` could make an older DSH installation appear to contain a newer installation's hooks. Shared package lookup now stays within the selected installation's local dependency graph, preserves real package-manager links, and reports incomplete local installations without certifying absence. Comparison against actual 0.1.1-rc.2 and 0.1.5-rc.2 installations preserved their legitimate inventories.
