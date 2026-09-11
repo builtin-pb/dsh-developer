@@ -9,10 +9,10 @@
   "interface": {
     "displayName": "DSH Developer",
     "shortDescription": "Describe the DSH plugin. It builds and proves it.",
-    "longDescription": "Own any DSH plugin request: answer or inspect directly, and turn changes into an approved plan and tested result.",
+    "longDescription": "Own any DSH plugin request: answer or inspect directly, and turn requested changes into a plan and tested result.",
     "developerName": "MetaFlow contributors",
     "category": "Developer Tools",
     "capabilities": [],
-    "defaultPrompt": "Use $dsh-developer to own this DSH plugin request: answer or inspect directly if read-only; for changes, plan, implement, repair, and prove the result after approval."
+    "defaultPrompt": "Use $dsh-developer to own this DSH plugin request: answer or inspect directly when appropriate; for requested changes, plan, implement, test, and repair within the authorized scope."
   }
 }
