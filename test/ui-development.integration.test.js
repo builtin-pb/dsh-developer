@@ -34,12 +34,13 @@ test('native and shell UI authenticate into owned DSH Web, interact, reload and 
   const [{ Context }, system, tools] = await Promise.all(['cordis', 'dsh-system-prompt', 'dsh-tools']
     .map(name => import(pathToFileURL(join(modules, '@deepseek-ai', name, 'lib/index.js')).href)))
   const ctx = new Context()
+  const agent = { id: 'development-ui-integration', ctx }
   const abort = new AbortController()
   let sequence = 0, ready, shellOpen = false
   const receipts = []
   const execute = async (input, allowFailure = false) => {
     const outcome = await ctx.tools.execute({ name: 'dsh_ui', callId: 'development-ui-' + (++sequence),
-      agent: { id: 'development-ui-integration' }, arguments: input, signal: AbortSignal.timeout(25_000) })
+      agent, arguments: input, signal: AbortSignal.timeout(25_000) })
     receipts.push(outcome)
     if (!allowFailure) assert.equal(outcome.isError, false, 'native UI action failed: ' + input.operation)
     return allowFailure ? outcome : outcome.value

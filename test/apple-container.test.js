@@ -1,6 +1,28 @@
 import assert from 'node:assert/strict'
+import { arch } from 'node:os'
 import test from 'node:test'
-import { APPLE_CELL_IMAGE, appleCellArguments, verifyAppleCellConfiguration } from '../lib/lab/apple-container.js'
+import { APPLE_CELL_IMAGE, APPLE_CONTAINER_VERSION, appleCellArguments, createAppleContainerCell, verifyAppleCellConfiguration } from '../lib/lab/apple-container.js'
+
+test('unpublished Apple cleanup failure identifies the retained VM using an injected CLI', {
+  skip: process.platform !== 'darwin' || arch() !== 'arm64',
+}, async () => {
+  let created = false
+  await assert.rejects(createAppleContainerCell({
+    cellId: 'b'.repeat(32),
+    runBounded: async (_command, args) => {
+      let stdout
+      if (args[0] === '--version') stdout = 'container CLI version ' + APPLE_CONTAINER_VERSION + ' fixture'
+      else if (args[0] === 'image') stdout = JSON.stringify([{ configuration: { descriptor: { digest: APPLE_CELL_IMAGE.split('@')[1] } } }])
+      else if (args[0] === 'list') stdout = JSON.stringify(created ? [{ id: 'dsh-developer-cell-' + 'b'.repeat(32) }] : [])
+      else if (args[0] === 'run') { created = true; throw new Error('fixture creation acknowledgement failed') }
+      else if (args[0] === 'delete') throw new Error('fixture deletion failed')
+      else assert.fail('unexpected injected CLI operation: ' + args[0])
+      return { stdout, stderr: '', exitCode: 0 }
+    },
+  }), (cause) => cause.code === 'CELL_CREATE_CLEANUP_FAILED'
+    && cause.details.providerId === 'apple-container'
+    && cause.details.cellId === 'dsh-developer-cell-' + 'b'.repeat(32))
+})
 
 const name = 'dsh-developer-cell-' + 'a'.repeat(32)
 function configuration() {

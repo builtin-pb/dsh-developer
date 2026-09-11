@@ -378,6 +378,7 @@ test('offers discard only for proven safe Apply failures and preserves ambiguous
   assert.deepEqual(committingWithoutProof, [])
 
   for (const code of [
+    'CELL_CREATE_CLEANUP_FAILED',
     'CELL_APPLY_ROLLBACK_FAILED',
     'CELL_APPLY_RECOVERY_PENDING',
     'CELL_APPLY_RECOVERY_REQUIRED',

@@ -99,6 +99,8 @@ export async function apply(ctx) {
   await registerUiCliToolWithDependencies({
     tools: ctx.tools,
     effect: (factory, description) => ctx.effect(factory, description),
+    onConfigurationError: diagnostic => ctx.logger.warn('dsh-developer: dsh_ui unavailable — '
+      + diagnostic.code + ': ' + diagnostic.message + '\n' + diagnostic.nextStep),
   })
   registerNativeCommandsWithDependencies({ commands: ctx.commands, tools: ctx.tools })
   registerDelegationProbeWithDependencies({

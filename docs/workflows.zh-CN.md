@@ -22,6 +22,8 @@
 
 用 `project` 定位实际 package、工具链和脚本，用 `knowledge` 查询精确安装版本或源码 checkout。通过宿主正常的执行策略使用 `run`、`verify` 和 `dev`；依赖保留在原生工作区。`verify` 在临时 profile 中调用真实全局工具并比较结果，`dev` 管理临时 Web 服务及退出清理。它们不是不可信代码沙箱。详见[开发指南](development.md)，包含 TypeScript 示例、打包产物验证和 DSH 自身开发。
 
+在 DSH 内的 POSIX shell 中使用 `node "$DSH_DEVELOPER_BIN" <操作>`，PowerShell 中使用 `node "$env:DSH_DEVELOPER_BIN" <操作>`。DSH 提供已安装插件的绝对入口，并默认选择当前运行时。下文的 `node bin/dsh-developer.js` 和 npm 脚本示例要求以 dsh-developer checkout 为工作目录；安装到 profile 不会创建全局 CLI 命令。
+
 ## 交付插件
 
 从你手里的东西开始：
@@ -29,9 +31,9 @@
 | 你已经有 | 运行 | 直接得到 |
 | --- | --- | --- |
 | 一个普通插件 | `doctor --skip-runtime`，然后 `verify` | 静态检查，以及所选 DSH 上的真实原生调用结果 |
-| 一个要装进 profile 的插件 | `preflight` | 启动前证明所需 Cordis 服务全部存在 |
+| 一个要装进受审通道 profile 的插件 | 安装前运行 `preflight` | 启动前证明所需 Cordis 服务全部存在 |
 | 一份 Creator 导出 | `promote` | 字节可复现、经过测试的 DSH + Codex bundle |
-| 一次即将到来的 DSH 升级 | `impact` | 这个插件真正需要重验的上游契约 |
+| 受审通道之间的 DSH 升级 | 修改前运行 `impact` | 这个插件真正需要重验的上游契约 |
 | 本产品或 promotion 生成的发布 bundle | `compatibility` | 正式版与预览版 DSH 上的运行实证 |
 | 一套陌生的 DSH 安装 | `capabilities` | 精确的运行时身份与可用开发路径 |
 | 一个已安装的 profile | `attest-profile` | 你实际测试过的静态字节的规范 receipt |
@@ -53,7 +55,7 @@ receipt 把 DSH 可执行文件绑定到你测试过的精确静态 profile 字�
 /dsh-developer-doctor {"source":"C:/path/to/plugin","skipRuntime":true}
 ```
 
-随后按[开发指南](development.md)使用 `verify` 验证目标运行时，用 `dev` 检查实际 Web 界面。Doctor 默认运行时审计与 preflight 使用固定认证通道；本产品和 promotion bundle 继续使用这些发布门禁。安装版本较新本身并不是普通插件的缺陷。
+随后按[开发指南](development.md)使用 `verify --profile <名称>` 验证目标运行时，用 `dev` 检查实际 Web 界面，并通过 `--patch` 验证文档中的配置。Doctor 默认运行时审计与 preflight 要求受审通道。对于 0.1.5-rc.2 等其他精确版本，使用静态 Doctor 和上述普通验证路线。本产品和 promotion bundle 继续使用认证发布门禁；安装版本较新本身并不是普通插件的缺陷。
 
 Doctor 检查 package 与 bundle 契约、冷启动依赖被错标为 optional、Host/Client 注入混用、Client 服务冲突、宿主认证 connection 边界之外的插件自建原始 Web 路由，以及无效的 Web 产物。本产品和 promotion bundle 还会检查可复现性及获准的干净 profile 生命周期。检查保持目标仓库只读；静态结果不能证明运行行为。
 
@@ -72,13 +74,15 @@ dsh --profile headless --dump-config
 
 ## DSH 升级，插件照常交付
 
-升级前先运行影响分析：
+对于受审的 0.1.1-rc.2 → 0.1.2-alpha.3 通道，在升级修改前先运行影响分析：
 
 ```powershell
 node bin/dsh-developer.js impact --source C:\path\to\plugin --release-dsh D:\release\dsh.cmd --preview-dsh D:\preview\dsh.cmd
 ```
 
 它只追踪插件真正触及的 package 与 Cordis 服务，再比较两个通道中的公开声明、入口、依赖和 DSH 元数据。它会离线证明声明的 DSH peer/dev 范围是否覆盖实际安装的正式版与预览版精确版本，并严格遵循 npm 的预发布版本规则；registry 发布状态与项目 lockfile 仍由安装证据单独确认。
+
+对于其他目标，先用 `knowledge` 检查两个精确安装或源码 checkout，沿受影响的源码与调用方确认变化，再修改。随后在每个目标运行时上使用静态 Doctor 和 `verify`/`dev`。这条普通开发路线不扩大受审通道的认证范围。
 
 对于精确的 `0.1.1-rc.2` → `0.1.2-alpha.3` 源码走廊，可用只读 migration ledger 获取文件与行号级行动项：
 
@@ -127,7 +131,7 @@ dsh_ui {"operation":"wait","text":"Saved"}
 dsh_ui {"operation":"close"}
 ```
 
-先运行 `dsh-developer ui-setup`，再重启 DSH 并检查 UI 能力。配置命令会查找常规位置中已安装的 Chrome/Edge 和固定版本 CLI。若缺少 CLI，显式运行 `dsh-developer ui-setup --install-cli`，将 `@playwright/cli@0.1.18` 安装到专用本地目录。普通启动和只读能力检查绝不自动安装。
+先在 DSH 的 POSIX shell 中运行 `node "$DSH_DEVELOPER_BIN" ui-setup`（PowerShell：`node "$env:DSH_DEVELOPER_BIN" ui-setup`），再重启 DSH 并检查 UI 能力。配置命令会查找常规位置中已安装的 Chrome/Edge 和固定版本 CLI。若缺少 CLI，在该命令后显式加上 `--install-cli`，将 `@playwright/cli@0.1.18` 安装到专用本地目录。普通启动和只读能力检查绝不自动安装。
 
 配置默认保存在 `~/.dsh-developer/ui/config.json`。临时验证可使用 `ui-setup --config <绝对文件路径>`，并在 DSH 启动和 shell UI 环境中将 `DSH_DEVELOPER_UI_CONFIG` 设置为同一文件。也可用 `--cli-entry` 和 `--browser-executable` 显式指定绝对路径；原有入口、浏览器和状态环境变量仍可覆盖保存值。配置命令不启动浏览器，也不证明 UI 行为。完整配置与操作契约见 [Agent 原生 UI](../skills/dsh-developer/references/agent-native-ui.md)。
 
@@ -143,9 +147,9 @@ node bin/dsh-developer.js ui --session codex-task --action close --json
 
 ## 为自主开发而生的隔离
 
-只读分析不执行目标代码。受控执行只用于本产品和逐字节可复现的 promotion 输出；凭据不进入子进程或证据。
+只读分析不执行目标代码。认证运行时审计仅执行本产品和逐字节可复现的 promotion 输出；凭据不进入这些审计的子进程或证据。普通可信开发遵循上文的宿主执行策略。
 
-执行任务使用已准入的隔离 cell（Windows 使用 WSL2 + Bubblewrap，支持的 Mac 使用 Apple container）：一次性、断网、无凭据、有界、串行、封存且清理可验证。
+隔离 Build/Apply 要求当前运行的 DSH 属于受审通道（0.1.1-rc.2 或仅供提示的 0.1.2-alpha.3），并使用已准入的隔离 cell（Windows 使用 WSL2 + Bubblewrap，支持的 Mac 使用 Apple container）：一次性、断网、无凭据、有界、串行、封存且清理可验证。DSH 0.1.5-rc.2 尚无隔离准入；见 [Mac 运行时配置](macos.md#enable-isolated-build-and-apply)。为 CLI 审计指定另一个 `--dsh` 不会切换当前 agent 的运行时。
 
 在顶层 DSH Agent 中，隔离 Build 原生且不接收路径。控制器从当前存活的根 Agent 推导源码，把命令和安全策略绑定到会过期的 digest，再由 DSH 发起可审计的一次性批准：
 
@@ -181,10 +185,10 @@ node bin/dsh-developer.js admit-cell --dsh D:\path\to\dsh.cmd --wsl-distro Ubunt
 
 ## 兼容性
 
-- 正式版通道：DSH 0.1.1-rc.2
-- 预览版通道：DSH 0.1.2-alpha.3
+- 普通开发：所选精确运行时，包括 DSH 0.1.5-rc.2；见[实测结果](verification.md)。
+- 受审审计与隔离通道：DSH 0.1.1-rc.2（阻断发布）及 0.1.2-alpha.3（仅供提示）。
 - Node.js：`^22.18.0 || >=24.11.0`
-- 平台：Windows 与 macOS。隔离 Build/Apply 的要求详见[平台支持](platforms.md)。
+- 原生开发：Windows、macOS 与 Linux。实测边界和独立的 Windows/macOS 隔离 Build 要求详见[平台支持](platforms.md)。
 
 正式版失败会阻止交付；预览版漂移会持续可见，并在下一版 DSH 正式发布前完成修复。
 

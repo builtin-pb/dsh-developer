@@ -90,6 +90,10 @@ The command creates a disposable Web profile, registers the source project with 
 
 Prepare the browser once with `dsh-developer ui-setup` (explicit `--install-cli` if the pinned CLI is missing), then restart DSH for native registration. For disposable setup storage and environment overrides, see [Agent-native UI](../skills/dsh-developer/references/agent-native-ui.md). Shell UI reads saved configuration immediately.
 
+Invalid UI configuration leaves core developer commands available and `dsh_ui` unregistered. DSH logs the configuration error code and setup instruction; repair it and restart before using native UI. Unexpected activation errors still propagate.
+
+Native Agent disposal cancels and drains that owner's browser calls before closing its browser. Plugin unload does this for all owners. Close attempts have a five-second timeout. A failed close retains ownership and reports the failure; an explicit controller cleanup retry can try again, while ordinary calls remain blocked for the ended owner. Shell sessions require an explicit `close`.
+
 Pass the reported `ui` object directly to `dsh_ui`. Its `developmentServer` field selects the private home directory returned by the running `dev` command. The browser completes native DSH authentication internally and opens the clean URL. Keep the owning terminal running; expired references are rejected. Do not paste launch tokens or disable DSH authentication.
 
 Shell agents use the same handoff:

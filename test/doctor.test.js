@@ -35,6 +35,33 @@ async function generatedFixture() {
   return root
 }
 
+test('static Doctor never invokes generated plugin code or lifecycle runners', async () => {
+  const root = await generatedFixture()
+  const calls = []
+  const runners = {
+    checkDshVersion: async () => {
+      calls.push('runtime')
+      return { version: '0.1.1-rc.2', invocation: {} }
+    },
+    runGeneratedNodeTests: async () => { calls.push('generated') },
+    smokeDshInstall: async () => { calls.push('lifecycle') },
+  }
+  try {
+    const staticReport = await doctorPlugin(root, { ...runners, runtime: 'skip' })
+    assert.equal(staticReport.ok, true)
+    assert.deepEqual(calls, [])
+    assert.equal(staticReport.checks.find((check) => check.id === 'tests.generated-smoke').status, 'SKIP')
+    assert.equal(staticReport.checks.find((check) => check.id === 'dsh.clean-profile-lifecycle').status, 'SKIP')
+
+    const runtimeReport = await doctorPlugin(root, runners)
+    assert.equal(runtimeReport.ok, true)
+    assert.deepEqual(calls, ['runtime', 'generated', 'lifecycle'])
+    assert.equal(runtimeReport.checks.find((check) => check.id === 'tests.generated-smoke').status, 'PASS')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 async function addClientBundle(root, body) {
   const packagePath = join(root, 'package.json')
   const packageValue = JSON.parse(await readFile(packagePath, 'utf8'))

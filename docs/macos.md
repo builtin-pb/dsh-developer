@@ -1,9 +1,9 @@
 # Develop on macOS
 
 Use Node.js `^22.18.0 || >=24.11.0`, pnpm 11.7.0 and DSH 0.1.5-rc.2 for
-ordinary development. The separate release audit retains DSH 0.1.1-rc.2 and
-0.1.2-alpha.3 as its advisory preview. Keep those exact versions only when
-reproducing that compatibility report.
+ordinary development. Certified audits and isolated Build/Apply require a
+separate reviewed DSH installation: 0.1.1-rc.2 or advisory 0.1.2-alpha.3.
+DSH 0.1.5-rc.2 has no isolated Build admission.
 
 ## Install DSH and this plugin
 
@@ -11,7 +11,7 @@ Install Apple Command Line Tools (`xcode-select --install`) for the system Pytho
 
 ```sh
 npm install --global pnpm@11.7.0 @deepseek-ai/dsh@0.1.5-rc.2
-dsh plugin --profile web add github:builtin-pb/dsh-developer --ignore-scripts
+dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.0' --ignore-scripts
 dsh web
 ```
 
@@ -36,11 +36,12 @@ To select another installation explicitly, pass `--dsh /absolute/path/to/dsh`.
 | Workflow | macOS |
 | --- | --- |
 | DSH CLI and native dsh-developer plugin | Supported |
-| Doctor, capabilities, profile preflight, impact, compatibility | Supported; runtime execution retains its trusted-source restrictions |
+| Static Doctor, capabilities, knowledge, verify and dev | Ordinary development on the selected runtime; host execution policy applies |
+| Runtime Doctor, profile preflight, impact, compatibility | Exact reviewed audit lanes; runtime execution retains its trusted-source restrictions |
 | Static hook inspection, migration and profile attestation | Supported for their documented exact lanes |
 | Agent UI controller | Requires separately configured Playwright CLI and browser; not included in this setup |
 | Creator promotion | Supported using the native exclusive-rename operation |
-| Isolated cell Build/Apply | Supported on Apple silicon with macOS 26+ and Apple container 1.4.1 |
+| Isolated cell Build/Apply | Reviewed DSH lanes, Apple silicon, macOS 26+ and Apple container 1.4.1; local admission required |
 
 Promotion uses Darwin exclusive rename and refuses to overwrite an existing destination, including a racing empty directory. Isolated execution uses a Linux VM. Test macOS-specific behavior separately on the host. Intel Macs and older macOS releases can use the native plugin workflows; they do not have an admitted isolated Build provider.
 You can develop and test an ordinary plugin directly from its checkout on macOS.
@@ -53,16 +54,33 @@ configuration; use a conventional workspace path when creating such fixtures.
 
 ## Enable isolated Build and Apply
 
+First install a separate reviewed runtime and launch DSH Web through that entry, using the profile where this plugin is installed:
+
+```sh
+npm install --prefix "$HOME/.local/share/dsh-reviewed" --ignore-scripts @deepseek-ai/dsh@0.1.1-rc.2
+"$HOME/.local/share/dsh-reviewed/node_modules/.bin/dsh" --version
+"$HOME/.local/share/dsh-reviewed/node_modules/.bin/dsh" web
+```
+
+Stop an existing Web server before launching this one. The version must be exactly 0.1.1-rc.2; selecting `--dsh` for a CLI check does not change the runtime of an already running agent. The advisory 0.1.2-alpha.3 lane is also reviewed, but supplies no release certification.
+
 Install the signed [Apple container 1.4.1 release](https://github.com/apple/container/releases/tag/1.4.1) using its official installer. It requires Apple silicon and macOS 26 or later. Then start the service and pull the reviewed image:
 
 ```sh
 container system start --enable-kernel-install
 container image pull docker.io/library/node@sha256:4196d66a565c6f195728d9952f161f4adfe2ad753052a08b7ec7f1c5a6bda42b
-node bin/dsh-developer.js lab
-node bin/dsh-developer.js admit-cell
 ```
 
-The first two commands download the Linux kernel and image. Subsequent cells run offline. The image contains Node.js 24.19.0, Python and standard Linux utilities. Dependencies are not downloaded during a Build.
+These commands download the Linux kernel and image. Subsequent cells run offline. The image contains Node.js 24.19.0, Python and standard Linux utilities. Dependencies are not downloaded during a Build.
+
+In the reviewed DSH agent's POSIX shell, check the installed plugin and that running DSH installation:
+
+```sh
+node "$DSH_DEVELOPER_BIN" lab
+node "$DSH_DEVELOPER_BIN" admit-cell
+```
+
+DSH supplies this absolute plugin entry; no dsh-developer checkout is required. In an external terminal, use `node bin/dsh-developer.js` only from a plugin checkout, with `--dsh` selecting the reviewed entry for admission.
 
 For a manual installation under `~/.local`, start the service with the **physical** binary path and `--install-root` pointing at the extracted payload root; Apple locates its helper executables beside that binary. For example:
 
@@ -70,11 +88,11 @@ For a manual installation under `~/.local`, start the service with the **physica
 ~/.local/share/apple-container-1.4.1/bin/container system start --install-root ~/.local/share/apple-container-1.4.1 --enable-kernel-install
 ```
 
-Restart DSH after setup. In a top-level agent, request an isolated Build; review its command plan, then separately approve Apply to copy verified changes back. The original checkout remains untouched during execution. A failed admission exposes its blocker and runs no workload.
+Restart the reviewed DSH entry after setup. In a top-level agent, request an isolated Build; review its command plan, then separately approve Apply to copy verified changes back. The original checkout remains untouched during execution. A failed admission exposes its blocker and runs no workload.
 
 The VM is intentionally bounded: small text workspaces, no host mounts, no credentials and no network. It is suitable for focused plugin edits and tests with the bundled tools. A complete DSH checkout with dependency trees needs the native upstream workflow below. See the [provider comparison](platforms.md) and [execution contract](../skills/dsh-developer/references/execution-lab.md).
 
-Run the real local integration suite after changing the provider:
+From a dsh-developer checkout, run the real local integration suite after changing the provider:
 
 ```sh
 DSH_DEVELOPER_APPLE_LAB_TEST=1 node --test test/apple-container.integration.test.js
@@ -93,13 +111,13 @@ npm ci --ignore-scripts
 dsh plugin --profile web add . --ignore-scripts
 ```
 
-Restart DSH after editing host JavaScript. From the checkout, run:
+Restart DSH after editing host JavaScript. From the checkout, run the checks below, replacing `/absolute/path/to/reviewed/dsh` with the separate 0.1.1-rc.2 entry for blocking runtime audits (for example, the entry installed above):
 
 ```sh
 npm run validate
-node bin/dsh-developer.js doctor --source .
-node bin/dsh-developer.js preflight --source . --profile headless
-node bin/dsh-developer.js preflight --source . --profile web
+node bin/dsh-developer.js doctor --source . --dsh /absolute/path/to/reviewed/dsh
+node bin/dsh-developer.js preflight --source . --profile headless --dsh /absolute/path/to/reviewed/dsh
+node bin/dsh-developer.js preflight --source . --profile web --dsh /absolute/path/to/reviewed/dsh
 npm pack --dry-run
 ```
 

@@ -1,13 +1,46 @@
 import assert from 'node:assert/strict'
+import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import test from 'node:test'
+import { promisify } from 'node:util'
 import { acquireCellAdmissionLease, issueCellAdmissionGrant } from '../lib/cell-admission-grant.js'
 import { DshDeveloperError } from '../lib/errors.js'
 import { fingerprintFileMap } from '../lib/files.js'
 import { openIsolatedCellInternal } from '../lib/isolated-cell-internal.js'
 import { openIsolatedCell } from '../lib/isolated-cell.js'
+
+test('admitted opening retains its process lease when unpublished provider cleanup fails', async () => {
+  // Isolate the deliberately poisoned process lease from all other tests.
+  const script = `
+    import assert from 'node:assert/strict';
+    import { openAdmittedIsolatedCellInternal } from ${JSON.stringify(new URL('../lib/isolated-cell-internal.js', import.meta.url).href)};
+    import { issueCellAdmissionGrant, acquireCellAdmissionLease } from ${JSON.stringify(new URL('../lib/cell-admission-grant.js', import.meta.url).href)};
+    import { DshDeveloperError } from ${JSON.stringify(new URL('../lib/errors.js', import.meta.url).href)};
+    const admission = issueCellAdmissionGrant({
+      kind: 'isolated-agent-cell-admission', admitted: true, disposition: 'Incubate',
+      evidenceDigest: 'sha256:fixture', runtime: { version: 'fixture' },
+      checks: [{ id: 'replacement.local-boundary', evidence: { provider: { id: 'wsl2-bubblewrap', distro: 'fixture' } } }],
+    });
+    const open = (openCell) => openAdmittedIsolatedCellInternal('must-not-be-read', { admission }, { openCell });
+    await assert.rejects(open(async () => { throw new DshDeveloperError('UNSAFE_SOURCE', 'no provider created'); }), { code: 'UNSAFE_SOURCE' });
+    acquireCellAdmissionLease(admission).release();
+    const handle = await open(async (_source, _options, lifecycle) => ({ dispose: lifecycle.onDisposed }));
+    assert.throws(() => acquireCellAdmissionLease(admission), { code: 'CELL_CAPACITY' });
+    handle.dispose();
+    acquireCellAdmissionLease(admission).release();
+    const failure = new DshDeveloperError('CELL_CREATE_CLEANUP_FAILED', 'owned root cleanup unverified', { retainedRoot: '/tmp/sample-owned-root' });
+    await assert.rejects(open(async () => { throw failure; }), (cause) => cause === failure);
+    let called = false;
+    await assert.rejects(open(async () => { called = true; }), { code: 'CELL_CAPACITY' });
+    assert.equal(called, false);
+    assert.throws(() => acquireCellAdmissionLease(admission), { code: 'CELL_CAPACITY' });
+    console.log('retained unpublished cleanup lease');
+  `
+  const { stdout } = await promisify(execFile)(process.execPath, ['--input-type=module', '-e', script], { timeout: 10_000 })
+  assert.match(stdout, /retained unpublished cleanup lease/u)
+})
 
 test('runs in a private cell and stages a full changed tree without touching source', async () => {
   const source = await mkdtemp(join(tmpdir(), 'dsh-developer-cell-source-'))

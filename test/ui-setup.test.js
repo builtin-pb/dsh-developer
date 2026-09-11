@@ -10,6 +10,7 @@ import { loadUiConfiguration, readUiSettings, uiConfigPath, UI_CLI_ENVIRONMENT }
 import { registerUiCliToolWithDependencies } from '../lib/ui-cli-tool.js'
 import { parseCliArguments, assertCliCommandOptions } from '../lib/cli-options.js'
 import { inspectUiCapabilities } from '../lib/ui-capabilities.js'
+import { DshDeveloperError } from '../lib/errors.js'
 
 const run = promisify(execFile)
 async function fixture(t) {
@@ -123,6 +124,27 @@ test('malformed, oversized and linked saved config fail closed with no registrat
   await symlink(target, f.config)
   await assert.rejects(setupUi({ cliEntry: f.entry, browserExecutable: f.browser }), { code: 'UI_CONFIG_INVALID' })
   assert.equal(await readFile(target, 'utf8'), '{}')
+})
+
+test('optional registration reports unusable storage but does not contain registration bugs', async t => {
+  const f = await fixture(t)
+  await setupUi({ cliEntry: f.entry, browserExecutable: f.browser })
+  const runtime = (await readUiSettings()).root
+  await writeFile(runtime, 'a file cannot be runtime storage')
+  const diagnostics = []
+  assert.equal(await registerUiCliToolWithDependencies({
+    tools: { register() { assert.fail('must not register') } }, effect() {},
+    onConfigurationError: diagnostic => diagnostics.push(diagnostic),
+  }), undefined)
+  assert.equal(diagnostics[0].code, 'UI_ROOT_INVALID')
+  assert.match(diagnostics[0].nextStep, /ui-setup/u)
+  await rm(runtime)
+  for (const failure of [new Error('unexpected registry failure'), new DshDeveloperError('UI_CONFIG_INVALID', 'registration bug')]) {
+    await assert.rejects(registerUiCliToolWithDependencies({
+      tools: { register() { throw failure } }, effect() {},
+      onConfigurationError() { assert.fail('only configuration loading can be contained') },
+    }), error => error === failure)
+  }
 })
 
 test('explicit setup reuses its dedicated pinned provider without installation', async t => {

@@ -2,6 +2,16 @@
 
 These are local and CI observations from 10–11 September 2026, covering the development workflow added after repository revision `4bf78c2`. They describe what was exercised, not a claim that dsh-developer already completes every development task reliably. The [development guide](development.md) explains how to use the capabilities; the [strategy](development-strategy.md) retains the broader goal and unfinished milestones.
 
+## Release coherence review
+
+The v0.1.0 review found and repaired interactions missed by earlier checks. Native audits now resolve relative paths from the attached Agent's workspace. Static Doctor skips all plugin execution, including generated smoke tests. Invalid optional browser configuration leaves core commands available; Agent disposal cancels, drains and closes only its owned browser, with failed cleanup retained for retry.
+
+Isolated Apply now uses exclusive file publication and rolls back only controller-owned moves. A concurrent edit or unverified rollback preserves source and recovery evidence instead of restoring the entire old snapshot. Disposal rechecks recovery after an active Apply settles. Failed provider creation with unverified cleanup retains capacity and identifiable recovery information; it cannot be cleared by a misleading successful discard. Recovery in these ambiguous states requires operator inspection, not automatic replay.
+
+Integrated local validation passed **603 tests**, with **33 optional checks skipped**. Four real Apple-container checks separately passed: admitted VM Build/Apply, oversized-export rejection, generated promotion through DSH, and fork/exit churn with timeout cleanup. Failure-combination regressions use injected filesystem/provider faults; they do not establish live Windows provider coverage. The packaged candidate passed release/preview lifecycle checks and two native knowledge cases on DSH 0.1.5-rc.2. Browser lifecycle changes have deterministic coverage; no new rendered-browser trial was performed for this review.
+
+Setup and workflow instructions now distinguish ordinary current-runtime development from the exact reviewed audit and isolated-execution lanes. Installation examples select the v0.1.0 tag. These repairs strengthen the implemented workflow; they do not guarantee correctness of arbitrary generated projects.
+
 ## Follow-up fixes from the Chrome evaluation
 
 The recall-plugin reconstruction exposed two Doctor syntax false positives, both repaired by DeepSeek through Chrome and independently reviewed. Subsequent diagnosis found that inherited `NODE_PATH` could make an older DSH installation appear to contain a newer installation's hooks. Shared package lookup now stays within the selected installation's local dependency graph, preserves real package-manager links, and reports incomplete local installations without certifying absence. Comparison against actual 0.1.1-rc.2 and 0.1.5-rc.2 installations preserved their legitimate inventories.

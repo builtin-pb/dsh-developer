@@ -119,7 +119,7 @@ test('drives one agent-owned browser through the exact compact DSH tool surface'
     return JSON.parse(result.stdout)
   }
   const ctx = new Context()
-  const agent = { id: 'native-ui-integration-agent' }
+  const agent = { id: 'native-ui-integration-agent', ctx }
   let directSessionOpen = false
   let call = 0
   const execute = (name, arguments_) => ctx.tools.execute({

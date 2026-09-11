@@ -2,7 +2,40 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { conformExecutionLab, formatExecutionLabReport } from '../lib/execution-lab.js'
 import { buildExecutionLabReport } from '../lib/lab/report.js'
-import { buildBubblewrapArgv, parseWindowsMounts } from '../lib/lab/wsl-bubblewrap.js'
+import { buildBubblewrapArgv, createWslBubblewrapCell, parseWindowsMounts } from '../lib/lab/wsl-bubblewrap.js'
+
+test('unpublished WSL cleanup failure identifies its exact retained provider root without a live provider', async () => {
+  let ownedRoot
+  const stdoutByLabel = {
+    'WSL distribution identity probe': 'Ubuntu-22.04\n',
+    'WSL user identity probe': '1000\n',
+    'WSL kernel probe': 'fixture-microsoft-standard-WSL2\n',
+    'Bubblewrap version probe': 'bubblewrap 0.6.1\n',
+    'prlimit version probe': 'prlimit fixture\n',
+    'WSL systemd probe': 'running\n',
+    'WSL Windows-mount inventory': '{"filesystems":[]}',
+    'WSL passwd identity probe': 'fixture:x:1000:1000::/home/fixture:/bin/sh\n',
+    'stale lab-root inventory': '',
+    'lab recovery clock probe': '1000\n',
+    'lab recovery metadata probe': '41c0|1000|700|1\n',
+    'lab hostile-mode normalization': '',
+  }
+  await assert.rejects(createWslBubblewrapCell({
+    platform: 'win32', distro: 'Ubuntu-22.04',
+    runBounded: async (_command, argv, options) => {
+      if (options.label === 'isolated cell root creation') {
+        ownedRoot = argv.at(-1)
+        return { stdout: '', stderr: '', exitCode: 0 }
+      }
+      if (['isolated cell workspace creation', 'lab workspace cleanup'].includes(options.label)) throw new Error(options.label + ' fixture failure')
+      assert.ok(Object.hasOwn(stdoutByLabel, options.label), 'unexpected invocation: ' + options.label)
+      return { stdout: stdoutByLabel[options.label], stderr: '', exitCode: 0 }
+    },
+  }), (cause) => cause.code === 'CELL_CREATE_CLEANUP_FAILED'
+    && cause.details.providerId === 'wsl2-bubblewrap'
+    && cause.details.retainedRoot === ownedRoot
+    && /^\/tmp\/dsh-developer-lab-[a-f0-9]{32}$/u.test(ownedRoot))
+})
 
 test('wraps provider evidence in a stable fail-closed lab report', () => {
   const result = {

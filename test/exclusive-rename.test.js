@@ -5,7 +5,30 @@ import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import test from 'node:test'
 import { promisify } from 'node:util'
-import { renameDirectoryExclusive } from '../lib/exclusive-rename.js'
+import { renameDirectoryExclusive, renameFileExclusive } from '../lib/exclusive-rename.js'
+
+test('exclusive file publication preserves collisions and moves exact file identity', {
+  skip: !['win32', 'darwin', 'linux'].includes(process.platform),
+}, async (t) => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'sample-exclusive-file-')))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const source = join(root, 'source')
+  const destination = join(root, 'destination')
+  await writeFile(source, 'candidate')
+  await writeFile(destination, 'concurrent')
+  const candidate = await lstat(source)
+  const collision = await lstat(destination)
+  await assert.rejects(renameFileExclusive(source, destination))
+  assert.equal(await readFile(destination, 'utf8'), 'concurrent')
+  assert.equal((await lstat(destination)).ino, collision.ino)
+  assert.equal(await readFile(source, 'utf8'), 'candidate')
+  await rm(destination)
+  await renameFileExclusive(source, destination)
+  assert.equal((await lstat(destination)).ino, candidate.ino)
+  assert.equal((await lstat(destination)).nlink, 1)
+  assert.equal(await readFile(destination, 'utf8'), 'candidate')
+  await assert.rejects(lstat(source), { code: 'ENOENT' })
+})
 
 test('POSIX exclusive rename preserves every existing destination and has one race winner', {
   skip: !['darwin', 'linux'].includes(process.platform),

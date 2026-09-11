@@ -22,6 +22,8 @@ Natural language is the primary entry. DSH and Codex select dsh-developer, extra
 
 Use `project` to select a package and toolchain, `knowledge` to locate exact-version DSH code, and the host shell for `run`, `verify` and `dev`. Dependencies remain in the ordinary workspace. The [development guide](development.md) includes a typed native-tool example, packed-artifact verification, Web server lifecycle, and working on DSH itself.
 
+Inside DSH, use `node "$DSH_DEVELOPER_BIN" <operation>` in a POSIX shell or `node "$env:DSH_DEVELOPER_BIN" <operation>` in PowerShell. DSH supplies the installed entry and its running runtime. Examples below using `node bin/dsh-developer.js` or npm scripts assume the dsh-developer checkout as the working directory; profile installation does not create a global CLI command.
+
 ## Ship a plugin
 
 Start with the route that matches what you have:
@@ -29,9 +31,9 @@ Start with the route that matches what you have:
 | You have | Run | You get |
 | --- | --- | --- |
 | An ordinary plugin | `doctor --skip-runtime`, then `verify` | Static findings and actual native results on the selected DSH |
-| A plugin targeting a profile | `preflight` | Proof that every required Cordis service exists before boot |
+| A plugin targeting a profile on a reviewed audit lane | `preflight` before install | Proof that every required Cordis service exists before boot |
 | A Creator export | `promote` | A new tested DSH + Codex bundle with reproducible bytes |
-| A DSH upgrade ahead | `impact` | The exact upstream contracts your plugin must revalidate |
+| A DSH upgrade across the reviewed lanes | `impact` before edits | The exact upstream contracts your plugin must revalidate |
 | This product or a promoted release bundle | `compatibility` | Witnessed behavior on release and preview DSH lanes |
 | An unfamiliar DSH install | `capabilities` | Exact runtime identity and supported development paths |
 | An installed profile | `attest-profile` | Canonical receipt for the exact static bytes you tested |
@@ -53,7 +55,7 @@ Inspect an ordinary repository from DSH Web:
 /dsh-developer-doctor {"source":"C:/path/to/plugin","skipRuntime":true}
 ```
 
-Then use the [development workflow](development.md) to test the intended runtime with `verify` and rendered Web behavior with `dev`. Doctor's default runtime audit and preflight use the certified lanes. Keep those gates for product and promoted release checks; a newer installation alone is not an ordinary plugin defect.
+Then use the [development workflow](development.md) to test the intended runtime with `verify --profile <name>` and rendered Web behavior with `dev`, including the documented configuration via `--patch`. Doctor's default runtime audit and preflight require the reviewed lanes. On other exact versions, including 0.1.5-rc.2, use static Doctor and this ordinary verification route. Keep certified gates for product and promoted release checks; a newer installation alone is not an ordinary plugin defect.
 
 Doctor checks package and bundle contracts, boot-required packages marked optional, Host/Client injection mixups, browser-service collisions, raw plugin-owned Web routes outside the authenticated connection boundary, and invalid Web artifacts. Product/promoted bundle checks also cover reproducibility and the admitted clean-profile lifecycle. The repository stays read-only during inspection; static findings do not prove behavior.
 
@@ -72,13 +74,15 @@ dsh --profile headless --dump-config
 
 ## Keep shipping as DSH moves
 
-Run impact analysis before an upgrade:
+For the reviewed 0.1.1-rc.2 to 0.1.2-alpha.3 lanes, run impact analysis before upgrade edits:
 
 ```powershell
 node bin/dsh-developer.js impact --source C:\path\to\plugin --release-dsh D:\release\dsh.cmd --preview-dsh D:\preview\dsh.cmd
 ```
 
 It follows the packages and Cordis services your plugin actually touches, then compares their public declarations, entries, dependencies, and DSH metadata across both lanes. It proves offline whether declared DSH peer and development ranges admit the exact installed release and preview versions under npm prerelease semantics; registry publication and the project lock remain separate install evidence.
+
+For other targets, inspect both exact installations or checkouts with `knowledge` and follow the affected source and consumers before editing. Then use static Doctor and `verify`/`dev` on each intended runtime. That ordinary route does not extend the reviewed audit lanes.
 
 For exact source corridor `0.1.1-rc.2` to `0.1.2-alpha.3`, get file-and-line actions from the advisory ledger:
 
@@ -127,7 +131,7 @@ dsh_ui {"operation":"wait","text":"Saved"}
 dsh_ui {"operation":"close"}
 ```
 
-Run `dsh-developer ui-setup` once, then restart DSH before admission. Setup finds normal Chrome/Edge installations and an installed pinned CLI. If the CLI is missing, `dsh-developer ui-setup --install-cli` explicitly installs `@playwright/cli@0.1.18` into dedicated local storage. No installation occurs during normal startup or admission.
+Run `node "$DSH_DEVELOPER_BIN" ui-setup` in the DSH POSIX shell (PowerShell: `node "$env:DSH_DEVELOPER_BIN" ui-setup`), then restart DSH before admission. Setup finds normal Chrome/Edge installations and an installed pinned CLI. If the CLI is missing, append `--install-cli` to explicitly install `@playwright/cli@0.1.18` into dedicated local storage. No installation occurs during normal startup or admission.
 
 Configuration defaults to `~/.dsh-developer/ui/config.json`. For disposable storage, use `ui-setup --config <absolute-file>` and set `DSH_DEVELOPER_UI_CONFIG` to that file for both DSH startup and shell UI. `--cli-entry` and `--browser-executable` accept explicit absolute paths when discovery is insufficient. Existing entry/browser/state environment overrides still take precedence. Setup does not launch a browser or prove UI behavior; exercise the rendered page after admission. The [Agent-native UI](../skills/dsh-developer/references/agent-native-ui.md) reference gives the agent operation and evidence loop.
 
@@ -143,9 +147,9 @@ Shell-capable agents can use the same `ui --session <name> --action <operation>`
 
 ## Isolation built for autonomous development
 
-Read-only analysis never executes target code. Controlled execution is limited to this product and byte-identical promoted output; credentials stay out of child environments and evidence.
+Read-only analysis never executes target code. Certified runtime audits execute only this product and byte-identical promoted output; credentials stay out of their child environments and evidence. Ordinary trusted development uses the host execution policy described above.
 
-Execution uses the admitted host provider (WSL2 + Bubblewrap on Windows, Apple container on supported Macs): disposable, offline, credential-free, bounded, serialized, sealed, and verifiably cleaned.
+Isolated Build/Apply requires a running reviewed DSH lane (0.1.1-rc.2 or advisory 0.1.2-alpha.3) and the admitted host provider (WSL2 + Bubblewrap on Windows, Apple container on supported Macs): disposable, offline, credential-free, bounded, serialized, sealed, and verifiably cleaned. DSH 0.1.5-rc.2 has no isolated admission; see [Mac runtime setup](macos.md#enable-isolated-build-and-apply). Selecting another `--dsh` for a CLI audit does not change the running agent's runtime.
 
 In a top-level DSH Agent, isolated Build is native and path-free. The controller derives source from the live root Agent, binds the commands and safety policy into an expiring digest, and asks DSH for audited one-time approval:
 
@@ -181,10 +185,10 @@ This repository is a native Codex plugin too. Add the existing folder to a perso
 
 ## Compatibility
 
-- Release lane: DSH 0.1.1-rc.2.
-- Preview lane: DSH 0.1.2-alpha.3.
+- Ordinary development: selected exact runtimes, including DSH 0.1.5-rc.2; see [observed results](verification.md).
+- Reviewed audit/isolated lanes: DSH 0.1.1-rc.2 (blocking release) and 0.1.2-alpha.3 (advisory preview).
 - Node.js: `^22.18.0 || >=24.11.0`.
-- Platform: Windows and macOS. See [platform support](platforms.md) for the isolated Build requirements.
+- Native development: Windows, macOS and Linux. See [platform support](platforms.md) for tested boundaries and the separate Windows/macOS isolated Build requirements.
 
 Release failures block. Preview drift stays visible so it gets fixed before the next DSH release lands.
 

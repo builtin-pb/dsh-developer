@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import { apply, inject, name } from '../index.js'
 import { hasNativeTool } from '../lib/native-tool.js'
@@ -17,6 +18,57 @@ test('the shipped activation graph remains complete within its bounded audit', a
   const closure = inspectExecutableModuleClosure(files, { entryPaths: ['index.js'] })
   assert.deepEqual(closure.activationIncompletePaths, [])
   assert.deepEqual(closure.resources.exhausted, [])
+})
+
+test('optional UI configuration failures leave core commands and diagnostics usable', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-native-bad-ui-'))
+  const previous = Object.fromEntries(Object.values(UI_CLI_ENVIRONMENT).map(key => [key, process.env[key]]))
+  for (const key of Object.values(UI_CLI_ENVIRONMENT)) delete process.env[key]
+  process.env.DSH_DEVELOPER_UI_CONFIG = join(root, 'config.json')
+  t.after(async () => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+    await rm(root, { recursive: true, force: true })
+  })
+  const provider = join(root, 'provider')
+  await mkdir(provider)
+  const entry = join(provider, 'playwright-cli.js'), browser = join(root, 'browser')
+  await writeFile(entry, 'throw new Error("provider must not execute during activation")')
+  await writeFile(browser, 'must not launch')
+  await writeFile(join(provider, 'package.json'), JSON.stringify({ name: '@playwright/cli', version: '0.1.19' }))
+  for (const [configuration, code] of [
+    ['malformed JSON', 'UI_CONFIG_INVALID'],
+    [JSON.stringify({ version: 1, entry, browser, root: join(root, 'runtime') }), 'UI_CLI_VERSION_MISMATCH'],
+  ]) {
+    await writeFile(process.env.DSH_DEVELOPER_UI_CONFIG, configuration)
+    const definitions = new Map(), commands = new Map(), effects = [], warnings = []
+    await apply({
+      skills: { register() {} }, shellEnv: { register() {} },
+      commands: { register(value) { commands.set(value.name, value) } },
+      tools: { register(value) { definitions.set(value.name, value) }, guard() {},
+        schemas: () => [...definitions.values()], get: name => definitions.get(name) },
+      agents: { list: () => [] }, on: () => () => {},
+      effect(factory) { effects.push(factory()) },
+      logger: { warn: message => warnings.push(message) },
+    })
+    try {
+      assert.equal(definitions.has('dsh_developer'), true)
+      assert.equal(definitions.has('dsh_ui'), false)
+      assert.equal(commands.size, 10)
+      const result = await commands.get('dsh-developer-doctor').handler({ rawInput: JSON.stringify({
+        source: fileURLToPath(new URL('../examples/hello-dsh.creator.json', import.meta.url)), skipRuntime: true,
+      }) })
+      assert.equal(result.kind, 'success')
+      const ui = await commands.get('dsh-developer-ui').handler({ rawInput: '{}' })
+      assert.equal(ui.kind, 'error')
+      assert.equal(warnings.length, 1)
+      assert.ok(warnings[0].includes(code))
+      assert.match(warnings[0], /dsh_ui unavailable/u)
+      assert.match(warnings[0], /ui-setup.*restart DSH/u)
+    } finally { await Promise.all(effects.reverse().map(dispose => dispose?.())) }
+  }
 })
 
 test('keeps every activation path context-complete through narrow capability projection', async () => {

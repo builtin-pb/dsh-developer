@@ -6,6 +6,8 @@ import test from 'node:test'
 import { fingerprintFileMap, scanOrdinaryTree } from '../lib/files.js'
 import { claimCellStageAuthority } from '../lib/cell-stage-authority.js'
 import { DshDeveloperError } from '../lib/errors.js'
+import { renameFileExclusive } from '../lib/exclusive-rename.js'
+import { deriveNextActions } from '../lib/recovery-actions.js'
 import {
   createCellWorkflowSlot,
   createNativeCellWorkflowController,
@@ -126,6 +128,7 @@ function fixture(options = {}) {
     })),
     cleanupBarrier: options.cleanupBarrier,
     applyBarrier: options.applyBarrier,
+    renameFileExclusive: options.renameFileExclusive,
   })
   return { controller, owner, state, slot, fakeCell }
 }
@@ -175,6 +178,7 @@ async function makeStagedWorkflow(options = {}) {
     inspectTreeIdentity: null,
     cleanupBarrier: options.cleanupBarrier,
     applyBarrier: options.applyBarrier,
+    renameFileExclusive: options.renameFileExclusive,
     ...(options.getProfileDirectory === undefined ? {} : { getProfileDirectory: options.getProfileDirectory }),
     ...(options.tmpdir === undefined ? {} : { tmpdir: options.tmpdir }),
     inspectWorkspace: async () => ({
@@ -1115,7 +1119,7 @@ test('rolls back byte-identical source after a partial candidate install and ret
   }
 })
 
-test('restores same-identity external content drift in place before verifying rollback', async () => {
+test('preserves same-identity concurrent edits and retains recovery instead of restoring over them', async () => {
   let tampered = false
   const workflow = await makeStagedWorkflow({
     sourceFiles: { 'stable.txt': 'original\n' },
@@ -1140,18 +1144,19 @@ test('restores same-identity external content drift in place before verifying ro
       signal: approval.exec.signal,
     })
     assert.equal(result.ok, false)
-    assert.equal(result.failure.code, 'CELL_APPLY_RESULT_MISMATCH', JSON.stringify(result))
+    assert.equal(result.failure.code, 'CELL_APPLY_ROLLBACK_FAILED', JSON.stringify(result))
     assert.equal(result.rollback.required, true)
-    assert.equal(result.rollback.verified, true)
-    assert.equal(await readFile(join(workflow.source, 'stable.txt'), 'utf8'), 'original\n')
+    assert.equal(result.rollback.verified, false)
+    assert.equal(await readFile(join(workflow.source, 'stable.txt'), 'utf8'), 'tampered\n')
     await assert.rejects(lstat(join(workflow.source, 'result.txt')), (cause) => cause.code === 'ENOENT')
-    assert.equal((await scanOrdinaryTree(workflow.source)).fingerprint, workflow.run.source.fingerprintBefore)
-    const discard = await workflow.value.controller.discard({ planDigest: workflow.plan.planDigest }, {
+    const transaction = workflow.value.slot.record.transaction
+    assert.equal(await readFile(join(transaction.backup, 'stable.txt'), 'utf8'), 'original\n')
+    assert.equal(result.cleanup.capacityReleased, false)
+    await assert.rejects(workflow.value.controller.discard({ planDigest: workflow.plan.planDigest }, {
       agent: workflow.value.owner,
-    })
-    assert.equal(discard.cleanup.capacityReleased, true)
+    }), { code: 'CELL_APPLY_RECOVERY_REQUIRED' })
   } finally {
-    await rm(workflow.source, { recursive: true, force: true })
+    await removeRecoveryFixture(workflow)
   }
 })
 
@@ -1628,3 +1633,148 @@ test('live workspace authority rejects missing, child, relative, and junction-ma
     await rm(root, { recursive: true, force: true })
   }
 })
+
+// These roots are disposable fixtures, never operator recovery paths.
+async function removeRecoveryFixture(workflow) {
+  const transaction = workflow.value.slot.record?.transaction
+  if (transaction) await rm(transaction.root, { recursive: true, force: true })
+  await chmod(workflow.run.staging.root, 0o700).catch((cause) => { if (cause.code !== 'ENOENT') throw cause })
+  await rm(workflow.run.staging.root, { recursive: true, force: true })
+  await rm(workflow.source, { recursive: true, force: true })
+}
+
+for (const changed of ['created', 'modified']) {
+  test('Apply preserves a concurrent file at a ' + changed + ' destination and retains recovery', async (t) => {
+    let rollbackEntered = false
+    const workflow = await makeStagedWorkflow({
+      sourceFiles: changed === 'modified' ? { 'target.txt': 'original\n' } : {},
+      stageFiles: { 'target.txt': 'staged\n' },
+      changes: { created: changed === 'created' ? ['target.txt'] : [], modified: changed === 'modified' ? ['target.txt'] : [], deleted: [] },
+      applyBarrier: async (phase, context) => {
+        if (phase === 'before-install-candidate') {
+          await writeFile(join(context.record.workspace.root, 'target.txt'), 'concurrent\n', { flag: 'wx' })
+        }
+        if (phase === 'before-rollback') rollbackEntered = true
+      },
+    })
+    t.after(() => removeRecoveryFixture(workflow))
+    const approval = await grantOnce(workflow.value, workflow.plan, { operation: 'cell-apply' })
+    assert.equal(approval.guard(), undefined)
+    const result = await workflow.value.controller.apply({ planDigest: workflow.plan.planDigest }, {
+      agent: workflow.value.owner, executionToken: approval.token, callId: approval.callId,
+    })
+    assert.equal(result.ok, false)
+    assert.equal(result.failure.code, 'CELL_APPLY_RECOVERY_REQUIRED')
+    assert.equal(result.rollback.verified, false)
+    assert.equal(result.cleanup.capacityReleased, false)
+    assert.equal(rollbackEntered, false)
+    assert.equal(await readFile(join(workflow.source, 'target.txt'), 'utf8'), 'concurrent\n')
+    const transaction = workflow.value.slot.record.transaction
+    assert.equal(await readFile(join(transaction.candidate, 'target.txt'), 'utf8'), 'staged\n')
+    if (changed === 'modified') {
+      assert.equal(await readFile(join(transaction.backup, 'target.txt'), 'utf8'), 'original\n')
+      assert.equal(await readFile(join(transaction.held, 'files/target.txt'), 'utf8'), 'original\n')
+    }
+    assert.equal(JSON.parse(await readFile(join(transaction.root, 'state-committing.json'), 'utf8')).state, 'committing')
+    assert.deepEqual(deriveNextActions({ operation: 'cell-apply', report: result }).map((item) => item.id), ['cell.preserve-apply-recovery'])
+    await assert.rejects(workflow.value.controller.discard({ planDigest: workflow.plan.planDigest }, { agent: workflow.value.owner }), { code: 'CELL_APPLY_RECOVERY_REQUIRED' })
+    await assert.rejects(workflow.value.controller.disposeOwner(workflow.value.owner), { code: 'CELL_OWNER_CLEANUP_FAILED' })
+    await assert.rejects(makePlan(workflow.value), { code: 'CELL_WORKFLOW_CAPACITY' })
+    assert.equal(await readFile(join(workflow.source, 'target.txt'), 'utf8'), 'concurrent\n')
+  })
+}
+
+test('owner disposal waiting for Apply preserves failed rollback, backup and poisoned capacity', async (t) => {
+  const entered = Promise.withResolvers()
+  const released = Promise.withResolvers()
+  let held = false
+  const workflow = await makeStagedWorkflow({
+    sourceFiles: { 'target.txt': 'original\n' },
+    stageFiles: { 'target.txt': 'staged\n' },
+    changes: { created: [], modified: ['target.txt'], deleted: [] },
+    applyBarrier: async (phase) => {
+      if (phase === 'after-install-candidate' && !held) {
+        held = true
+        entered.resolve()
+        await released.promise
+      }
+      if (phase === 'before-rollback') throw new DshDeveloperError('EACCES', 'fixture rollback access failure')
+    },
+  })
+  t.after(() => removeRecoveryFixture(workflow))
+  const approval = await grantOnce(workflow.value, workflow.plan, { operation: 'cell-apply' })
+  assert.equal(approval.guard(), undefined)
+  const applying = workflow.value.controller.apply({ planDigest: workflow.plan.planDigest }, {
+    agent: workflow.value.owner, executionToken: approval.token, callId: approval.callId,
+  })
+  await entered.promise
+  const disposal = assert.rejects(workflow.value.controller.disposeOwner(workflow.value.owner), { code: 'CELL_OWNER_CLEANUP_FAILED' })
+  released.resolve()
+  const result = await applying
+  assert.equal(result.failure.code, 'CELL_APPLY_ROLLBACK_FAILED')
+  assert.equal(result.rollback.verified, false)
+  await disposal
+  const transaction = workflow.value.slot.record.transaction
+  assert.equal(workflow.value.controller.status().phase, 'rollback-failed')
+  assert.equal(await readFile(join(transaction.backup, 'target.txt'), 'utf8'), 'original\n')
+  assert.equal(await readFile(join(transaction.held, 'files/target.txt'), 'utf8'), 'original\n')
+  assert.equal(await readFile(join(workflow.source, 'target.txt'), 'utf8'), 'staged\n')
+  assert.equal((await lstat(join(transaction.root, 'state-committing.json'))).isFile(), true)
+  await assert.rejects(workflow.value.controller.discard({ planDigest: workflow.plan.planDigest }, { agent: workflow.value.owner }), { code: 'CELL_APPLY_RECOVERY_REQUIRED' })
+  await assert.rejects(makePlan(workflow.value), { code: 'CELL_WORKFLOW_CAPACITY' })
+})
+
+test('an unacknowledged candidate move retains both source state and transaction without rollback', async (t) => {
+  let rollbackEntered = false
+  const workflow = await makeStagedWorkflow({
+    sourceFiles: {}, stageFiles: { 'target.txt': 'staged\n' },
+    changes: { created: ['target.txt'], modified: [], deleted: [] },
+    renameFileExclusive: async (source, destination) => {
+      await renameFileExclusive(source, destination)
+      throw Object.assign(new Error('fixture lost syscall acknowledgement'), { code: 'RENAME_STATE_UNKNOWN' })
+    },
+    applyBarrier: async (phase) => { if (phase === 'before-rollback') rollbackEntered = true },
+  })
+  t.after(() => removeRecoveryFixture(workflow))
+  const approval = await grantOnce(workflow.value, workflow.plan, { operation: 'cell-apply' })
+  assert.equal(approval.guard(), undefined)
+  const result = await workflow.value.controller.apply({ planDigest: workflow.plan.planDigest }, {
+    agent: workflow.value.owner, executionToken: approval.token, callId: approval.callId,
+  })
+  assert.equal(result.failure.code, 'CELL_APPLY_RECOVERY_REQUIRED')
+  assert.equal(result.cleanup.capacityReleased, false)
+  assert.equal(rollbackEntered, false)
+  assert.equal(await readFile(join(workflow.source, 'target.txt'), 'utf8'), 'staged\n')
+  await assert.rejects(workflow.value.controller.discard({ planDigest: workflow.plan.planDigest }, { agent: workflow.value.owner }), { code: 'CELL_APPLY_RECOVERY_REQUIRED' })
+})
+
+for (const cancelled of [false, true]) {
+  test('unpublished cell cleanup failure remains poisoned' + (cancelled ? ' through cancellation' : ''), async () => {
+    const cancellation = new AbortController()
+    const f = fixture({
+      openCell: async () => {
+        if (cancelled) cancellation.abort()
+        throw new DshDeveloperError('CELL_CREATE_CLEANUP_FAILED', 'fixture provider cleanup failed', {
+          providerId: 'wsl2-bubblewrap', retainedRoot: '/tmp/sample-retained-provider',
+        })
+      },
+    })
+    const plan = await makePlan(f)
+    const approval = await grantOnce(f, plan)
+    assert.equal(approval.guard(), undefined)
+    const result = await f.controller.run({ planDigest: plan.planDigest }, {
+      agent: f.owner, executionToken: approval.token, callId: approval.callId, signal: cancellation.signal,
+    })
+    assert.equal(result.failure.code, 'CELL_CREATE_CLEANUP_FAILED')
+    assert.equal(result.failure.retainedRoot, '/tmp/sample-retained-provider')
+    assert.equal(result.failure.providerId, 'wsl2-bubblewrap')
+    assert.equal(result.cleanup.requiresCellDiscard, false)
+    assert.equal(result.cleanup.cellDisposed, false)
+    assert.equal(result.cleanup.capacityReleased, false)
+    assert.deepEqual(deriveNextActions({ operation: 'cell-run', report: result }).map((item) => item.id), ['cell.preserve-apply-recovery'])
+    await assert.rejects(f.controller.discard({ planDigest: plan.planDigest }, { agent: f.owner }), { code: 'CELL_CREATE_CLEANUP_FAILED' })
+    await assert.rejects(f.controller.disposeOwner(f.owner), { code: 'CELL_OWNER_CLEANUP_FAILED' })
+    await assert.rejects(makePlan(f), { code: 'CELL_WORKFLOW_CAPACITY' })
+    assert.equal(f.controller.status().phase, 'cleanup-failed')
+  })
+}
