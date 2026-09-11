@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -38,13 +38,13 @@ function fakeRuntime() {
 }
 
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), 'dsh-developer-test-'))
+  const root = await mkdtemp(join(await realpath(tmpdir()), 'dsh-developer-test-'))
   const source = join(root, 'creator.json')
   await writeFile(source, JSON.stringify(draft(), null, 2) + '\n', 'utf8')
   return { root, source, output: join(root, 'promoted-plugin') }
 }
 
-test('promotes through a fresh final gate and commits one new directory', { skip: process.platform !== 'win32' }, async () => {
+test('promotes through a fresh final gate and commits one new directory', { skip: !['win32', 'darwin', 'linux'].includes(process.platform) }, async () => {
   const value = await fixture()
   try {
     const result = await promoteCreatorExport(value.source, value.output, fakeRuntime())
@@ -77,8 +77,8 @@ test('never replaces an existing destination', async () => {
   }
 })
 
-test('rejects an output path that traverses a junction ancestor', { skip: process.platform !== 'win32' }, async () => {
-  const root = await mkdtemp(join(tmpdir(), 'dsh-developer-junction-test-'))
+test('rejects an output path that traverses a junction ancestor', { skip: !['win32', 'darwin', 'linux'].includes(process.platform) }, async () => {
+  const root = await mkdtemp(join(await realpath(tmpdir()), 'dsh-developer-junction-test-'))
   const target = join(root, 'physical-parent')
   const targetChild = join(target, 'ordinary-child')
   const alias = join(root, 'junction-alias')
@@ -96,7 +96,7 @@ test('rejects an output path that traverses a junction ancestor', { skip: proces
   }
 })
 
-test('retains identified staging when the final gate fails', { skip: process.platform !== 'win32' }, async () => {
+test('retains identified staging when the final gate fails', { skip: !['win32', 'darwin', 'linux'].includes(process.platform) }, async () => {
   const value = await fixture()
   try {
     let failure
@@ -119,7 +119,7 @@ test('retains identified staging when the final gate fails', { skip: process.pla
   }
 })
 
-test('cancellation retains staging and schedules no later lifecycle work', { skip: process.platform !== 'win32' }, async () => {
+test('cancellation retains staging and schedules no later lifecycle work', { skip: !['win32', 'darwin', 'linux'].includes(process.platform) }, async () => {
   const value = await fixture()
   const controller = new AbortController()
   let lifecycleCalls = 0
@@ -150,7 +150,7 @@ test('cancellation retains staging and schedules no later lifecycle work', { ski
   }
 })
 
-test('a verifier mutation fails before commit and leaves staging', { skip: process.platform !== 'win32' }, async () => {
+test('a verifier mutation fails before commit and leaves staging', { skip: !['win32', 'darwin', 'linux'].includes(process.platform) }, async () => {
   const value = await fixture()
   let failure
   try {
@@ -176,7 +176,7 @@ test('a verifier mutation fails before commit and leaves staging', { skip: proce
   }
 })
 
-test('reports an ambiguous terminal state when observation fails after commit', { skip: process.platform !== 'win32' }, async () => {
+test('reports an ambiguous terminal state when observation fails after commit', { skip: !['win32', 'darwin', 'linux'].includes(process.platform) }, async () => {
   const value = await fixture()
   let failure
   try {

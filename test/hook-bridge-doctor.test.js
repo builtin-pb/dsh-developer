@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { link, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { link, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
@@ -25,7 +25,7 @@ async function putJson(path, value) {
 }
 
 async function makeLane(t, { dialect = 'codex', release = false } = {}) {
-  const root = await mkdtemp(join(tmpdir(), 'dsh-hook-doctor-'))
+  const root = await mkdtemp(join(await realpath(tmpdir()), 'sample-dsh-hook-doctor-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   const dshRoot = join(root, 'node_modules', '@deepseek-ai', 'dsh')
   const dshVersion = release ? '9.1.1-test-release' : '9.1.2-test-preview'
@@ -126,7 +126,7 @@ test('classifies the exact reviewed Codex subset without executing DSH, bridge, 
   }
   const first = await lane.inspect(config)
   const second = await lane.inspect(config)
-  assert.equal(first.ok, true)
+  assert.equal(first.ok, true, JSON.stringify(first))
   assert.equal(first.lane.status, 'reviewed-partial')
   assert.equal(first.lane.activation, 'not-inspected')
   assert.equal(first.config.totals.runnable, 5)
@@ -279,6 +279,15 @@ test('keeps changed bridge bytes unclassified and does not read config afterward
   const boundary = withNextActions(report, { operation: 'hook-doctor', report })
   assert.deepEqual(boundary.nextActions.map((value) => value.id), ['dsh.select-reviewed-lane'])
   assert.doesNotMatch(JSON.stringify(boundary.nextActions), /doctor\.resolve-blocker|repair-doctor-blocker/u)
+})
+
+test('does not certify hook absence when a local bridge installation is incomplete', async t => {
+  const lane = await makeLane(t, { release: true })
+  await mkdir(join(lane.dshRoot, 'node_modules', '@deepseek-ai', 'dsh-hooks-codex'), { recursive: true })
+  const report = await lane.inspect(undefined, { source: join(lane.root, 'missing-and-unread.json') })
+  assert.equal(report.lane.status, 'unreviewed')
+  assert.equal(report.source.status, 'not-read')
+  assert.equal(report.checks[0].evidence.code, 'DSH_PACKAGE_INVALID')
 })
 
 test('reseals the complete package set against cross-file mutation', async (t) => {

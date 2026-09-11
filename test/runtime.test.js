@@ -1,9 +1,104 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
 import test from 'node:test'
-import { resolveDshInvocation, runBounded, secretFreeEnvironment, smokeDshInstall } from '../lib/runtime.js'
+import { assertOfficialDshInvocation } from '../lib/dsh-installation.js'
+import { resolveDshInvocation, runBounded, runDsh, secretFreeEnvironment, smokeDshInstall } from '../lib/runtime.js'
+
+test('retains a bounded log tail without terminating a long-lived command', async () => {
+  const report = await runBounded(process.execPath, ['-e', "process.stdout.write('x'.repeat(2048) + 'finished')"], {
+    outputLimit: 64, outputMode: 'tail', timeoutMs: 0,
+  })
+  assert.equal(report.exitCode, 0)
+  assert.equal(report.stdout.length, 64)
+  assert.ok(report.stdout.endsWith('finished'))
+})
+
+test('runDsh reports child exit before inherited stdio closes and still drains descendant output', {
+  timeout: 10_000,
+}, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-runtime-exit-'))
+  const pidPath = join(root, 'descendant.pid')
+  const leaderPidPath = join(root, 'leader.pid')
+  const releasePath = join(root, 'release')
+  const controller = new AbortController()
+  const descendantCode = `
+    const { existsSync, writeFileSync } = require('node:fs');
+    writeFileSync(process.argv[1], String(process.pid));
+    const timer = setInterval(() => {
+      if (!existsSync(process.argv[2])) return;
+      clearInterval(timer);
+      process.stdout.write('descendant tail\\n', () => {
+        process.stderr.write('descendant stderr\\n', () => process.exit(0));
+      });
+    }, 10);
+    process.send('ready');
+  `
+  const childCode = `
+    const { spawn } = require('node:child_process');
+    require('node:fs').writeFileSync(process.argv[3], String(process.pid));
+    const descendant = spawn(process.execPath,
+      ['-e', ${JSON.stringify(descendantCode)}, process.argv[1], process.argv[2]],
+      { stdio: ['ignore', 'inherit', 'inherit', 'ipc'] });
+    descendant.once('message', () => {
+      process.stdout.write('leader\\n', () => process.exit(0));
+    });
+  `
+  let notifyExit
+  const exited = new Promise(resolve => { notifyExit = resolve })
+  let settled = false
+  let drained = false
+  const notifications = []
+  const running = runDsh({ command: process.execPath, prefixArgs: ['-e', childCode] }, [pidPath, releasePath, leaderPidPath], {
+    signal: controller.signal,
+    timeoutMs: 5_000,
+    onExit: exit => { notifications.push(exit); notifyExit(exit) },
+  })
+  // Observe rejections immediately, including a timeout if the exit hook regresses.
+  const completed = running.then(value => { settled = true; return value }, error => { settled = true; throw error })
+  try {
+    const exit = await Promise.race([
+      exited,
+      completed.then(() => { throw new Error('Runner completed without an early exit notification.') }),
+    ])
+    const leaderPid = Number(await readFile(leaderPidPath, 'utf8'))
+    assert.ok(Number.isSafeInteger(leaderPid) && leaderPid > 0)
+    assert.deepEqual(exit, { code: 0, signal: null, pid: leaderPid })
+    assert.equal(settled, false, 'runner must still wait for the descendant-held pipes')
+    const descendantPid = Number(await readFile(pidPath, 'utf8'))
+    assert.ok(Number.isSafeInteger(descendantPid) && descendantPid > 0)
+    process.kill(descendantPid, 0)
+    await writeFile(releasePath, '')
+    const report = await completed
+    drained = true
+    assert.deepEqual(report, {
+      stdout: 'leader\ndescendant tail\n', stderr: 'descendant stderr\n', exitCode: 0,
+    })
+    assert.deepEqual(notifications, [{ code: 0, signal: null, pid: leaderPid }])
+  } finally {
+    if (!drained) {
+      controller.abort()
+      // The leader may already be gone, so also clean up the known descendant
+      // directly on platforms where tree termination cannot find that leader.
+      const descendantPid = Number(await readFile(pidPath, 'utf8').catch(() => ''))
+      if (Number.isSafeInteger(descendantPid) && descendantPid > 0) {
+        try { process.kill(descendantPid, 'SIGKILL') } catch (error) { if (error.code !== 'ESRCH') throw error }
+      }
+    }
+    await completed.catch(() => {})
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('contains synchronous exit callback failures without escaping the runner', async () => {
+  let calls = 0
+  await assert.rejects(runBounded(process.execPath, ['-e', "process.stdout.write('output before exit')"], {
+    timeoutMs: 5_000,
+    onExit: () => { calls += 1; throw new Error('private callback details') },
+  }), error => error.code === 'COMMAND_EXIT_CALLBACK_FAILED' && !error.message.includes('private callback details'))
+  assert.equal(calls, 1)
+})
 
 test('passes only an explicit non-credential host environment allowlist', () => {
   const previousSecret = process.env.DEEPSEEK_API_KEY
@@ -113,9 +208,58 @@ test('resolves a pnpm local-bin DSH wrapper to the official package entry', asyn
     await writeFile(entry, '', 'utf8')
     const invocation = await resolveDshInvocation(wrapper)
     assert.equal(invocation.command, process.execPath)
-    assert.deepEqual(invocation.prefixArgs, [entry])
+    assert.deepEqual(invocation.prefixArgs, [await realpath(entry)])
     assert.equal(invocation.displayPath, wrapper)
   } finally {
     await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('resolves POSIX npm symlinks and pnpm wrappers to inspectable official entries', {
+  skip: process.platform === 'win32',
+}, async (t) => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-posix-')))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const packageRoot = join(root, 'node_modules', '@deepseek-ai', 'dsh')
+  const entry = join(packageRoot, 'lib', 'bin.js')
+  await mkdir(dirname(entry), { recursive: true })
+  await writeFile(entry, '#!/usr/bin/env node\n', { mode: 0o755 })
+  await writeFile(join(packageRoot, 'package.json'), JSON.stringify({
+    name: '@deepseek-ai/dsh', publishConfig: { access: 'public' }, bin: { dsh: 'lib/bin.js' },
+  }))
+  const npmBin = join(root, 'bin', 'dsh')
+  const pnpmBin = join(root, 'node_modules', '.bin', 'dsh')
+  await mkdir(dirname(npmBin), { recursive: true })
+  await mkdir(dirname(pnpmBin), { recursive: true })
+  await symlink(entry, npmBin)
+  await writeFile(pnpmBin, '#!/bin/sh\nexit 99\n', { mode: 0o755 })
+  for (const path of [npmBin, pnpmBin, entry]) {
+    const invocation = await resolveDshInvocation(path)
+    assert.equal(invocation.command, process.execPath)
+    assert.deepEqual(invocation.prefixArgs, [entry])
+    assert.equal(invocation.displayPath, path)
+    assert.equal((await assertOfficialDshInvocation(invocation)).root, packageRoot)
+  }
+
+  const badBin = join(root, 'bad', 'dsh')
+  await mkdir(dirname(badBin))
+  await writeFile(badBin, '#!/bin/sh\nexit 99\n')
+  await chmod(badBin, 0o644)
+  const previousPath = process.env.PATH
+  const previousDsh = process.env.DSH_DEVELOPER_DSH
+  try {
+    delete process.env.DSH_DEVELOPER_DSH
+    process.env.PATH = [dirname(badBin), dirname(npmBin)].join(delimiter)
+    assert.deepEqual((await resolveDshInvocation()).prefixArgs, [entry])
+    await rm(badBin)
+    await symlink(join(root, 'missing'), badBin)
+    assert.deepEqual((await resolveDshInvocation()).prefixArgs, [entry])
+    process.env.PATH = dirname(badBin)
+    await assert.rejects(resolveDshInvocation(), { code: 'DSH_NOT_FOUND' })
+  } finally {
+    if (previousPath === undefined) delete process.env.PATH
+    else process.env.PATH = previousPath
+    if (previousDsh === undefined) delete process.env.DSH_DEVELOPER_DSH
+    else process.env.DSH_DEVELOPER_DSH = previousDsh
   }
 })

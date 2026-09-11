@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import {
   CLIENT_BUNDLE_PLATFORM_MODULES,
@@ -268,4 +269,52 @@ test('decodes quoted service names and scans executable template expressions', (
   const result = inspectClientBundle(new Map([['lib/client.js', source]]), manifest())
   assert.deepEqual(result.providedServices, ['chatFileMentions'])
   assert.equal(result.coreServiceCollisions.length, 1)
+})
+
+function methodBundle(body = 'return {}') {
+  return 'window.__ModuleLoader__.load({ id: "client-fixture", factory(require) { ' + body + ' } })\n'
+}
+
+test('accepts the shipped compiled object-method factory registration', async () => {
+  const source = await readFile(new URL('../examples/session-status/lib/client.js', import.meta.url), 'utf8')
+  const result = inspectClientBundle(new Map([['lib/client.js', source]]), {
+    name: 'dsh-session-status',
+    exports: { './client': './lib/client.js' },
+    dsh: { client: { platform: 'web' } },
+  })
+  assert.equal(result.registrationId, 'dsh-session-status')
+  assert.deepEqual(result.requests, ['react/jsx-runtime'])
+  assert.deepEqual(result.dynamicRequests, [])
+  assert.equal(result.repositoryCodeExecuted, false)
+})
+
+test('accepts object-method factory shorthand and still scans its body', () => {
+  const result = inspectClientBundle(
+    new Map([['lib/client.js', methodBundle('const React = require("react"); return { React }')]]),
+    manifest(),
+  )
+  assert.equal(result.registrationId, 'client-fixture')
+  assert.deepEqual(result.requests, ['react'])
+  assert.equal(result.validation, 'static-classic-script')
+})
+
+test('rejects unsafe, dynamic, and duplicate object-method factory registrations', () => {
+  assert.throws(
+    () => inspectClientBundle(new Map([['lib/client.js', methodBundle('return require(someModule)')]]), manifest()),
+    (error) => error.code === 'CLIENT_BUNDLE_DYNAMIC_REQUEST',
+  )
+  assert.throws(
+    () => inspectClientBundle(new Map([['lib/client.js', methodBundle('return require("node:fs")')]]), manifest()),
+    (error) => error.code === 'CLIENT_BUNDLE_UNSAFE_IMPORT' && error.details.requests[0] === 'node:fs',
+  )
+  assert.throws(
+    () => inspectClientBundle(new Map([['lib/client.js', methodBundle() + methodBundle()]]), manifest()),
+    (error) => error.code === 'CLIENT_BUNDLE_REGISTRATION_INVALID'
+      && error.details.observed.length === 2,
+  )
+  assert.throws(
+    () => inspectClientBundle(new Map([['lib/client.js', 'window.__ModuleLoader__.load({ id: "client-fixture" })\n']]), manifest()),
+    (error) => error.code === 'CLIENT_BUNDLE_REGISTRATION_INVALID'
+      && error.details.observed.length === 0,
+  )
 })

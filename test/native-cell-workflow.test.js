@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { link, lstat, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, unlink, writeFile } from 'node:fs/promises'
+import { chmod, link, lstat, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import test from 'node:test'
@@ -164,7 +164,8 @@ async function writeFixtureTree(root, files) {
 }
 
 async function makeStagedWorkflow(options = {}) {
-  const source = options.source ?? await mkdtemp(join(tmpdir(), 'dsh-cell-owned-stage-source-'))
+  // Physical, explicitly sample paths avoid macOS temp aliases and entropy false positives.
+  const source = options.source ?? await mkdtemp(join(await realpath(tmpdir()), 'sample-dsh-cell-owned-stage-source-'))
   if (options.source !== undefined) await mkdir(source, { recursive: true })
   await writeFixtureTree(source, options.sourceFiles ?? {})
   const sourceFingerprint = (await scanOrdinaryTree(source)).fingerprint
@@ -686,7 +687,7 @@ test('cancellation while opening or staging reaches owned cleanup and never sche
 
 test('retains and poisons capacity on stage replacement, disappearance, and rename-away until verified discard', async () => {
   async function stagedFixture() {
-    const source = await mkdtemp(join(tmpdir(), 'dsh-cell-workflow-source-'))
+    const source = await mkdtemp(join(await realpath(tmpdir()), 'sample-dsh-cell-workflow-source-'))
     const sourceFingerprint = fingerprintFileMap(new Map())
     const owner = agent('stage-owner')
     const f = fixture({
@@ -748,6 +749,8 @@ test('retains and poisons capacity on stage replacement, disappearance, and rena
   try {
     const { plan, run } = await runStaged(replaced)
     replacedRoot = run.staging.root
+    // Deliberately bypass the owned seal to exercise identity-tampering detection.
+    await chmod(replacedRoot, 0o700)
     await rm(replacedRoot, { recursive: true, force: true })
     await mkdir(replacedRoot)
     await assert.rejects(
@@ -766,6 +769,7 @@ test('retains and poisons capacity on stage replacement, disappearance, and rena
   try {
     const { plan, run } = await runStaged(missing)
     missingRoot = run.staging.root
+    await chmod(missingRoot, 0o700)
     await rm(missingRoot, { recursive: true, force: true })
     await assert.rejects(
       missing.f.controller.discard({ planDigest: plan.planDigest }, { agent: missing.f.owner }),
@@ -785,6 +789,7 @@ test('retains and poisons capacity on stage replacement, disappearance, and rena
   try {
     const { plan, run } = await runStaged(moved)
     movedRoot = run.staging.root
+    await chmod(movedRoot, 0o700)
     movedAway = movedRoot + '-renamed'
     await rename(movedRoot, movedAway)
     await assert.rejects(
@@ -812,7 +817,7 @@ test('retains and poisons capacity on stage replacement, disappearance, and rena
 })
 
 test('rejects unowned prefix stages and malformed minted paths or fingerprints without deleting external directories', async () => {
-  const external = await mkdtemp(join(tmpdir(), '.dsh-developer-cell-authority-external-'))
+  const external = await mkdtemp(join(await realpath(tmpdir()), '.dsh-developer-cell-authority-external-'))
   await writeFile(join(external, 'sentinel.txt'), 'external\n', 'utf8')
   try {
     const unowned = fixture()
@@ -837,7 +842,7 @@ test('rejects unowned prefix stages and malformed minted paths or fingerprints w
     assert.equal((await lstat(join(external, 'sentinel.txt'))).isFile(), true)
 
     for (const mode of ['alias', 'fingerprint']) {
-      const source = await mkdtemp(join(tmpdir(), 'dsh-cell-malformed-stage-source-'))
+      const source = await mkdtemp(join(await realpath(tmpdir()), 'sample-dsh-cell-malformed-stage-source-'))
       const sourceFingerprint = fingerprintFileMap(new Map())
       const owner = agent('malformed-' + mode)
       const value = fixture({
@@ -894,7 +899,7 @@ test('rejects unowned prefix stages and malformed minted paths or fingerprints w
 })
 
 test('mints retained staging physically outside the runtime-owned real-profile fence', async () => {
-  const profile = await mkdtemp(join(tmpdir(), 'dsh-cell-real-profile-'))
+  const profile = await mkdtemp(join(await realpath(tmpdir()), 'sample-dsh-cell-real-profile-'))
   await writeFile(join(profile, 'sentinel.txt'), 'real profile\n', 'utf8')
   const workflow = await makeStagedWorkflow({
     getProfileDirectory: () => profile,
@@ -915,7 +920,7 @@ test('mints retained staging physically outside the runtime-owned real-profile f
 })
 
 test('detects a barrier-controlled quarantine ancestor swap and never deletes the junction target', async () => {
-  const external = await mkdtemp(join(tmpdir(), 'dsh-cell-external-sentinel-'))
+  const external = await mkdtemp(join(await realpath(tmpdir()), 'sample-dsh-cell-external-sentinel-'))
   await writeFile(join(external, 'sentinel.txt'), 'must survive\n', 'utf8')
   let swapped = false
   let movedAnchor
@@ -1151,7 +1156,7 @@ test('restores same-identity external content drift in place before verifying ro
 })
 
 test('does not mistake a high-entropy workspace suffix for a credential but blocks explicit token paths', async () => {
-  const safeParent = await mkdtemp(join(tmpdir(), 'dsh-cell-approval-path-'))
+  const safeParent = await mkdtemp(join(await realpath(tmpdir()), 'sample-dsh-cell-approval-path-'))
   const safe = await makeStagedWorkflow({
     source: join(safeParent, ['dsh', 'developer', 'native', 'journey', 'source', 'X8SJG3'].join('-')),
   })
@@ -1165,7 +1170,7 @@ test('does not mistake a high-entropy workspace suffix for a credential but bloc
     await rm(safeParent, { recursive: true, force: true })
   }
 
-  const secretParent = await mkdtemp(join(tmpdir(), 'dsh-cell-approval-secret-'))
+  const secretParent = await mkdtemp(join(await realpath(tmpdir()), 'sample-dsh-cell-approval-secret-'))
   const secret = await makeStagedWorkflow({
     source: join(secretParent, ['sk', '-', 'abcdefghijklmnop', 'SECRET'].join('')),
   })
@@ -1176,6 +1181,7 @@ test('does not mistake a high-entropy workspace suffix for a credential but bloc
     assert.equal(approval.decision.kind, 'deny')
     assert.match(approval.decision.reason, /CELL_APPLY_APPROVAL_SECRET/u)
   } finally {
+    await chmod(secret.run.staging.root, 0o700)
     await rm(secret.run.staging.root, { recursive: true, force: true })
     await rm(secretParent, { recursive: true, force: true })
   }
@@ -1408,13 +1414,14 @@ test('preserves post-commit integrity failure when caller cancellation races cle
     assert.equal(result.cleanup.capacityReleased, false)
   } finally {
     if (transactionRoot !== undefined) await rm(transactionRoot, { recursive: true, force: true })
+    await chmod(workflow.run.staging.root, 0o700)
     await rm(workflow.run.staging.root, { recursive: true, force: true })
     await rm(workflow.source, { recursive: true, force: true })
   }
 })
 
 test('rejects a hardlink-swapped candidate and verifies rollback before cleanup', async () => {
-  const externalRoot = await mkdtemp(join(tmpdir(), 'dsh-cell-apply-hardlink-'))
+  const externalRoot = await mkdtemp(join(await realpath(tmpdir()), 'sample-dsh-cell-apply-hardlink-'))
   const external = join(externalRoot, 'external.txt')
   await writeFile(external, 'sealed\n', 'utf8')
   let swapped = false
@@ -1462,7 +1469,7 @@ test('rejects a hardlink-swapped candidate and verifies rollback before cleanup'
 })
 
 test('never claims rollback after a source hardlink race changes physical identity', async () => {
-  const externalRoot = await mkdtemp(join(tmpdir(), 'dsh-cell-source-hardlink-'))
+  const externalRoot = await mkdtemp(join(await realpath(tmpdir()), 'sample-dsh-cell-source-hardlink-'))
   const external = join(externalRoot, 'held-link.txt')
   let linked = false
   const workflow = await makeStagedWorkflow({
@@ -1504,13 +1511,14 @@ test('never claims rollback after a source hardlink race changes physical identi
   } finally {
     await rm(externalRoot, { recursive: true, force: true })
     if (retainedTransaction !== undefined) await rm(retainedTransaction, { recursive: true, force: true })
+    await chmod(workflow.run.staging.root, 0o700)
     await rm(workflow.run.staging.root, { recursive: true, force: true })
     await rm(workflow.source, { recursive: true, force: true })
   }
 })
 
 test('blocks a fresh controller while a crash-recovery transaction remains beside source', async () => {
-  const parent = await mkdtemp(join(tmpdir(), 'dsh-cell-orphan-recovery-'))
+  const parent = await mkdtemp(join(await realpath(tmpdir()), 'sample-dsh-cell-orphan-recovery-'))
   const source = join(parent, 'source')
   const orphan = join(parent, '.dsh-developer-cell-apply-crash-evidence')
   await mkdir(source)
@@ -1597,7 +1605,7 @@ test('owner disposal during Apply aborts mutation, rolls back, and releases capa
 })
 
 test('live workspace authority rejects missing, child, relative, and junction-marked contexts without cwd fallback', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'dsh-cell-authority-'))
+  const root = await mkdtemp(join(await realpath(tmpdir()), 'sample-dsh-cell-authority-'))
   try {
     const top = { ctx: {}, session: { header: { id: 'top', cwd: root, origin: 'user', delegationDepth: 0 } } }
     const workspace = await inspectLiveAgentWorkspace(top, { isRootAgent: (candidate) => candidate === top })

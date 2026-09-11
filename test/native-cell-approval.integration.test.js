@@ -3,7 +3,9 @@ import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import test from 'node:test'
+import { DshDeveloperError } from '../lib/errors.js'
 import { inspectLiveAgentWorkspace } from '../lib/native-cell-workflow.js'
+import { createNativeToolDefinition } from '../lib/native-tool-internal.js'
 
 const lanes = [
   ['release', process.env.DSH_DEVELOPER_RELEASE_TOOLS_ROOT, '0.1.1-rc.2'],
@@ -15,6 +17,72 @@ async function importFrom(requireFromLane, name) {
 }
 
 for (const [lane, root, expectedVersion] of lanes) {
+  test('exact ' + lane + ' registry renders native cell approval denial without executing the body', {
+    skip: root === undefined ? 'set the exact tools package root to exercise this installed lane' : false,
+  }, async (t) => {
+    const manifest = join(root, 'package.json')
+    const requireFromLane = createRequire(manifest)
+    assert.equal(requireFromLane(manifest).version, expectedVersion)
+    const [{ Context }, { default: SystemPrompt }, { default: ToolRuntime }] = await Promise.all([
+      importFrom(requireFromLane, '@deepseek-ai/cordis'),
+      importFrom(requireFromLane, '@deepseek-ai/dsh-system-prompt'),
+      importFrom(requireFromLane, '@deepseek-ai/dsh-tools'),
+    ])
+    const ctx = new Context()
+    t.after(() => ctx.fiber.dispose())
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    let answer = 'rejected'
+    let bodies = 0
+    ctx.provide('approval', { request: async () => answer })
+    ctx.on('tools/pre-execute', async () => ({ kind: 'ask', reason: 'Review this test call once.' }))
+    ctx.tools.register(createNativeToolDefinition(async (input) => {
+      bodies += 1
+      if (input.operation === 'cell-run') {
+        throw new DshDeveloperError('CELL_APPROVAL_GATE_UNAVAILABLE', 'Missing controller approval proof.')
+      }
+      return { operation: input.operation, ok: true, report: { ok: true, source: 'plugin', checks: [] } }
+    }))
+    const agent = { session: { header: { id: lane + '-native-denial' } } }
+    let callId = 0
+    const execute = (args) => ctx.tools.execute({
+      callId: lane + '-native-denial-' + (++callId), name: 'dsh_developer', arguments: args,
+      agent, signal: new AbortController().signal,
+    })
+    const planDigest = 'sha256:' + 'a'.repeat(64)
+    for (const operation of ['cell-run', 'cell-apply']) {
+      for (const outcome of ['rejected', 'cancelled', 'unavailable']) {
+        answer = outcome
+        const result = await execute({ operation, planDigest })
+        assert.equal(result.isError, true, outcome)
+        assert.equal(bodies, 0, 'approval denial must bypass the body and its execute catch path')
+        assert.equal(result.content.length, 2)
+        assert.equal(result.content[0].text, 'Error: ' + result.error.message)
+        assert.match(result.content[1].text, /Next action \[cell\.stop-after-approval-denial\]/u)
+        assert.ok(result.content[1].text.includes('Stop without executing or retrying ' + operation))
+        assert.equal(result.value, undefined, 'finalization must preserve the registry error outcome')
+      }
+    }
+    answer = 'allowed-once'
+    const success = await execute({ operation: 'doctor', source: 'plugin' })
+    assert.equal(success.isError, false)
+    assert.equal(success.value.ok, true)
+    assert.deepEqual(success.value.nextActions, [])
+    assert.equal(success.content.length, 1)
+    assert.equal(bodies, 1)
+
+    // Body failures already return canonical recovery evidence; the finalizer must not duplicate it.
+    const failure = await execute({ operation: 'cell-run', planDigest })
+    assert.equal(failure.isError, false)
+    assert.equal(failure.value.ok, false)
+    assert.equal(failure.value.report.diagnostic.code, 'CELL_APPROVAL_GATE_UNAVAILABLE')
+    assert.equal(failure.value.nextActions[0].id, 'cell.stop-after-approval-denial')
+    assert.equal(failure.value.nextActions.filter(action => action.id === 'cell.stop-after-approval-denial').length, 1)
+    assert.equal(failure.content.length, 1)
+    assert.equal((failure.content[0].text.match(/Next action \[/gu) ?? []).length, 1)
+    assert.equal(bodies, 2)
+  })
+
   test('exact ' + lane + ' DSH tools contract enforces audited allowed-once before handler execution', {
     skip: root === undefined ? 'set the exact tools package root to exercise this installed lane' : false,
   }, async () => {

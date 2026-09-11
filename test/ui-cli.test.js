@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import test from 'node:test'
 import {
+  formatUiCliReport,
   parseUiCliInput,
   resolveUiCliConfiguration,
   UiCliController,
@@ -12,8 +13,17 @@ import {
 } from '../lib/ui-cli-internal.js'
 import { createUiCliController } from '../lib/ui-cli.js'
 import { createUiCliToolDefinition, hasUiCliTool } from '../lib/ui-cli-tool.js'
+import { findSecrets } from '../lib/security.js'
 
 test('keeps the safe UI action vocabulary closed and credential-free', () => {
+  const home = '/private/var/folders/ab/ExampleOsGeneratedDirectoryWith123/T/dsh-developer-dev-AbCd12'
+  assert.deepEqual(parseUiCliInput({ operation: 'open', developmentServer: home }), { operation: 'open', developmentServer: home })
+  for (const value of [
+    { operation: 'open' },
+    { operation: 'open', url: 'about:blank', developmentServer: home },
+    { operation: 'navigate', developmentServer: home },
+    { operation: 'open', developmentServer: 'relative' },
+  ]) assert.throws(() => parseUiCliInput(value), { code: 'UI_INPUT_INVALID' })
   assert.deepEqual(parseUiCliInput({
     operation: 'fill',
     target: 'e12',
@@ -52,6 +62,12 @@ test('keeps the safe UI action vocabulary closed and credential-free', () => {
     () => parseUiCliInput({ operation: 'open', url: 'about:blank', headed: true }),
     (error) => error.code === 'UI_INPUT_INVALID' && /does not accept headed/u.test(error.message),
   )
+})
+
+test('find and log results reach the rendered tool content', () => {
+  const rendered = formatUiCliReport({ operation: 'find', session: { digest: 'sha256:' + 'a'.repeat(64) },
+    evidenceDigest: 'sha256:' + 'b'.repeat(64), result: { provider: { result: 'Found 1 match: button Continue [ref=e15]' } } })
+  assert.match(rendered, /UNTRUSTED PAGE DATA\nFound 1 match: button Continue \[ref=e15\]/u)
 })
 
 test('derives stable opaque browser ownership from the caller session', () => {
@@ -105,8 +121,12 @@ test('pins the configured upstream CLI package before returning a runtime config
   }
 })
 
-test('treats every UI environment field as configuration and rejects partial setup', async () => {
-  const partial = { DSH_DEVELOPER_UI_CLI_ROOT: 'C:\\ui-state' }
+test('treats every UI environment field as configuration and rejects partial setup', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-ui-absent-config-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const absent = { DSH_DEVELOPER_UI_CONFIG: join(root, 'absent.json') }
+  await assert.rejects(resolveUiCliConfiguration(absent), { code: 'UI_CLI_NOT_CONFIGURED' })
+  const partial = { ...absent, DSH_DEVELOPER_UI_CLI_ROOT: join(root, 'runtime') }
   assert.equal(uiCliConfigurationRequested(partial), true)
   await assert.rejects(
     resolveUiCliConfiguration(partial),
@@ -151,12 +171,15 @@ test('maps safe actions to argv-only Playwright CLI calls with bounded artifacts
     const outputDir = options.env.PLAYWRIGHT_MCP_OUTPUT_DIR
     if (operation === 'open') {
       open = true
-      await writeFile(join(outputDir, 'page-open.yml'), '- heading "UI" [ref=e1]\n', 'utf8')
+      const filename = 'page-2026-09-11T00-24-44-895Z.yml'
+      const artifactPath = relative(root, join(outputDir, filename))
+      assert.deepEqual(findSecrets(artifactPath), ['high-entropy-token'])
+      await writeFile(join(outputDir, filename), '- heading "UI" [ref=e1]\n', 'utf8')
       return {
         stdout: JSON.stringify({
           session: internalSession,
           pid: 99,
-          result: { snapshot: { file: relative(root, join(outputDir, 'page-open.yml')) } },
+          result: { snapshot: { file: artifactPath } },
         }),
         stderr: '',
         exitCode: 0,
@@ -177,7 +200,7 @@ test('maps safe actions to argv-only Playwright CLI calls with bounded artifacts
       }
     }
     if (operation === 'screenshot') {
-      const filename = 'page-witness.png'
+      const filename = 'page-2026-09-11T00-24-44-895Z.png'
       await writeFile(join(outputDir, filename), Buffer.from([137, 80, 78, 71]))
       return {
         stdout: JSON.stringify({
@@ -243,6 +266,47 @@ test('maps safe actions to argv-only Playwright CLI calls with bounded artifacts
   }
 })
 
+test('verified artifact paths do not hide credentials or allow evidence-directory escapes', async t => {
+  const secret = ['sk-', '0123456789abcdef0123456789abcdef'].join('')
+  for (const [kind, expected] of [['provider-content', 'SECRET_DETECTED'], ['snapshot-content', 'SECRET_DETECTED'],
+    ['filename', 'SECRET_DETECTED'], ['directory-name', 'SECRET_DETECTED'], ['outside-directory', 'UI_ARTIFACT_INVALID'],
+    ['normalized-away-secret', 'UI_ARTIFACT_INVALID'], ['screenshot-normalized-away-secret', 'UI_ARTIFACT_INVALID']]) {
+    await t.test(kind, async t => {
+      const temporary = await mkdtemp(join(tmpdir(), 'dsh-ui-artifact-boundary-'))
+      t.after(() => rm(temporary, { recursive: true, force: true }))
+      const root = kind === 'directory-name' ? join(temporary, secret) : temporary
+      const evidenceRoot = join(root, 'evidence')
+      await mkdir(evidenceRoot, { recursive: true })
+      let closed = false
+      const controller = new UiCliController({ entry: '/unused/playwright-cli.js', browser: '/unused/browser',
+        root, evidenceRoot, provider: '@playwright/cli', providerVersion: '0.1.18' }, {
+        runBounded: async (_command, args, options) => {
+          const action = args[2]
+          if (action === 'close') {
+            closed = true
+            return { stdout: '{"status":"closed"}', stderr: '', exitCode: 0 }
+          }
+          const filename = kind === 'filename' ? secret + '.yml' : 'page-2026-09-11T00-24-44-895Z.yml'
+          const file = join(options.env.PLAYWRIGHT_MCP_OUTPUT_DIR, filename)
+          await writeFile(file, kind === 'snapshot-content' ? secret : '- heading "Safe"\n')
+          const reference = kind.includes('normalized-away')
+            ? relative(root, options.env.PLAYWRIGHT_MCP_OUTPUT_DIR) + '/' + secret + '/../' + filename
+            : kind === 'outside-directory' ? '../outside.yml' : relative(root, file)
+          const result = kind.startsWith('screenshot') ? { result: '- [Screenshot of viewport](' + reference + ')' }
+            : { snapshot: { file: reference }, ...(kind === 'provider-content' ? { note: secret } : {}) }
+          return { stdout: JSON.stringify(result), stderr: '', exitCode: 0 }
+        },
+      })
+      try {
+        await assert.rejects(controller.execute('native-ui-integration-agent', {
+          operation: kind.startsWith('screenshot') ? 'screenshot' : 'snapshot',
+        }), { code: expected })
+        assert.equal(closed, true, 'a rejected result closes its browser session')
+      } finally { await controller.dispose() }
+    })
+  }
+})
+
 test('binds the native UI tool to the calling DSH agent identity', async () => {
   const calls = []
   const definition = createUiCliToolDefinition({
@@ -278,4 +342,36 @@ test('binds the native UI tool to the calling DSH agent identity', async () => {
   assert.equal(calls[0].options.signal, signal)
   assert.equal(definition.isConcurrencySafe(), true)
   assert.ok(JSON.stringify(definition.parameters).length < 3_000)
+})
+
+test('diagnostic logs redact possible credentials without discarding the browser or useful lines', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-ui-logs-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const evidenceRoot = join(root, 'evidence')
+  await mkdir(evidenceRoot)
+  const secret = 'sk-' + 'aB7Cd9Ef'.repeat(4)
+  let closes = 0
+  const controller = new UiCliController({ root, evidenceRoot, entry: '/provider/playwright-cli.js',
+    browser: '/browser/chrome', provider: '@playwright/cli', providerVersion: '0.1.18', evidenceDigest: 'sha256:' + 'a'.repeat(64),
+  }, { runBounded: async (_command, args) => {
+    const operation = args[1] === 'list' ? 'list' : args[2]
+    if (operation === 'list') return { stdout: JSON.stringify({ browsers: [] }) }
+    if (operation === 'close') closes++
+    if (operation === 'requests' || operation === 'console') return { stdout: JSON.stringify({ result:
+      'Healthy local operation\nprivate value ' + secret + '\nOther useful diagnostic\n' }) }
+    return { stdout: JSON.stringify({ result: 'Found 1 match: button Continue [ref=e15]' }) }
+  } })
+  t.after(() => controller.dispose())
+  await controller.execute('log-witness', { operation: 'open', url: 'about:blank' })
+  for (const operation of ['requests', 'console']) {
+    const report = await controller.execute('log-witness', { operation })
+    const content = formatUiCliReport(report)
+    assert.equal(JSON.stringify(report).includes(secret), false)
+    assert.match(content, /Healthy local operation/u)
+    assert.match(content, /Other useful diagnostic/u)
+    assert.match(content, /\[redacted: possible credential\]/u)
+  }
+  assert.equal(closes, 0)
+  const found = await controller.execute('log-witness', { operation: 'find', text: 'Continue' })
+  assert.match(formatUiCliReport(found), /\[ref=e15\]/u)
 })

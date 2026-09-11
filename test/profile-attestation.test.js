@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
@@ -27,7 +27,7 @@ async function packageAt(root, value, entry = 'export function apply() {}\n', pa
 }
 
 async function fixture(version) {
-  const root = await mkdtemp(join(tmpdir(), 'dsh-profile-attestation-'))
+  const root = await mkdtemp(join(await realpath(tmpdir()), 'dsh-profile-attestation-'))
   const dsh = join(root, 'runtime', 'node_modules', '@deepseek-ai', 'dsh')
   const base = join(dsh, 'node_modules', '@deepseek-ai', 'dsh-base')
   await packageAt(dsh, {

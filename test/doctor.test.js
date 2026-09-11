@@ -758,7 +758,12 @@ test('reviews raw plugin-owned Web routes without blocking intentional public in
     assert.match(connectionCheck.message, /local absence is not a safety proof/u)
 
     await writeFile(join(root, 'index.js'), [
-      'export function apply(ctx) {',
+      "import './broken.js'",
+      'export function apply(ctx) {}',
+      '',
+    ].join('\n'), 'utf8')
+    await writeFile(join(root, 'broken.js'), [
+      'export function helper(ctx) {',
       '  const broken = ([)]',
       '}',
       '',
@@ -768,9 +773,89 @@ test('reviews raw plugin-owned Web routes without blocking intentional public in
       .find((candidate) => candidate.id === 'web.raw-route-auth')
     assert.equal(incompleteCheck.status, 'WARN')
     assert.equal(incompleteCheck.blocking, false)
-    assert.deepEqual(incompleteCheck.evidence.coverage.incompletePaths, ['index.js'])
+    assert.deepEqual(incompleteCheck.evidence.coverage.incompletePaths, ['broken.js'])
     assert.match(incompleteCheck.message, /not claiming clean route absence/u)
     assert.match(incompleteCheck.recovery, /Repair malformed or unsupported reachable source/u)
+  } finally {
+    await rm(parent, { recursive: true, force: true })
+  }
+})
+
+test('accepts the shipped compiled session-status example end to end', async () => {
+  const example = fileURLToPath(new URL('../examples/session-status/', import.meta.url))
+  const report = await doctorPlugin(example, { runtime: 'skip' })
+  assert.equal(report.ok, true, JSON.stringify(report.checks, null, 2))
+  const entrypoint = report.checks.find((check) => check.id === 'dsh.entrypoint')
+  assert.equal(entrypoint.status, 'PASS')
+  assert.equal(entrypoint.evidence.entryPath, 'lib/index.js')
+  assert.equal(entrypoint.evidence.mounted, true)
+  const client = report.checks.find((check) => check.id === 'web.client-bundle')
+  assert.equal(client.status, 'PASS')
+  assert.equal(client.evidence.registrationId, 'dsh-session-status')
+})
+
+test('recognizes compiled named apply exports and aliases without executing the entry', async () => {
+  const { parent, root } = await copiedOrdinaryFixture()
+  try {
+    const accepted = [
+      [
+        '// src/index.ts',
+        'var name = "ordinary-dsh-plugin";',
+        'function apply() {',
+        '}',
+        'export {',
+        '  apply,',
+        '  name',
+        '};',
+        '',
+      ].join('\n'),
+      [
+        'async function activate() {}',
+        'const name = "ordinary-dsh-plugin";',
+        'export { activate as apply, name };',
+        '',
+      ].join('\n'),
+      [
+        'const apply = async (ctx) => { void ctx };',
+        'export { apply };',
+        '',
+      ].join('\n'),
+      [
+        'var apply = function namedApply() {};',
+        'export { apply };',
+        '',
+      ].join('\n'),
+    ]
+    for (const entry of accepted) {
+      await writeFile(join(root, 'index.js'), entry, 'utf8')
+      const report = await doctorPlugin(root, { runtime: 'skip' })
+      const check = report.checks.find((value) => value.id === 'dsh.entrypoint')
+      assert.equal(check.status, 'PASS', entry + '\n' + JSON.stringify(check, null, 2))
+      assert.equal(check.evidence.mounted, true)
+    }
+
+    const rejected = [
+      'const apply = 42;\nexport { apply };\n',
+      'export { name };\nconst name = "ordinary-dsh-plugin";\n',
+      "export { apply } from './impl.js';\n",
+      'const apply = undefined;\nexport { activate as apply };\n',
+      'export { activate as apply };\n',
+      'export default function apply() {}\n',
+      '// function apply() {}\nexport { name };\nconst name = "ordinary-dsh-plugin";\n',
+      'const notice = "export function apply() {}";\nexport { notice as apply };\n',
+      'const inert = `function apply() {}`;\nexport { inert as apply };\n',
+      'function outer() { function apply() {} }\nexport { apply };\n',
+      'let apply = () => {};\napply = 42;\nexport { apply };\n',
+      'let apply = () => {};\nexport { apply };\napply = null;\n',
+    ]
+    await writeFile(join(root, 'impl.js'), 'export function apply() {}\n', 'utf8')
+    for (const entry of rejected) {
+      await writeFile(join(root, 'index.js'), entry, 'utf8')
+      const report = await doctorPlugin(root, { runtime: 'skip' })
+      const check = report.checks.find((value) => value.id === 'dsh.entrypoint')
+      assert.equal(check.status, 'FAIL', entry + '\n' + JSON.stringify(check, null, 2))
+      assert.equal(check.evidence.code, 'INVALID_DSH_ENTRY')
+    }
   } finally {
     await rm(parent, { recursive: true, force: true })
   }

@@ -679,7 +679,7 @@ test('approval denial finalization stops run and Apply without inventing executi
       content: [{ type: 'text', text: 'Error: rejected' }],
     }
     const content = definition.finalizeContent(
-      { operation, planDigest: DIGEST },
+      { name: 'dsh_developer', arguments: { operation, planDigest: DIGEST } },
       result,
     )
     assert.equal(content.length, 2)

@@ -1,0 +1,45 @@
+[
+  {
+    "tool": "check_package_version",
+    "arguments": { "version": "1.9.0", "range": "^1.2.0" },
+    "expected": { "version": "1.9.0", "range": "^1.2.0", "includePrerelease": false, "satisfies": true }
+  },
+  {
+    "tool": "check_package_version",
+    "arguments": { "version": "2.0.0", "range": "^1.2.0" },
+    "expected": { "version": "2.0.0", "range": "^1.2.0", "includePrerelease": false, "satisfies": false }
+  },
+  {
+    "tool": "check_package_version",
+    "arguments": { "version": "0.1.1-rc.2", "range": ">=0.1.1-rc.1 <0.2.0" },
+    "expected": { "version": "0.1.1-rc.2", "range": ">=0.1.1-rc.1 <0.2.0", "includePrerelease": false, "satisfies": true }
+  },
+  {
+    "tool": "check_package_version",
+    "arguments": { "version": "0.1.1-rc.2", "range": "*" },
+    "expected": { "version": "0.1.1-rc.2", "range": "*", "includePrerelease": false, "satisfies": false }
+  },
+  {
+    "tool": "check_package_version",
+    "arguments": { "version": "0.1.1-rc.2", "range": "*", "includePrerelease": true },
+    "expected": { "version": "0.1.1-rc.2", "range": "*", "includePrerelease": true, "satisfies": true }
+  },
+  {
+    "tool": "check_package_version",
+    "arguments": { "version": "1.2", "range": "*" },
+    "expected": null,
+    "isError": true
+  },
+  {
+    "tool": "check_package_version",
+    "arguments": { "version": "1.2.3", "range": "latest" },
+    "expected": null,
+    "isError": true
+  },
+  {
+    "tool": "check_package_version",
+    "arguments": { "version": "1.2.3", "range": "*", "includePrerelease": "false" },
+    "expected": null,
+    "isError": true
+  }
+]

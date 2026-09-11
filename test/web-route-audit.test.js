@@ -1406,6 +1406,28 @@ test('fails explicit Node loader capabilities closed while keeping require.resol
   assert.deepEqual(shadowed.incompletePaths, [])
 })
 
+test('recognizes direct Node search-path lookup without admitting escaped loaders', () => {
+  const inspect = body => inspectExecutableModuleClosure(new Map([['index.js',
+    "import { createRequire } from 'node:module';\nexport function apply(ctx) { " + body + ' }',
+  ]]), { entryPaths: ['index.js'] })
+  for (const expression of [
+    'createRequire(import.meta.url).resolve.paths(packageName)',
+    "createRequire(import.meta.url).resolve['paths'](packageName)",
+  ]) {
+    const report = inspect('const paths = ' + expression)
+    assert.deepEqual(report.incompletePaths, [], expression)
+    assert.deepEqual(report.activationIncompletePaths, [], expression)
+  }
+  for (const body of [
+    'const lookup = createRequire(import.meta.url).resolve.paths; lookup(packageName)',
+    'createRequire(import.meta.url).resolve.paths = customLoader',
+    'createRequire(import.meta.url).resolve.paths.call(null, packageName)',
+    'createRequire(import.meta.url).resolve[method](packageName)',
+    'createRequire(import.meta.url).resolve.paths(packageName).map(path => import(path))',
+    'createRequire(import.meta.url).resolve.paths(packageName); createRequire(import.meta.url)(packageName)',
+  ]) assert.deepEqual(inspect(body).incompletePaths, ['index.js'], body)
+})
+
 test('treats explicit JSON module edges as data leaves while failing unknown loaders closed', () => {
   const esm = inspectWebRouteAuth(new Map([
     ['index.js', [

@@ -1,0 +1,3 @@
+- insert:
+    - id: dsh-package-check
+      name: dsh-package-check

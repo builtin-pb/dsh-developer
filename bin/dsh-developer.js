@@ -19,12 +19,25 @@ import { promoteCreatorExport } from '../lib/promote.js'
 import { appendFirstNextAction, withNextActions } from '../lib/recovery-actions.js'
 import { formatSourceMigrationReport, inspectSourceMigration } from '../lib/source-migration.js'
 import { executeUiCliAction, formatUiCliReport } from '../lib/ui-cli.js'
+import { setupUi, formatUiSetupReport } from '../lib/ui-setup.js'
 import { formatUpstreamImpactReport, inspectUpstreamImpact } from '../lib/upstream-impact.js'
+import { inspectProject, runProjectScript, formatProjectReport } from '../lib/project.js'
+import { inspectDshKnowledge, formatDshKnowledgeReport } from '../lib/knowledge.js'
+import { verifyDevelopmentPlugin, runDevelopmentServer, formatDevelopmentReport } from '../lib/development.js'
+import { inspectSession, formatSessionReport } from '../lib/session.js'
 
 const USAGE = [
   'dsh-developer — The single plugin you need for DSH',
   '',
   'Usage:',
+  '  dsh-developer project [--source <directory-or-file>] [--json]',
+  '  dsh-developer knowledge [--dsh <path>] [--upstream <checkout>] [--topic <topic>] [--package <name>] [--json]',
+  '  dsh-developer session --source <session.jsonl[.zstd]> [--limit <0..100>] [--json]',
+  '  dsh-developer run --source <project> --script <name> [--timeout-ms <ms>] [--json] [-- <script args...>]',
+  '  dsh-developer verify --source <plugin-or-tgz> --cases <json> [--patch <path>] [--dsh <path>] [--profile <name>] [--online] [--json]',
+  '  dsh-developer dev --source <plugin-or-tgz> [--patch <path>] [--dsh <path>] [--port <number>] [--online] [--json]',
+  '  run, verify and dev execute trusted project code under the calling host policy.',
+  '  --patch selects one trusted Cordis overlay after the installed bundle/profile and before the development probe.',
   '  dsh-developer admit-cell [--dsh <path>] [--wsl-distro <name>] [--json]',
   '  dsh-developer attest-profile --profile <directory> [--dsh <path>] [--json]',
   '  dsh-developer capabilities [--dsh <path>] [--json]',
@@ -37,7 +50,10 @@ const USAGE = [
   '  dsh-developer promote --source <creator.json> --output <new-dir> [--dsh <path>] [--json]',
   '  dsh-developer fingerprint --source <creator-draft.json> [--json]',
   '  dsh-developer hook-doctor --source <hooks.json|settings.json> --dialect <codex|claude-code> --dsh <path> [--json]',
+  '  dsh-developer ui-setup [--install-cli] [--cli-entry <absolute-path>] [--browser-executable <absolute-path>] [--config <absolute-file>] [--json]',
+  '  ui-setup saves host-local configuration; restart DSH to activate dsh_ui. Installation is opt-in and pins @playwright/cli@0.1.18.',
   '  dsh-developer ui --session <name> --action <operation> [operation options] [--json]',
+  '  ui --action open accepts --url <loopback-url> or --development-server <home-returned-by-dev>; keep dev running.',
   '',
   'Promotion only creates a new, absent destination and requires public DSH 0.1.1-rc.2.',
 ].join('\n')
@@ -95,6 +111,42 @@ async function main(argv) {
   assertCliCommandOptions(command, options)
   const controller = new AbortController()
   process.once('SIGINT', () => controller.abort())
+  process.once('SIGTERM', () => controller.abort())
+
+  if (['project', 'knowledge', 'session', 'run', 'verify', 'dev'].includes(command)) {
+    const output = (report, format) => process.stdout.write(options.json ? JSON.stringify(report, null, 2) + '\n' : format(report) + '\n')
+    const timeoutMs = integerOption(options, 'timeoutMs')
+    if (timeoutMs !== undefined && (timeoutMs < 1 || timeoutMs > 3_600_000)) {
+      throw new DshDeveloperError('CLI_USAGE', '--timeout-ms must be from 1 to 3600000.')
+    }
+    let report
+    if (command === 'project') {
+      report = await inspectProject(options.source ?? '.', { signal: controller.signal })
+      output(report, formatProjectReport)
+    } else if (command === 'knowledge') {
+      report = await inspectDshKnowledge({ dshPath: options.dsh, upstreamRoot: options.upstream, topic: options.topic, packageName: options.package, signal: controller.signal })
+      output(report, formatDshKnowledgeReport)
+    } else if (command === 'session') {
+      report = await inspectSession(required(options, 'source'), { limit: integerOption(options, 'limit'), signal: controller.signal })
+      output(report, formatSessionReport)
+    } else if (command === 'run') {
+      report = await runProjectScript(required(options, 'source'), requiredValue(options, 'script'), { args: options.scriptArgs, signal: controller.signal, timeoutMs })
+      output(report, formatProjectReport)
+    } else if (command === 'verify') {
+      report = await verifyDevelopmentPlugin(required(options, 'source'), {
+        casesPath: required(options, 'cases'), patchPath: options.patch, dshPath: options.dsh, profile: options.profile,
+        online: options.online, timeoutMs, signal: controller.signal,
+      })
+      output(report, formatDevelopmentReport)
+    } else {
+      report = await runDevelopmentServer(required(options, 'source'), {
+        dshPath: options.dsh, patchPath: options.patch, port: integerOption(options, 'port'), online: options.online, timeoutMs,
+        signal: controller.signal, onReady: report => output(report, formatDevelopmentReport),
+      })
+    }
+    if (!report.ok) process.exitCode = 1
+    return
+  }
 
   if (command === 'admit-cell') {
     const report = await inspectIsolatedCellAdmission(options.dsh, {
@@ -217,10 +269,17 @@ async function main(argv) {
     }
     return
   }
+  if (command === 'ui-setup') {
+    const report = await setupUi({ cliEntry: options.cliEntry, browserExecutable: options.browserExecutable,
+      config: options.config, installCli: options.installCli, signal: controller.signal })
+    printFormattedReport(report, options.json, command, formatUiSetupReport)
+    return
+  }
   if (command === 'ui') {
     const input = {
       operation: requiredValue(options, 'action'),
       ...(options.url === undefined ? {} : { url: options.url }),
+      ...(options.developmentServer === undefined ? {} : { developmentServer: options.developmentServer }),
       ...(options.target === undefined ? {} : { target: options.target }),
       ...(options.text === undefined ? {} : { text: options.text }),
       ...(options.key === undefined ? {} : { key: options.key }),

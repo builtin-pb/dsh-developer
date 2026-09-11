@@ -62,9 +62,12 @@ export async function apply(ctx) {
       DSH_DEVELOPER_UI_PATCH: {
         description: 'Absolute path to the opt-in, protected Playwright MCP Cordis patch.',
       },
+      DSH_DEVELOPER_DSH: {
+        description: 'The running DSH entry; developer CLI commands default to this exact installation.',
+      },
     },
     resolve() {
-      return { DSH_DEVELOPER_BIN: cliPath, DSH_DEVELOPER_UI_PATCH: uiPatchPath }
+      return { DSH_DEVELOPER_BIN: cliPath, DSH_DEVELOPER_UI_PATCH: uiPatchPath, DSH_DEVELOPER_DSH: process.argv[1] }
     },
   })
   const authoritySources = {

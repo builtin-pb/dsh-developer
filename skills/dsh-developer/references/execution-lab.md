@@ -1,15 +1,12 @@
 # Local execution-lab gate
 
-Use before execution-bearing core incubation. It runs fixed keyless fixtures only—never source, a build script, model, or caller command.
+Use before execution-bearing core incubation. Run fixed keyless fixtures only—never source, a model, build script or caller command.
 
-Run `/dsh-developer-lab {"distro":"Ubuntu-22.04"}` in DSH Web, or:
+Run `/dsh-developer-lab {}` or `node bin/dsh-developer.js lab`. The host selects:
 
-    node bin/dsh-developer.js lab --wsl-distro Ubuntu-22.04
+- Windows: WSL2/Bubblewrap; require non-root `/home`, `prlimit`, systemd scopes and covered mounts. Select `--wsl-distro Ubuntu-22.04` if needed. Cells share the WSL kernel.
+- Apple silicon/macOS 26+: Apple container 1.4.1 and the pinned image documented in `docs/macos.md`. Each cell has a Linux VM, no host mounts/network, read-only root, capability-free workload and root-owned cgroup cleanup. Native Mac behavior needs host tests.
 
-PASS binds host, WSL distro/kernel, Bubblewrap/`prlimit`, mounts, policy, checks, and digest. It proves a private workspace; denies host state, Windows integration, credentials, network, and runtime writes; fixes environment/namespaces; bounds memory, tasks, CPU, files, output, and time; terminates byte/entry growth; and verifies cancellation, expiry, orphan cleanup, and controller recovery.
+PASS binds host, provider, image/distro, resource policy, checks and digest. Provider limits differ; preserve the exact policy and claim only passing checks. Re-run after host, runtime or policy changes. Missing tools, failed checks, cancellation or uncertain cleanup fails closed without fallback.
 
-The provider shares the WSL2 kernel; it claims neither project seccomp nor a microVM. Re-run after host, runtime, mount, or policy change.
-
-Require Windows, WSL2, non-root `/home`, Bubblewrap, `prlimit`, systemd user scopes, and covered mounts. Missing tools, unfamiliar mounts, failed checks, cancellation, or uncertain cleanup is FAIL with no fallback.
-
-PASS proves a boundary, not a feature. Enforce [core admission and authority](core-admission.md): the actual workload—not only fixtures—must run through the admitted provider.
+PASS proves a boundary, not a feature. Enforce [core admission](core-admission.md): launch the actual workload through the admitted provider; fixtures alone grant no execution authority.

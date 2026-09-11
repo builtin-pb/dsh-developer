@@ -21,6 +21,10 @@ test('registers one closed structured tool instead of multiplying model schemas'
 })
 
 test('keeps operation-specific argument surfaces closed before execution', () => {
+  assert.deepEqual(parseNativeToolInput({ operation: 'session', source: 'session.jsonl', limit: 0 }),
+    { operation: 'session', source: 'session.jsonl', limit: 0 })
+  assert.throws(() => parseNativeToolInput({ operation: 'session', source: 'session.jsonl', limit: 101 }), /limit must/u)
+  assert.throws(() => parseNativeToolInput({ operation: 'project', limit: 1 }), /not valid/u)
   assert.deepEqual(
     parseNativeToolInput({ operation: 'preflight', source: 'plugin', profile: 'headless' }),
     { operation: 'preflight', source: 'plugin', profile: 'headless' },

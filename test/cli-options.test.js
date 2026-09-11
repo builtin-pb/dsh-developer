@@ -32,6 +32,11 @@ test('normalizes dashed value and flag options to the CLI option vocabulary', ()
 })
 
 test('parses the closed agent-native UI command surface', () => {
+  const development = parseCliArguments(['ui', '--session', 'preview', '--action', 'open',
+    '--development-server', '/tmp/dsh-developer-dev-fixture'])
+  assert.equal(development.options.developmentServer, '/tmp/dsh-developer-dev-fixture')
+  assert.doesNotThrow(() => assertCliCommandOptions(development.command, development.options))
+  assert.throws(() => assertCliCommandOptions('doctor', { developmentServer: '/tmp/dsh-developer-dev-fixture' }), /does not accept/u)
   assert.deepEqual(parseCliArguments([
     'ui',
     '--session', 'codex-preview',
@@ -103,6 +108,37 @@ test('rejects unknown options and missing values', () => {
     () => parseCliArguments(['doctor', '--trust-source']),
     (error) => error.code === 'CLI_USAGE' && /Unknown option/u.test(error.message),
   )
+})
+
+test('forwards only run arguments after -- without interpreting script flags', () => {
+  const args = ['--help', '--source', 'a different target', '', '汉字', '--', 'literal; $(text)']
+  const parsed = parseCliArguments(['run', '--source', 'project', '--script', 'test', '--json', '--', ...args])
+  assert.deepEqual(parsed.options, { source: 'project', script: 'test', json: true, scriptArgs: args })
+  assert.doesNotThrow(() => assertCliCommandOptions(parsed.command, parsed.options))
+  assert.deepEqual(parseCliArguments(['run', '--']).options.scriptArgs, [])
+  assert.throws(() => parseCliArguments(['run', '--unknown']), { code: 'CLI_USAGE' })
+  for (const command of ['project', 'knowledge', 'session', 'verify', 'dev', 'doctor', 'promote', 'ui']) {
+    assert.throws(() => parseCliArguments([command, '--', '--help']), { code: 'CLI_USAGE' })
+    assert.throws(() => assertCliCommandOptions(command, { scriptArgs: [] }), { code: 'CLI_USAGE' })
+  }
+})
+
+test('accepts exactly one trusted overlay only on verify and dev', () => {
+  for (const command of ['verify', 'dev']) {
+    const parsed = parseCliArguments([command, '--source', 'packed plugin.tgz', '--patch', 'config changes.patch.yml'])
+    assert.equal(parsed.options.patch, 'config changes.patch.yml')
+    assert.doesNotThrow(() => assertCliCommandOptions(command, parsed.options))
+    assert.throws(() => parseCliArguments([command, '--patch']), { code: 'CLI_USAGE' })
+    assert.throws(() => parseCliArguments([command, '--patch', '--json']), { code: 'CLI_USAGE' })
+    assert.throws(() => parseCliArguments([command, '--patch', 'one.yml', '--patch', 'two.yml']), /--patch accepts one file/u)
+  }
+  for (const command of ['project', 'knowledge', 'session', 'run', 'admit-cell', 'attest-profile', 'capabilities',
+    'compatibility', 'doctor', 'fingerprint', 'hook-doctor', 'impact', 'migration', 'lab', 'preflight', 'promote', 'ui']) {
+    const parsed = parseCliArguments([command, '--patch', 'config changes.patch.yml'])
+    assert.throws(() => assertCliCommandOptions(command, parsed.options), {
+      code: 'CLI_USAGE', message: command + ' does not accept --patch.',
+    })
+  }
 })
 
 test('keeps command option surfaces closed after global option parsing', () => {

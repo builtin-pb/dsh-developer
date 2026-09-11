@@ -14,7 +14,11 @@ concurrency:
 
 jobs:
   deterministic:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -23,16 +27,25 @@ jobs:
           node-version: '22.18.0'
       - run: npm ci --ignore-scripts
       - run: npm run validate
+        env:
+          DSH_DEVELOPER_PROCESS_TEST: '1'
+      - name: Linux exclusive rename failure checks
+        if: runner.os == 'Linux'
+        run: node --test test/exclusive-rename.test.js
+        env:
+          DSH_DEVELOPER_LINUX_RENAME_TEST: '1'
       - run: npm pack --dry-run
 
   lane-evidence:
-    name: DSH ${{ matrix.dsh }} (${{ matrix.claim }})
-    runs-on: windows-latest
+    name: DSH ${{ matrix.dsh }} (${{ matrix.claim }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     continue-on-error: ${{ matrix.claim == 'preview' }}
     strategy:
       fail-fast: false
       matrix:
+        os: [windows-latest, macos-latest]
+        dsh: [0.1.1-rc.2, 0.1.2-alpha.3]
         include:
           - dsh: 0.1.1-rc.2
             claim: blocking
@@ -60,7 +73,8 @@ jobs:
       - name: Record exact-lane capability evidence
         shell: pwsh
         run: |
-          $dsh = Join-Path $env:DSH_RUNTIME "node_modules/.bin/dsh.cmd"
+          $bin = if ($IsWindows) { "dsh.cmd" } else { "dsh" }
+          $dsh = Join-Path $env:DSH_RUNTIME "node_modules/.bin/$bin"
           $evidence = Join-Path $env:RUNNER_TEMP "dsh-capabilities-${{ matrix.dsh }}.json"
           node bin/dsh-developer.js capabilities --dsh $dsh --json | Tee-Object -FilePath $evidence
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -68,14 +82,18 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: dsh-capabilities-${{ matrix.dsh }}
+          name: dsh-capabilities-${{ matrix.dsh }}-${{ matrix.os }}
           path: ${{ runner.temp }}/dsh-capabilities-${{ matrix.dsh }}.json
           if-no-files-found: warn
           retention-days: 14
 
   product-matrix:
-    name: Product release-to-preview matrix
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    name: Product release-to-preview matrix (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
@@ -103,8 +121,9 @@ jobs:
       - name: Exercise this plugin across both lanes
         shell: pwsh
         run: |
-          $releaseDsh = Join-Path $env:DSH_RELEASE 'node_modules/.bin/dsh.cmd'
-          $previewDsh = Join-Path $env:DSH_PREVIEW 'node_modules/.bin/dsh.cmd'
+          $bin = if ($IsWindows) { "dsh.cmd" } else { "dsh" }
+          $releaseDsh = Join-Path $env:DSH_RELEASE "node_modules/.bin/$bin"
+          $previewDsh = Join-Path $env:DSH_PREVIEW "node_modules/.bin/$bin"
           $preflightCases = @(
             @{ Lane = 'release'; Profile = 'headless'; Dsh = $releaseDsh; Blocking = $true },
             @{ Lane = 'release'; Profile = 'web'; Dsh = $releaseDsh; Blocking = $true },
@@ -139,10 +158,62 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: dsh-compatibility-matrix
+          name: dsh-compatibility-matrix-${{ matrix.os }}
           path: |
             ${{ runner.temp }}/dsh-profile-preflight-*.json
             ${{ runner.temp }}/dsh-upstream-impact.json
             ${{ runner.temp }}/dsh-compatibility-matrix.json
           if-no-files-found: error
           retention-days: 14
+
+  development:
+    name: Native development DSH ${{ matrix.dsh }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+        dsh: [0.1.1-rc.2, 0.1.5-rc.2]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.19.0'
+      - uses: pnpm/setup@v2
+        with:
+          version: '11.7.0'
+          install: false
+      - run: npm ci --ignore-scripts
+      - run: npm ci --ignore-scripts
+        working-directory: examples/package-check
+      - run: node bin/dsh-developer.js run --source examples/package-check --script test
+      - run: npm ci --ignore-scripts
+        if: matrix.dsh == '0.1.5-rc.2'
+        working-directory: examples/session-status
+      - run: node bin/dsh-developer.js run --source examples/session-status --script test
+        if: matrix.dsh == '0.1.5-rc.2'
+      - name: Verify real package-manager argument forwarding
+        if: matrix.dsh == '0.1.5-rc.2'
+        shell: pwsh
+        run: |
+          $env:DSH_DEVELOPER_YARN_CLASSIC_ROOT = Join-Path $env:RUNNER_TEMP 'yarn-classic'
+          $env:DSH_DEVELOPER_YARN_MODERN_ROOT = Join-Path $env:RUNNER_TEMP 'yarn-modern'
+          npm install --prefix $env:DSH_DEVELOPER_YARN_CLASSIC_ROOT --ignore-scripts yarn@1.22.22
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm install --prefix $env:DSH_DEVELOPER_YARN_MODERN_ROOT --ignore-scripts '@yarnpkg/cli-dist@4.18.0'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:DSH_DEVELOPER_PNPM_TEST = '1'
+          node bin/dsh-developer.js run --source . --script test:development
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Install exact runtime and exercise development
+        shell: pwsh
+        run: |
+          $runtime = Join-Path $env:RUNNER_TEMP "development-dsh-${{ matrix.dsh }}"
+          New-Item -ItemType Directory -Force -Path $runtime | Out-Null
+          pnpm --dir $runtime add --ignore-scripts --save-exact "@deepseek-ai/dsh@${{ matrix.dsh }}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $bin = if ($IsWindows) { 'dsh.cmd' } else { 'dsh' }
+          $env:DSH_DEVELOPER_DSH = Join-Path $runtime "node_modules/.bin/$bin"
+          node bin/dsh-developer.js run --source . --script test:development:dsh --json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

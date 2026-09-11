@@ -42,7 +42,7 @@ test('fails closed without accepting a caller-supplied provider', async () => {
   })
   assert.equal(injectedProviderCalled, false)
   assert.equal(report.ok, false)
-  assert.equal(report.provider.id, 'wsl2-bubblewrap')
+  assert.equal(report.provider.id, process.platform === 'darwin' ? 'apple-container' : 'wsl2-bubblewrap')
   assert.equal(report.checks[0].status, 'FAIL')
 })
 

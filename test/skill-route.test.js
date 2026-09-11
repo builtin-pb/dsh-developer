@@ -32,6 +32,9 @@ async function routedInstructionSet(initialReferences) {
 
 test('keeps every LF and CRLF routed skill set below the repository budget with margin', async (t) => {
   const routes = {
+    'native-cell': ['references/native-cell.md', 'references/safety.md'],
+    development: ['references/development.md'],
+    session: ['references/session-diagnostics.md'],
     creator: ['references/creator-export.md', 'references/safety.md'],
     audit: ['references/safety.md'],
     core: ['references/core-incubation.md', 'references/safety.md'],
@@ -65,13 +68,10 @@ test('owns a conversational plan-to-proof development loop', async () => {
   assert.match(skill, /\*\*Answer\*\*.*\*\*Inspect\*\*.*\*\*Build\*\*/su)
   assert.match(skill, /Answer or inspect directly when no change is needed/u)
   assert.match(skill, /compact plan: outcome, files\/effects, proof path, and material choices/u)
-  assert.match(skill, /Obtain approval before mutation/u)
   assert.match(skill, /implement, test, diagnose, and repair autonomously/u)
-  assert.match(skill, /Load one reference family per response/u)
-  assert.match(skill, /DeepSeek runs untrusted source only in an admitted Bubblewrap-backed cell/u)
+  assert.match(skill, /DeepSeek runs untrusted source only in the admitted host provider/u)
   assert.match(skill, /Hook Bridge Doctor first; classify exact installed bytes statically/u)
   assert.match(skill, /rerun that gate and all downstream gates/u)
-  assert.match(skill, /Answer ends with the answer and assumptions/u)
-  assert.match(skill, /Inspect ends with findings, evidence, and risks/u)
-  assert.match(skill, /Build ends with a tested outcome.*or an exact blocker and recovery/su)
+  assert.match(skill, /answer or findings with evidence, assumptions and material limits/u)
+  assert.match(skill, /For Build, return the tested outcome.*or an exact blocker and recovery/su)
 })

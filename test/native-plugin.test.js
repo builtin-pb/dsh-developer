@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
 import { apply, inject, name } from '../index.js'
 import { hasNativeTool } from '../lib/native-tool.js'
 import { inspectExecutableContextReferences } from '../lib/web-route-audit.js'
+import { UI_CLI_ENVIRONMENT } from '../lib/ui-configuration.js'
 
 test('keeps every activation path context-complete through narrow capability projection', async () => {
   const activationPaths = [
@@ -20,7 +23,18 @@ test('keeps every activation path context-complete through narrow capability pro
   }
 })
 
-test('registers the canonical skill through the native DSH service', async () => {
+test('registers the canonical skill through the native DSH service', async (t) => {
+  const uiRoot = await mkdtemp(join(tmpdir(), 'dsh-native-no-ui-'))
+  const previousUiEnvironment = Object.fromEntries(Object.values(UI_CLI_ENVIRONMENT).map(key => [key, process.env[key]]))
+  for (const key of Object.values(UI_CLI_ENVIRONMENT)) delete process.env[key]
+  process.env.DSH_DEVELOPER_UI_CONFIG = join(uiRoot, 'absent.json')
+  t.after(async () => {
+    for (const [key, value] of Object.entries(previousUiEnvironment)) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+    await rm(uiRoot, { recursive: true, force: true })
+  })
   let registration
   const commands = new Map()
   let shellContribution
@@ -82,7 +96,7 @@ test('registers the canonical skill through the native DSH service', async () =>
   assert.match(registration.description, /any DSH plugin idea/u)
   assert.match(registration.description, /Answer or inspect directly when no change is needed/u)
   assert.match(registration.whenToUse, /even when they do not name this skill/u)
-  assert.match(registration.content, /Start from conversation/u)
+  assert.match(registration.content, /Understand and act/u)
   assert.match(registration.content, /compact plan/u)
   assert.match(registration.content, /implement, test, diagnose, and repair autonomously/u)
   assert.equal(registration.resourceBase.kind, 'directory')
@@ -99,6 +113,7 @@ test('registers the canonical skill through the native DSH service', async () =>
     'dsh-developer-ui',
   ])
   assert.equal(shellContribution.name, 'dsh-developer')
+  assert.equal(shellContribution.resolve().DSH_DEVELOPER_DSH, process.argv[1])
   assert.match(shellContribution.resolve().DSH_DEVELOPER_BIN, /bin[\\/]dsh-developer\.js$/u)
   assert.match(shellContribution.resolve().DSH_DEVELOPER_UI_PATCH, /presets[\\/]playwright-mcp\.cordis\.yml$/u)
   assert.equal(nativeTool.name, 'dsh_developer')
@@ -108,6 +123,19 @@ test('registers the canonical skill through the native DSH service', async () =>
   assert.equal(typeof nativeGuard, 'function')
   assert.deepEqual(nativeTool.parameters.required, ['operation'])
   assert.equal(nativeTool.output.schema.additionalProperties, false)
+  const workspace = await realpath(await mkdtemp(join(tmpdir(), 'dsh-native-session-')))
+  t.after(() => rm(workspace, { recursive: true, force: true }))
+  await writeFile(join(workspace, 'session.jsonl'), JSON.stringify({ type: 'session', version: 3, id: 'native-session' }) + '\n'
+    + JSON.stringify({ type: 'turn/end', seq: 0, data: { turn: 1, reason: { kind: 'completed' } } }) + '\n')
+  const session = await nativeTool.execute({ operation: 'session', source: 'session.jsonl', limit: 0 }, {
+    signal: new AbortController().signal, agent: { session: { header: { cwd: workspace } } },
+  })
+  assert.equal(session.ok, true)
+  assert.equal(session.report.completion.state, 'completed')
+  assert.deepEqual(session.nextActions, [])
+  await assert.rejects(nativeTool.execute({ operation: 'session', source: 'session.jsonl' }, {
+    signal: new AbortController().signal,
+  }), { code: 'HOOK_PROJECT_UNAVAILABLE' })
   const result = await commands.get('dsh-developer-doctor').handler({
     rawInput: JSON.stringify({
       source: 'examples/hello-dsh.creator.json',
