@@ -13,7 +13,9 @@ Native Linux supports project inspection, source guidance, host project scripts,
 
 Local ordinary-development evidence covers macOS ARM64 and Debian 12 ARM64 with Node 24.19.0 and DSH 0.1.5-rc.2: a TypeScript plugin with a runtime dependency, source and archive invocation, configuration overlays, Web authentication/startup, cancellation, cleanup and occupied-port rejection. The final Linux run used UID/GID 1000 with no Linux capabilities in a disposable container; dependency installation and all checks ran as that user. npm, pnpm 11.7.0, Yarn Classic 1.22.22 and Yarn 4.18.0 preserved script arguments and exit status on both hosts.
 
-Earlier ordinary-development runs also passed on DSH 0.1.1-rc.2 and 0.1.5-rc.1. Rendered packed Client behavior was checked on macOS with 0.1.5-rc.1 and 0.1.5-rc.2; Linux UI evidence covers compilation and automated registry/component tests. These runs do not establish x64, musl or native Windows behavior. The Windows/macOS/Linux CI matrix is configured separately; a configured job is not an observed pass. See [verification results](verification.md) for scope and remaining work.
+Earlier ordinary-development runs also passed on DSH 0.1.1-rc.2 and 0.1.5-rc.1. Rendered packed Client behavior was checked on macOS with 0.1.5-rc.1 and 0.1.5-rc.2; Linux UI evidence covers compilation and automated registry/component tests.
+
+The subsequent [CI run at `09e896c`](https://github.com/builtin-pb/dsh-developer/actions/runs/34555142751) passed all six native development jobs: DSH 0.1.1-rc.2 and 0.1.5-rc.2 on Windows, macOS and Ubuntu with Node 24.19.0. This adds observed native Windows source/archive verification, overlays, HTTP authentication, process cleanup and background-browser suppression. It does not establish rendered Windows browser automation, every architecture or musl. That run still had separate general-test and authority-probe failures; see [verification results](verification.md) for their follow-up and the remaining scope.
 
 ## Why these routes
 

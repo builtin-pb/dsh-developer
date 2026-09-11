@@ -1,12 +1,23 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { apply, inject, name } from '../index.js'
 import { hasNativeTool } from '../lib/native-tool.js'
-import { inspectExecutableContextReferences } from '../lib/web-route-audit.js'
+import { inspectExecutableContextReferences, inspectExecutableModuleClosure } from '../lib/web-route-audit.js'
 import { UI_CLI_ENVIRONMENT } from '../lib/ui-configuration.js'
+
+test('the shipped activation graph remains complete within its bounded audit', async () => {
+  const library = new URL('../lib/', import.meta.url)
+  const paths = ['index.js', ...(await readdir(library, { recursive: true }))
+    .filter(path => path.endsWith('.js')).map(path => 'lib/' + path.replaceAll('\\', '/'))]
+  const files = new Map(await Promise.all(paths.map(async path => [path,
+    await readFile(new URL('../' + path, import.meta.url), 'utf8')])))
+  const closure = inspectExecutableModuleClosure(files, { entryPaths: ['index.js'] })
+  assert.deepEqual(closure.activationIncompletePaths, [])
+  assert.deepEqual(closure.resources.exhausted, [])
+})
 
 test('keeps every activation path context-complete through narrow capability projection', async () => {
   const activationPaths = [
