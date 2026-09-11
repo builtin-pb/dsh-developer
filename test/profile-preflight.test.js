@@ -231,6 +231,34 @@ test('fails before composition when Host inject contains DSH Client package iden
   }
 })
 
+test('preflight reports context and activation gaps separately and never composes through either', async () => {
+  const root = await fixture()
+  let composed = false
+  try {
+    for (const [body, category, label] of [
+      ["const record = {}; record[config.provider] = 'direct'", 'activationCoverage', 'activation-coverage'],
+      ["const get = ctx?.get; get.call(ctx, 'skills')", 'contextCoverage', 'context-coverage'],
+    ]) {
+      await writeFile(join(root, 'index.js'), `export const inject = ['skills'];\nexport function apply(ctx, config) { ${body} }\n`)
+      const report = await inspectProfilePreflightInternal(root, {
+        dshPath: 'fake-dsh', profile: 'headless',
+      }, runtimeDependencies(async () => { composed = true }))
+      const failed = report.checks.find((value) => value.id === 'source.inject-contract')
+      assert.equal(report.ok, false, body)
+      assert.equal(failed.status, 'FAIL', body)
+      assert.equal(failed.blocking, true, body)
+      assert.equal(failed.evidence.injectionValidity.ok, true, body)
+      assert.deepEqual(failed.evidence.unparsedDeclarations, [], body)
+      assert.deepEqual(failed.evidence[category].paths, ['index.js'], body)
+      assert.ok(formatProfilePreflightReport(report).includes(`${label}: index.js`))
+      assert.equal(report.checks.find((value) => value.id === 'profile.service-contract').status, 'SKIP')
+      assert.equal(composed, false)
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('keeps a profile composition failure actionable without executing repository code', async () => {
   const root = await fixture()
   try {

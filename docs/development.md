@@ -72,11 +72,15 @@ node bin/dsh-developer.js verify --source ./my-plugin.tgz --cases ./tool-cases.j
 
 Use `doctor --source <plugin> --skip-runtime` for static package checks during ordinary development, then `verify` for the selected runtime. Native Doctor uses `skipRuntime: true` for the same purpose. Doctor's default blocking runtime lane belongs to the release audit workflow; a newer DSH version is not by itself a defect in an ordinary plugin. Static Doctor alone is never release or execution proof.
 
+An `INCOMPLETE_UPSTREAM_ATTACHMENTS` result identifies context or activation expressions the static analyzer could not fully follow. Its evidence separates discovered injection validity from analysis coverage and names the affected files. It does not establish that a literal `inject` declaration is invalid. Inspect the reported expressions and retain the unresolved coverage finding; native verification supplies separate runtime evidence and does not turn that static gate into a pass.
+
 When a development session fails unexpectedly, use [session diagnostics](session-diagnostics.md) to inspect its tool calls and results without replaying them.
 
 ## Work with Web
 
 The [native session-status example](../examples/session-status/README.md) shows a real Client bundle, typed slots, session hooks and disposal. Its tests use DSH's actual registry, and its packed artifact has also been exercised in a rendered Web session.
+
+`knowledge --topic ui` includes the selected runtime's `@deepseek-ai/dsh-client-modules` package for client loading contracts. For browser externals, follow the selected checkout's `packages/client/web/src/platform.ts` and compare the example's build. For placement, inspect the package declaring the intended slot: `@deepseek-ai/dsh-client-ui-layout` for main panels, `@deepseek-ai/dsh-client-ui-settings` for settings sections, or the relevant feature owner. Focus the lookup with `--package`. A package bundled into the Web frontend may be absent from the host's installed dependency graph; that absence does not establish missing browser capability.
 
 ```sh
 node bin/dsh-developer.js dev --source ./my-plugin --dsh /path/to/dsh

@@ -145,7 +145,7 @@ test('fails nonliteral runtime closure closed while retaining independently prov
       const references = discoverUpstreamReferences(await scanOrdinaryTree(root))
       assert.deepEqual(references.services.map((value) => value.service), ['skills'], loader)
       assert.deepEqual(references.packages.map((value) => value.package), [], loader)
-      assert.deepEqual(references.coverage.unparsedInjectDeclarations, ['index.js'], loader)
+      assert.deepEqual(references.coverage.incompleteActivationClosure, ['index.js'], loader)
       assert.equal(classifyHostInjectContract(references).ok, false, loader)
     }
 
@@ -224,9 +224,41 @@ test('separates deferred loader visibility from activation-reachable loader proo
     ].join('\n'), 'utf8')
     const activated = discoverUpstreamReferences(await scanOrdinaryTree(root))
     assert.deepEqual(activated.services.map((value) => value.service), ['skills'])
-    assert.deepEqual(activated.coverage.unparsedInjectDeclarations, ['index.js'])
+    assert.deepEqual(activated.coverage.incompleteActivationClosure, ['index.js'])
     assert.deepEqual(activated.coverage.unparsedModuleClosure, ['index.js'])
     assert.equal(classifyHostInjectContract(activated).ok, false)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('separates observed inject validity from context and activation coverage without admitting opaque uses', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-developer-impact-coverage-categories-'))
+  try {
+    await sourceFixture(root)
+    const cases = [
+      { body: "ctx.inject(['tools'], () => {})", category: null },
+      { body: "const map = new Map(); map.set(config.provider, 'direct')", category: null },
+      { body: "const record = {}; record[config.provider] = 'direct'", category: 'activationCoverage' },
+      { body: "const get = ctx?.get; get.call(ctx, 'skills')", category: 'contextCoverage' },
+      { body: 'unknown(ctx)', category: 'contextCoverage' },
+      { body: "const record = { set hidden(value) { ctx.inject(config.services, () => {}) } }; record[config.provider] = 'direct'", category: 'activationCoverage', invalid: true },
+      { body: 'ctx.inject(config.services, () => {})', category: 'contextCoverage', invalid: true },
+    ]
+    for (const { body, category, invalid = false } of cases) {
+      await writeFile(join(root, 'index.js'), `export const inject = ['skills'];\nexport function apply(ctx, config) { ${body} }\n`)
+      const references = discoverUpstreamReferences(await scanOrdinaryTree(root))
+      const contract = classifyHostInjectContract(references)
+      assert.equal(contract.ok, category === null, body)
+      assert.equal(contract.injectionValidity.ok, !invalid, body)
+      if (category) {
+        assert.equal(contract[category].complete, false, body)
+        assert.deepEqual(contract[category].paths, ['index.js'], body)
+        assert.deepEqual(contract.paths, ['index.js'], body)
+      }
+      if (!invalid) assert.deepEqual(contract.unparsedDeclarations, [], body)
+      assert.ok(references.services.some((value) => value.service === 'skills'), body)
+    }
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -252,7 +284,7 @@ test('fails external package-import aliases closed instead of hiding package evi
     const references = discoverUpstreamReferences(await scanOrdinaryTree(root))
     assert.deepEqual(references.packages, [])
     assert.deepEqual(references.services.map((value) => value.service), ['skills'])
-    assert.deepEqual(references.coverage.unparsedInjectDeclarations, ['index.js'])
+    assert.deepEqual(references.coverage.incompleteActivationClosure, ['index.js'])
     assert.equal(classifyHostInjectContract(references).ok, false)
   } finally {
     await rm(root, { recursive: true, force: true })
@@ -330,7 +362,7 @@ test('resolves common Node main forms and fails missing activation entries close
       await rm(join(root, 'dist'), { recursive: true, force: true })
       await writeJson(join(root, 'package.json'), manifest)
       const references = discoverUpstreamReferences(await scanOrdinaryTree(root))
-      assert.deepEqual(references.coverage.unparsedInjectDeclarations, ['package.json'])
+      assert.deepEqual(references.coverage.incompleteActivationClosure, ['package.json'])
       assert.equal(classifyHostInjectContract(references).ok, false)
     }
   } finally {
@@ -793,7 +825,7 @@ test('fails Host attachment proof for with-scoped ctx access and implicit argume
         '',
       ].join('\n'), 'utf8')
       const references = discoverUpstreamReferences(await scanOrdinaryTree(root))
-      assert.deepEqual(references.coverage.unparsedInjectDeclarations, ['index.js'], body)
+      assert.deepEqual(references.coverage.incompleteContextReferences, ['index.js'], body)
       assert.equal(classifyHostInjectContract(references).ok, false, body)
     }
 
@@ -1357,6 +1389,23 @@ test('maps a declared service to exact package owners and emits stable scoped im
     const contextFailure = dynamicContext.checks.find((value) => value.id === 'source.inject-contract')
     assert.equal(contextFailure.status, 'FAIL')
     assert.deepEqual(contextFailure.evidence.paths, ['index.js'])
+
+    await writeFile(join(source, 'index.js'), [
+      "export const inject = ['skills']",
+      "export function apply(ctx, config) { const record = {}; record[config.provider] = 'direct' }",
+      '',
+    ].join('\n'), 'utf8')
+    const coverageGap = await inspectUpstreamImpactInternal(source, {
+      releaseDsh: 'release', previewDsh: 'preview',
+    }, dependencies)
+    const coverageFailure = coverageGap.checks.find((value) => value.id === 'source.inject-contract')
+    assert.equal(coverageGap.ok, false)
+    assert.equal(coverageFailure.status, 'FAIL')
+    assert.equal(coverageFailure.blocking, true)
+    assert.equal(coverageFailure.evidence.injectionValidity.ok, true)
+    assert.deepEqual(coverageFailure.evidence.activationCoverage.paths, ['index.js'])
+    assert.deepEqual(coverageFailure.evidence.unparsedDeclarations, [])
+    assert.match(formatUpstreamImpactReport(coverageGap), /activation-coverage: index\.js/u)
 
     await sourceFixture(source, {
       peerDependencies: { '@deepseek-ai/dsh-skill': '^0.1.0-rc.8' },

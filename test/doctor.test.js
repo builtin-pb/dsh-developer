@@ -106,7 +106,7 @@ test('audits an extensionless non-dot main and blocks a missing declared entry',
     const missing = await doctorPlugin(root, { runtime: 'skip' })
     const failed = missing.checks.find((value) => value.id === 'compatibility.upstream-attachments')
     assert.equal(failed.status, 'FAIL')
-    assert.equal(failed.evidence.code, 'UNSCOPED_INJECT_CONTRACT')
+    assert.equal(failed.evidence.code, 'INCOMPLETE_UPSTREAM_ATTACHMENTS')
     assert.deepEqual(failed.evidence.paths, ['package.json'])
   } finally {
     await rm(parent, { recursive: true, force: true })
@@ -487,6 +487,35 @@ test('blocks an incomplete upstream attachment claim for dynamic inject source',
   }
 })
 
+test('Doctor keeps coverage gaps blocking while identifying valid literal injections separately', async () => {
+  const root = await generatedFixture()
+  try {
+    for (const [body, category, label] of [
+      ["const record = {}; record[config.provider] = 'direct'", 'activationCoverage', 'activation-coverage'],
+      ["const get = ctx?.get; get.call(ctx, 'skills')", 'contextCoverage', 'context-coverage'],
+      ['helper(ctx)', 'contextCoverage', 'context-coverage'],
+    ]) {
+      await writeFile(join(root, 'index.js'), [
+        "export const inject = ['skills']",
+        `export function apply(ctx, config) { ${body}; ctx.inject(['tools'], () => {}) }`,
+        '',
+      ].join('\n'))
+      const report = await doctorPlugin(root, { runtime: 'skip' })
+      const failed = report.checks.find((value) => value.id === 'compatibility.upstream-attachments')
+      assert.equal(failed.status, 'FAIL', body)
+      assert.equal(failed.blocking, true, body)
+      assert.equal(failed.evidence.code, 'INCOMPLETE_UPSTREAM_ATTACHMENTS', body)
+      assert.equal(failed.evidence.injectionValidity.ok, true, body)
+      assert.deepEqual(failed.evidence.unparsedDeclarations, [], body)
+      assert.deepEqual(failed.evidence.invalidValues, [], body)
+      assert.deepEqual(failed.evidence[category].paths, ['index.js'], body)
+      assert.ok(failed.message.includes(`${label}: index.js`), failed.message)
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('blocks opaque runtime loaders while accepting an exact declared literal import', async () => {
   const root = await generatedFixture()
   try {
@@ -505,7 +534,7 @@ test('blocks opaque runtime loaders while accepting an exact declared literal im
       const report = await doctorPlugin(root, { runtime: 'skip' })
       const failed = report.checks.find((value) => value.id === 'compatibility.upstream-attachments')
       assert.equal(failed.status, 'FAIL', loader)
-      assert.equal(failed.evidence.code, 'UNSCOPED_INJECT_CONTRACT', loader)
+      assert.equal(failed.evidence.code, 'INCOMPLETE_UPSTREAM_ATTACHMENTS', loader)
       assert.deepEqual(failed.evidence.paths, ['index.js'], loader)
     }
 
@@ -562,7 +591,7 @@ test('warns on deferred opaque loaders but blocks activation-reachable helper lo
       .find((value) => value.id === 'compatibility.upstream-attachments')
     assert.equal(failed.status, 'FAIL')
     assert.equal(failed.blocking, true)
-    assert.equal(failed.evidence.code, 'UNSCOPED_INJECT_CONTRACT')
+    assert.equal(failed.evidence.code, 'INCOMPLETE_UPSTREAM_ATTACHMENTS')
     assert.deepEqual(failed.evidence.paths, ['index.js'])
     assert.equal(activated.ok, false)
   } finally {
