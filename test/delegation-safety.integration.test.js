@@ -53,6 +53,9 @@ async function probeLane(dshPath, lane) {
     const witness = JSON.parse(await readFile(join(home, DELEGATION_PROBE_WITNESS), 'utf8'))
     assert.equal(witness.token, token)
     assert.equal(witness.ok, true)
+    const expectedShell = process.platform === 'win32' ? 'pwsh' : 'bash'
+    assert.equal(witness.parent.shell, expectedShell)
+    assert.equal(witness.child.shell, expectedShell)
     assert.ok(witness.parentEscalationTools.length > 0)
     assert.equal(witness.parent.mutable.ok, true)
     assert.equal(witness.parent.mutable.applies, false)

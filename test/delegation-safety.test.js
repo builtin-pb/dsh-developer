@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { registerDelegationProbeWithDependencies } from '../lib/delegation-probe.js'
 import {
   createFixedAuthorityToolShadow,
   createDelegatedToolShadow,
@@ -40,6 +43,38 @@ function schema(name, fields = ['sandbox_permissions', 'justification']) {
     async execute(args) { return args },
   }
 }
+
+test('flushes a bounded redacted probe failure without requiring a logger sink', async t => {
+  const home = join(tmpdir(), 'private-probe-home')
+  const token = 'a'.repeat(64)
+  const secret = ['sk-', '1234567890abcdef1234567890abcdef'].join('')
+  const keys = ['DSH_HOME', 'DSH_DEVELOPER_DELEGATION_PROBE']
+  const previous = keys.map(key => process.env[key])
+  process.env.DSH_HOME = home
+  process.env.DSH_DEVELOPER_DELEGATION_PROBE = token
+  t.after(() => keys.forEach((key, index) => {
+    if (previous[index] === undefined) delete process.env[key]
+    else process.env[key] = previous[index]
+  }))
+  let stderr = '', flush, exitCode
+  t.mock.method(process.stderr, 'write', (text, callback) => { stderr += text; flush = callback; return true })
+  let onExit
+  const exited = new Promise(resolve => { onExit = resolve })
+  registerDelegationProbeWithDependencies({ injectProbeServices: callback => callback({
+    agents: { create: async () => { throw new Error('failed fixture ' + home + '\n' + token + '\n' + secret + '\n' + 'x'.repeat(20_000)) } },
+    tools: {},
+    get: service => service === 'appExit' ? code => { exitCode = code; onExit() } : undefined,
+  }) })
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(typeof flush, 'function')
+  assert.equal(exitCode, undefined, 'exit must wait until stderr has flushed')
+  assert.match(stderr, /delegation probe failed: Error: failed fixture/u)
+  assert(!stderr.includes(home) && !stderr.includes(token) && !stderr.includes(secret))
+  assert(stderr.length < 8300)
+  flush()
+  await exited
+  assert.equal(exitCode, 1)
+})
 
 test('classifies only durable subagent lineage as delegated', () => {
   assert.equal(isDelegatedAgent(agent(delegatedHeader())), true)

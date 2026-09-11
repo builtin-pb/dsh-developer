@@ -172,8 +172,9 @@ test('maps safe actions to argv-only Playwright CLI calls with bounded artifacts
     if (operation === 'open') {
       open = true
       const filename = 'page-2026-09-11T00-24-44-895Z.yml'
-      const artifactPath = relative(root, join(outputDir, filename)).replaceAll('\\', '/')
-      assert.deepEqual(findSecrets(artifactPath), ['high-entropy-token'])
+      // Playwright uses path.relative(), including native Windows separators.
+      const artifactPath = relative(root, join(outputDir, filename))
+      assert.deepEqual(findSecrets(artifactPath.replaceAll('\\', '/')), ['high-entropy-token'])
       await writeFile(join(outputDir, filename), '- heading "UI" [ref=e1]\n', 'utf8')
       return {
         stdout: JSON.stringify({
