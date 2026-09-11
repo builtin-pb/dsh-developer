@@ -9,7 +9,8 @@ import { runBounded } from '../lib/runtime.js'
 
 async function fixture(t, manifest = {}) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-project-')))
-  t.after(() => rm(root, { recursive: true, force: true }))
+  // Windows may briefly retain the package manager's working-directory handle.
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }))
   await mkdir(join(root, '.git'))
   await writeFile(join(root, 'package.json'), JSON.stringify(manifest))
   return root

@@ -40,7 +40,10 @@ test('runDsh reports child exit before inherited stdio closes and still drains d
     require('node:fs').writeFileSync(process.argv[3], String(process.pid));
     const descendant = spawn(process.execPath,
       ['-e', ${JSON.stringify(descendantCode)}, process.argv[1], process.argv[2]],
-      { stdio: ['ignore', 'inherit', 'inherit', 'ipc'] });
+      // libuv's Windows job kills non-detached children when their parent
+      // exits. This fixture needs a surviving descendant to hold the pipes;
+      // the test's finally block owns its explicit PID cleanup.
+      { stdio: ['ignore', 'inherit', 'inherit', 'ipc'], detached: process.platform === 'win32', windowsHide: true });
     descendant.once('message', () => {
       process.stdout.write('leader\\n', () => process.exit(0));
     });

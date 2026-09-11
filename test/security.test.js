@@ -25,6 +25,21 @@ test('keeps diagnostic context while redacting credentials and multiline private
 const COMMIT = 'c291e7961a515f6d7af9304e7fd1d257929aef26'
 const SOURCE = 'https://github.com/deepseek-ai/deepseek-harness/blob/' + COMMIT
 
+test('scans GitHub repository identifiers separately without hiding credentials', () => {
+  const repository = 'https://github.com/hg1048596-pixel/dsh-recall-unread'
+  assert.deepEqual(findSecrets('[Reference](' + repository + ').'), [])
+  assert.deepEqual(findSecrets(JSON.stringify({ repository })), [])
+  const raw = ['aB3dE7gH', '9jK2mN4p', 'Q6sT8vW0', 'yZ1cF5iL'].join('')
+  for (const url of [
+    'https://github.com/' + raw + '/project',
+    'https://github.com/owner/' + raw,
+    repository + '/' + raw,
+    repository + '?value=' + raw,
+    repository + '#' + raw,
+    repository + ' ' + raw,
+  ]) assert.ok(findSecrets(url).includes('high-entropy-token'))
+})
+
 test('preserves exact GitHub source links in documentation and diagnostics', () => {
   for (const url of [
     SOURCE,

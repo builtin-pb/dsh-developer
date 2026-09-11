@@ -20,6 +20,12 @@ A separate live Chrome fixture received a continuing SSE update, ran a browser w
 
 The opt-in `test/ui-development.integration.test.js` requires `DSH_DEVELOPER_UI_DEV_TEST=1`, an exact `DSH_DEVELOPER_DSH`, its `DSH_DEVELOPER_DSH_MODULES` directory, and saved browser setup or explicit provider/browser settings. `DSH_DEVELOPER_UI_DEV_SOURCE` can select a built local plugin. These are observed macOS checks; Windows authentication and independent autonomous development remain unverified.
 
+### Background browser startup correction
+
+A later host observation disproved the earlier claim that development never opened the default browser. Cordis replaces a row's entire `config`: the development overlay's `printUrl: false` discarded the native `openBrowser` binding that carries `--no-open`, restoring the schema's `true` default. Development and Web verification now share an overlay that explicitly sets both values to `false`, after the caller's overlay.
+
+A native regression on macOS with DSH 0.1.1-rc.2 and 0.1.5-rc.2 inspects the running Web runtime's validated configuration and intercepts its browser launcher. Both development and verification reported `openBrowser: false` and zero launch attempts, even when the caller requested opening. A private negative control restored the old overlay and detected one attempted launch without opening a browser. This corrects the automatic-startup claim; the earlier isolated-browser authentication observations remain applicable.
+
 ## Native development
 
 | Surface | Observed behavior | Scope |
@@ -44,7 +50,7 @@ Integrated validation on macOS passed **442 tests**, with **24 skipped**, on bot
 
 A fresh Linux ARM64 run on Debian 12, Node 24.19.0, UID/GID 1000 and zero Linux capabilities passed **447 tests**, with **22 skipped**, including real manager forwarding, process cancellation and Linux exclusive-rename failures. It separately passed all nine then-current native DSH tests, both examples and the packed eight-case verification. An independently written byte-boundary check also passed: a 67-byte result passed a cap of 67 and failed a cap of 66; a small selected field could not conceal oversized rendered content. The source manifest SHA-256 was `5614e9a66ea6df91efb6aaba5cb24900d7fe3d884884eb568e91565c9972260e`. The later headless/Web profile correction and its tenth integration test are outside that full-validation snapshot.
 
-The profile correction was prompted by a real `headless` verification failing before any case could run. The verifier now disables the two native headless application-driver rows and reports that modification; Web verification requests a temporary port with browser opening disabled. These checks establish global tool behavior in those compositions, not a model task or application-driver behavior.
+The profile correction was prompted by a real `headless` verification failing before any case could run. The verifier disables the two native headless application-driver rows and reports that modification; Web verification requests a temporary port and `--no-open`. The later background-startup regression above checks the effective browser setting rather than inferring it from that flag. These checks establish global tool behavior in those compositions, not a model task or application-driver behavior.
 
 A fresh Linux follow-up verified the exact three-file profile change: **10/10 native tests**, **22/22 focused development/documentation checks**, and actual CLI runs with **eight passing cases each in headless and Web**. Its source manifest SHA-256 was `0f17d89a7d83c19368722a5f47ba36bf2c311353c88813db2d3d014f1022a04a`. Independent process observations confirmed the Web flags, headless disclosure and cleanup. The full suite was not repeated on this delta; later edits changed only documentation.
 

@@ -1589,6 +1589,51 @@ test('shares a source budget across the reachable graph and stops without retain
   assert.equal(result.coverage.retainedAnalysis, 'compact-metadata-only')
 })
 
+test('completes activation across a graph with more than 4096 retained edge records', () => {
+  const moduleCount = 8
+  const callsPerModule = 525
+  const files = new Map([['index.js', [
+    ...Array.from({ length: moduleCount }, (_, index) =>
+      `import { activate as activate${index} } from './module${index}.js'`),
+    "export const inject = ['skills']",
+    'export function apply(ctx) {',
+    ...Array.from({ length: moduleCount }, (_, index) => `activate${index}(ctx)`),
+    '}',
+  ].join('\n')]])
+  for (let index = 0; index < moduleCount; index += 1) {
+    files.set(`module${index}.js`, [
+      ...Array.from({ length: callsPerModule }, (_, call) => `function leaf${call}() {}`),
+      'export function activate(ctx) {',
+      ...Array.from({ length: callsPerModule }, (_, call) => `leaf${call}()`),
+      '}',
+    ].join('\n'))
+  }
+  const closure = inspectExecutableModuleClosure(files, { entryPaths: ['index.js'] })
+  assert.deepEqual(closure.incompletePaths, [])
+  assert.deepEqual(closure.activationIncompletePaths, [])
+  assert.deepEqual(closure.resources.exhausted, [])
+  assert.equal(closure.resources.used.modules, moduleCount + 1)
+  // Each module contributes one import, one entry call and 525 distinct local calls.
+  assert.equal(closure.resources.used.edges, moduleCount * (callsPerModule + 2))
+  assert.equal(closure.modules.length, files.size)
+  for (const module of closure.modules.filter(value => value.sourcePath !== 'index.js')) {
+    assert.equal(module.parsed, true)
+    assert.equal(module.functions.length, callsPerModule + 1)
+    const activate = module.functions.find(value => value.candidate)
+    assert.equal(activate.calls.length, callsPerModule)
+    assert.deepEqual(new Set(activate.calls.map(value => value.functionId)),
+      new Set(module.functions.filter(value => value !== activate).map(value => value.id)))
+  }
+
+  // An opaque load in the final leaf must still invalidate activation beyond the old cap.
+  const last = `module${moduleCount - 1}.js`
+  files.set(last, files.get(last).replace(`function leaf${callsPerModule - 1}() {}`,
+    `function leaf${callsPerModule - 1}(specifier) { import(specifier) }`))
+  const opaque = inspectExecutableModuleClosure(files, { entryPaths: ['index.js'] })
+  assert.deepEqual(opaque.resources.exhausted, [])
+  assert.deepEqual(opaque.activationIncompletePaths, [last])
+})
+
 test('bounds unique module edges with linear deduplication before retaining metadata', () => {
   const imports = Array.from(
     { length: EXECUTABLE_MODULE_EDGE_LIMIT + 1 },

@@ -76,7 +76,7 @@ jobs:
           $bin = if ($IsWindows) { "dsh.cmd" } else { "dsh" }
           $dsh = Join-Path $env:DSH_RUNTIME "node_modules/.bin/$bin"
           $evidence = Join-Path $env:RUNNER_TEMP "dsh-capabilities-${{ matrix.dsh }}.json"
-          node bin/dsh-developer.js capabilities --dsh $dsh --json | Tee-Object -FilePath $evidence
+          node bin/dsh-developer.js capabilities --dsh $dsh --json 2>&1 | Tee-Object -FilePath $evidence
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Upload capability evidence
         if: always()
@@ -133,7 +133,7 @@ jobs:
           )
           foreach ($case in $preflightCases) {
             $preflight = Join-Path $env:RUNNER_TEMP "dsh-profile-preflight-$($case.Lane)-$($case.Profile).json"
-            node bin/dsh-developer.js preflight --source . --profile $case.Profile --dsh $case.Dsh --json | Tee-Object -FilePath $preflight
+            node bin/dsh-developer.js preflight --source . --profile $case.Profile --dsh $case.Dsh --json 2>&1 | Tee-Object -FilePath $preflight
             $exitCode = $LASTEXITCODE
             if ($case.Blocking -and $exitCode -ne 0) { exit $exitCode }
             if (-not $case.Blocking -and $exitCode -ne 0) {
@@ -141,7 +141,7 @@ jobs:
             }
           }
           $impact = Join-Path $env:RUNNER_TEMP 'dsh-upstream-impact.json'
-          node bin/dsh-developer.js impact --source . --release-dsh $releaseDsh --preview-dsh $previewDsh --json | Tee-Object -FilePath $impact
+          node bin/dsh-developer.js impact --source . --release-dsh $releaseDsh --preview-dsh $previewDsh --json 2>&1 | Tee-Object -FilePath $impact
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $env:DSH_DEVELOPER_DELEGATION_DSH_TEST = '1'
           $env:DSH_DEVELOPER_RELEASE_DSH = $releaseDsh
@@ -149,7 +149,7 @@ jobs:
           node --test --test-reporter=spec test/delegation-safety.integration.test.js
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $evidence = Join-Path $env:RUNNER_TEMP 'dsh-compatibility-matrix.json'
-          node bin/dsh-developer.js compatibility --source . --release-dsh $releaseDsh --preview-dsh $previewDsh --json | Tee-Object -FilePath $evidence
+          node bin/dsh-developer.js compatibility --source . --release-dsh $releaseDsh --preview-dsh $previewDsh --json 2>&1 | Tee-Object -FilePath $evidence
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $report = Get-Content -Raw $evidence | ConvertFrom-Json
           $preview = $report.lanes | Where-Object { $_.id -eq 'preview' }

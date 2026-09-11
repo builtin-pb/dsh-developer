@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { runDevelopmentServer, verifyDevelopmentPlugin } from '../lib/development.js'
@@ -12,7 +12,7 @@ import { inspectDshKnowledge } from '../lib/knowledge.js'
 import { readDevelopmentBrowserTarget } from '../lib/development-browser.js'
 
 // Explicit script only: npm run test:development:dsh. Requires built example, pnpm and DSH.
-const example = fileURLToPath(new URL('../examples/package-check/', import.meta.url))
+const example = resolve(fileURLToPath(new URL('../examples/package-check/', import.meta.url)))
 const casesPath = join(example, 'tool-cases.json')
 const dshPath = process.env.DSH_DEVELOPER_DSH
 
@@ -44,15 +44,35 @@ export const name = 'overlay-fixture'
 export const inject = ['tools']
 export async function apply(ctx, config) {
   let started = false
+  let browserState
+  if (config.browserObservationPath) {
+    // Import through the running loader to intercept the same module it mounts.
+    // A regression must fail without opening the developer's everyday browser.
+    const { internals } = await ctx.loader.import('@deepseek-ai/dsh-web-app')
+    let launches = 0
+    internals.openBrowser = async () => { launches += 1 }
+    browserState = async () => {
+      await ctx.loader.await()
+      // Include the deferred opener and, on older DSH, launcher finalization.
+      await new Promise(resolve => setTimeout(resolve, 100))
+      const entries = [...ctx.loader.entries()].filter(entry => entry.options.name === '@deepseek-ai/dsh-web-app')
+      if (entries.length !== 1) throw new Error('Expected one native Web runtime')
+      const state = { openBrowser: entries[0].fiber.config.openBrowser, launches }
+      await writeFile(config.browserObservationPath, JSON.stringify(state))
+      return state
+    }
+    void browserState().catch(error => { console.error(error); process.exitCode = 1 })
+  }
   if (config.observationPath) await writeFile(config.observationPath, JSON.stringify({
     value: config.value, home: process.env.DSH_HOME, pid: process.pid,
   }))
   ctx.tools.register({
     name: 'overlay_value', description: 'Return the configured fixture value.',
     parameters: { type: 'object', properties: {}, additionalProperties: false },
-    output: { schema: { type: config.structured ? 'object' : 'string' },
+    output: { schema: { type: config.structured || browserState ? 'object' : 'string' },
       render: (_args, value) => [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value) }] },
     isConcurrencySafe: () => true, execute: async () => {
+      if (browserState) return browserState()
       if (config.callMarker) await writeFile(config.callMarker, JSON.stringify({ started }))
       return config.structured ? { status: 'ready', details: config.value } : config.value
     },
@@ -72,6 +92,39 @@ export async function apply(ctx, config) {
     '--pack-destination', temporary, '--cache', join(temporary, 'cache')], { cwd: source, timeoutMs: 30_000 })
   return { source, archive: join(temporary, JSON.parse(packed.stdout)[0].filename) }
 }
+
+test('background Web development and verification never launch the default browser', { timeout: 90_000 }, async () => {
+  const temporary = await mkdtemp(join(tmpdir(), 'dsh-background-browser-'))
+  const controller = new AbortController()
+  try {
+    const { archive } = await createOverlayFixture(temporary)
+    const observationPath = join(temporary, 'browser.json')
+    const patchPath = join(temporary, 'browser.patch.yml')
+    // The caller's overlay must not undo the background runner's own policy.
+    await writeFile(patchPath, '- id: web-runtime\n  config:\n    openBrowser: true\n'
+      + '- id: overlay-fixture\n  config:\n    browserObservationPath: ' + JSON.stringify(observationPath) + '\n')
+    const expected = { openBrowser: false, launches: 0 }
+    const fixtureCases = join(temporary, 'cases.json')
+    await writeFile(fixtureCases, JSON.stringify([{ tool: 'overlay_value', arguments: {}, expected }]))
+    const report = await verifyDevelopmentPlugin(archive, { dshPath, profile: 'web', casesPath: fixtureCases, patchPath, online: true })
+    assert.equal(report.ok, true, JSON.stringify(report))
+    assert.deepEqual(JSON.parse(await readFile(observationPath, 'utf8')), expected)
+    await rm(observationPath)
+    await runDevelopmentServer(archive, { dshPath, patchPath, online: true, signal: controller.signal,
+      onReady: async () => {
+        const deadline = Date.now() + 5_000
+        let observed
+        while (!observed && Date.now() < deadline) {
+          try { observed = JSON.parse(await readFile(observationPath, 'utf8')) }
+          catch (error) { if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error }
+          if (!observed) await new Promise(resolve => setTimeout(resolve, 25))
+        }
+        assert.deepEqual(observed, expected)
+        controller.abort()
+      },
+    })
+  } finally { controller.abort(); await rm(temporary, { recursive: true, force: true }) }
+})
 
 test('current DSH startup must finish before invocation or Web readiness', { timeout: 60_000 }, async t => {
   const knowledge = await inspectDshKnowledge({ dshPath, topic: 'tool' })
@@ -291,7 +344,7 @@ test('owns Web startup, cancellation, endpoint and profile cleanup', { timeout: 
   let ready
   const report = await runDevelopmentServer(example, { dshPath, signal: controller.signal, onReady: async value => {
     ready = value
-    assert.equal(value.workspace.path, example.replace(/\/$/u, ''))
+    assert.equal(value.workspace.path, example)
     assert.equal(typeof value.workspace.id, 'string')
     assert.equal(new URL(value.url).search, '')
     assert.deepEqual(value.ui, { operation: 'open', developmentServer: value.home })

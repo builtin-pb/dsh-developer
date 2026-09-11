@@ -56,24 +56,42 @@ test('confines native inspection to the selected workspace, including linked par
 })
 
 test('rejects parent swaps during resolution, open and read, before returning any outside data', async (t) => {
-  for (const phase of ['resolve', 'open', 'opened', 'read']) await t.test(phase, async (t) => {
+  // Windows cannot rename a directory containing an open file. Retarget a
+  // directory alias to exercise actual post-open swaps on every platform, and
+  // retain physical-directory swaps before open (including opening outside).
+  const cases = [
+    ...['resolve', 'open'].map(phase => ['directory', phase]),
+    ...['resolve', 'open', 'opened', 'read'].map(phase => ['alias', phase]),
+  ]
+  for (const [kind, phase] of cases) await t.test(`${kind}: ${phase}`, async (t) => {
     const workspace = await fixture(t)
     const outside = await fixture(t)
     const parent = join(workspace.root, 'logs')
-    await fs.mkdir(parent)
+    const target = kind === 'alias' ? join(workspace.root, 'exports') : parent
+    const linkType = process.platform === 'win32' ? 'junction' : 'dir'
+    await fs.mkdir(target)
+    if (kind === 'alias') await fs.symlink(target, parent, linkType)
     const path = join(parent, 'session.jsonl')
     await fs.writeFile(path, jsonl([header, call('inside'), end()]))
     await fs.writeFile(join(outside.root, 'session.jsonl'), jsonl([header, call('outside', { value: 'OUTSIDE_SENTINEL' }), end()]))
     let swapped = false
+    let swapError
     async function swap() {
       if (swapped) return
-      swapped = true
-      await fs.rename(parent, join(workspace.root, 'saved'))
-      await fs.symlink(outside.root, parent, process.platform === 'win32' ? 'junction' : 'dir')
+      try {
+        await fs.rename(parent, join(workspace.root, 'saved'))
+        await fs.symlink(outside.root, parent, linkType)
+        swapped = true
+      } catch (error) {
+        swapError = error
+        throw error
+      }
     }
     const nativeRealpath = fs.realpath
     const nativeOpen = fs.open
+    const handles = []
     let reads = 0
+    let closes = 0
     t.mock.method(fs, 'realpath', async (...args) => {
       const physical = await nativeRealpath(...args)
       if (phase === 'resolve' && args[0] === path) await swap()
@@ -82,25 +100,43 @@ test('rejects parent swaps during resolution, open and read, before returning an
     t.mock.method(fs, 'open', async (...args) => {
       if (phase === 'open') await swap()
       const handle = await nativeOpen(...args)
-      if (phase === 'opened') await swap()
-      const read = handle.read.bind(handle)
-      handle.read = async (...args) => {
-        reads++
-        const value = await read(...args)
-        if (phase === 'read') await swap()
-        return value
+      handles.push(handle)
+      const close = handle.close.bind(handle)
+      handle.close = async () => { await close(); closes++ }
+      try {
+        if (phase === 'opened') await swap()
+        const read = handle.read.bind(handle)
+        handle.read = async (...args) => {
+          reads++
+          const value = await read(...args)
+          if (phase === 'read') await swap()
+          return value
+        }
+        return handle
+      } catch (error) {
+        // Until this mock returns, inspectSession cannot own the handle.
+        await handle.close()
+        throw error
       }
-      return handle
     })
     syncBuiltinESMExports()
     t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports() })
-    await assert.rejects(inspectSession(path, { sourceRoot: workspace.root }), (error) => {
-      assert.equal(error.code, 'SESSION_SOURCE_CHANGED')
-      assert(!JSON.stringify(error).includes('OUTSIDE_SENTINEL'))
-      return true
-    })
-    assert.equal(swapped, true)
-    assert.equal(reads, phase === 'read' ? 1 : 0, 'pre-read swaps must not read even the first byte')
+    try {
+      await assert.rejects(inspectSession(path, { sourceRoot: workspace.root }), (error) => {
+        assert.ifError(swapError)
+        assert.equal(error.code, 'SESSION_SOURCE_CHANGED')
+        assert(!JSON.stringify(error).includes('OUTSIDE_SENTINEL'))
+        return true
+      })
+      assert.equal(swapped, true)
+      assert.equal(reads, phase === 'read' ? 1 : 0, 'pre-read swaps must not read even the first byte')
+      assert.equal(handles.length, phase === 'resolve' ? 0 : 1)
+      assert.equal(closes, handles.length, 'inspection must explicitly close each opened handle')
+      assert(handles.every(handle => handle.fd === -1), 'no handles may be left for garbage collection')
+    } finally {
+      // Still release resources if a cleanup assertion exposes a regression.
+      for (const handle of handles) if (handle.fd !== -1) await handle.close()
+    }
   })
 })
 
