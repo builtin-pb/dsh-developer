@@ -218,7 +218,12 @@ test('DSH launcher startup must finish before verification; current Web also wai
     let announced = false
     await assert.rejects(runDevelopmentServer(archive, { dshPath, patchPath, online: true, signal: controller.signal,
       onReady() { announced = true; controller.abort() },
-    }), /delayed fixture startup failed/u)
+    }), error => {
+      assert.match(error.message, /delayed fixture startup failed/u, JSON.stringify({
+        code: error.code, message: error.message, ...error.details,
+      }))
+      return true
+    })
     assert.equal(announced, false)
   } finally { controller.abort(); await rm(temporary, { recursive: true, force: true }) }
 })
