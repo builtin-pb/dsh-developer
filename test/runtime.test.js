@@ -91,6 +91,58 @@ test('protected output withholds a real PEM body on the opposite stream, in eith
   }
 })
 
+test('cancellation and timeout retain requested protected tails after stopping the child', { timeout: 15_000 }, async t => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-abort-diagnostics-'))
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }))
+  for (const mode of ['cancel', 'timeout']) {
+    for (const pem of [false, true]) {
+      const ready = join(root, mode + '-' + pem + '.json')
+      const controller = new AbortController()
+      const credential = ['pass', 'word'].join('') + '=fixture-only-value'
+      const marker = ['-----BEGIN', 'PRIVATE KEY-----'].join(' ')
+      const code = `
+        setInterval(() => {}, 1000);
+        process.stdout.write(${JSON.stringify('ordinary log\n'.repeat(100) + (pem ? marker + '\n' : ''))}, () => {
+          process.stderr.write(${JSON.stringify('Error: delayed fixture startup failed\n' + credential + '\n')}, () => {
+            require('node:fs').writeFileSync(${JSON.stringify(ready)}, String(process.pid));
+          });
+        });
+      `
+      const running = runBounded(process.execPath, ['-e', code], {
+        signal: controller.signal, timeoutMs: 2000, outputMode: 'tail', outputLimit: 256,
+        protectOutput: true, diagnosticOutput: true,
+      }).then(() => { throw new Error('Expected an aborted command') }, error => error)
+      try {
+        let pid
+        const deadline = Date.now() + 1500
+        while (pid === undefined && Date.now() < deadline) {
+          const value = await readFile(ready, 'utf8').catch(() => undefined)
+          if (value) pid = Number(value)
+          else await new Promise(resolve => setTimeout(resolve, 10))
+        }
+        assert(Number.isSafeInteger(pid), 'child must publish its logs before interruption')
+        if (mode === 'cancel') controller.abort()
+        const error = await running
+        assert.equal(error.code, mode === 'cancel' ? 'CANCELLED' : 'COMMAND_TIMEOUT')
+        assert.equal(error.details.output.truncated.stdout, true)
+        assert.equal(error.details.output.truncated.stderr, false)
+        assert.deepEqual(error.details.output.withheld, { stdout: pem, stderr: pem })
+        if (pem) {
+          assert.equal(error.details.stdout, '[redacted: process output contained a private key]\n')
+          assert.equal(error.details.stderr, error.details.stdout)
+        } else {
+          assert.match(error.details.stderr, /delayed fixture startup failed/u)
+          assert.match(error.details.stderr, /redacted: possible credential/u)
+        }
+        assert(!JSON.stringify(error.details).includes('fixture-only-value'))
+        assert(Object.hasOwn(error.details, 'exitCode'))
+        assert(Object.hasOwn(error.details, 'exitSignal'))
+        assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' })
+      } finally { controller.abort(); await running }
+    }
+  }
+})
+
 test('runDsh reports child exit before inherited stdio closes and still drains descendant output', {
   timeout: 10_000,
 }, async () => {

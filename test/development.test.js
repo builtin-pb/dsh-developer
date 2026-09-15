@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { generateKeyPairSync } from 'node:crypto'
+import { execFile } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
 import test from 'node:test'
 import { formatDevelopmentReport, runDevelopmentServer, validateToolCases, verifyDevelopmentPlugin } from '../lib/development.js'
 import { selectCaseValue } from '../lib/development-probe.js'
@@ -61,6 +64,177 @@ test('development startup error tails withhold both streams after a PEM marker',
   }
 })
 
+test('a startup that logs an error then hangs preserves protected diagnostics and removes its profile', { timeout: 15_000 }, async t => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-dev-timeout-diagnostics-'))
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }))
+  await mkdir(join(root, '.git'))
+  const source = join(root, 'plugin'), installation = join(root, 'runtime')
+  await mkdir(source); await mkdir(installation)
+  await writeFile(join(source, 'package.json'), JSON.stringify({ name: 'fixture', dsh: { bundle: { patch: './patch.yml' } } }))
+  await writeFile(join(installation, 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh', version: '1.0.0',
+    publishConfig: { access: 'public' }, bin: { dsh: './bin.cjs' } }))
+  const realNow = Date.now.bind(Date)
+  let clockOffset = 0
+  t.mock.method(Date, 'now', () => realNow() + clockOffset)
+  for (const mode of ['timeout', 'pem-timeout', 'cancel']) {
+    const markerPath = join(root, mode + '.json')
+    const controller = new AbortController()
+    const credential = ['pass', 'word'].join('') + '=fixture-only-value'
+    const marker = ['-----BEGIN', 'PRIVATE KEY-----'].join(' ')
+    const dshPath = join(installation, 'bin.cjs')
+    await writeFile(dshPath, `
+      if (!process.argv.includes('plugin') && !process.argv.includes('--dump-config')) {
+        setInterval(() => {}, 1000);
+        process.stdout.write('ordinary startup log\\n'.repeat(30000) + ${JSON.stringify(mode === 'pem-timeout' ? marker + '\n' : '')}, () => {
+          process.stderr.write(${JSON.stringify('Error: delayed fixture startup failed\n' + credential + '\n')}, () => {
+            require('node:fs').writeFileSync(${JSON.stringify(markerPath)}, JSON.stringify({ pid: process.pid, home: process.env.DSH_HOME }));
+          });
+        });
+      }
+    `)
+    const running = runDevelopmentServer(source, { dshPath, signal: controller.signal,
+      onReady() { throw new Error('A hung startup must never announce readiness') },
+    }).then(() => { throw new Error('Expected startup to fail') }, error => error)
+    try {
+      let observed
+      const deadline = realNow() + 5000
+      while (!observed && realNow() < deadline) {
+        try { observed = JSON.parse(await readFile(markerPath, 'utf8')) } catch {}
+        if (!observed) await new Promise(resolve => setTimeout(resolve, 10))
+      }
+      assert(observed, 'the fixture must publish its logs before the startup deadline')
+      if (mode === 'cancel') controller.abort()
+      else clockOffset = 31_000 // Exercise the unchanged 30-second deadline without waiting 30 seconds.
+      const error = await running
+      assert.equal(error.code, mode === 'cancel' ? 'CANCELLED' : 'DEVELOPMENT_SERVER_TIMEOUT')
+      assert.equal(error.details.output.truncated.stdout, true)
+      assert.equal(error.details.output.truncated.stderr, false)
+      const withheld = mode === 'pem-timeout'
+      assert.deepEqual(error.details.output.withheld, { stdout: withheld, stderr: withheld })
+      if (withheld) {
+        assert.equal(error.details.stdout, '[redacted: process output contained a private key]\n')
+        assert.equal(error.details.stderr, error.details.stdout)
+        assert.doesNotMatch(error.message, /delayed fixture startup failed/u)
+      } else {
+        assert.match(error.details.stderr, /delayed fixture startup failed/u)
+        assert.match(error.details.stderr, /redacted: possible credential/u)
+        if (mode === 'timeout') assert.match(error.message, /delayed fixture startup failed/u)
+      }
+      assert(!JSON.stringify(error).includes('fixture-only-value'))
+      assert.throws(() => process.kill(observed.pid, 0), { code: 'ESRCH' })
+      await assert.rejects(stat(observed.home), { code: 'ENOENT' })
+    } finally { controller.abort(); await running; clockOffset = 0 }
+  }
+})
+
+test('consumes only bounded tokened startup error receipts and stops the owned process', { timeout: 15_000 }, async t => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-dev-error-receipt-'))
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }))
+  await mkdir(join(root, '.git'))
+  const source = join(root, 'plugin'), installation = join(root, 'runtime')
+  await mkdir(source); await mkdir(installation)
+  await writeFile(join(source, 'package.json'), JSON.stringify({ name: 'fixture', dsh: { bundle: { patch: './patch.yml' } } }))
+  await writeFile(join(installation, 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh', version: '1.0.0',
+    publishConfig: { access: 'public' }, bin: { dsh: './bin.cjs' } }))
+  const credential = ['pass', 'word'].join('') + '=fixture-only-value'
+  for (const [mode, fields] of [
+    ['valid', { error: 'delayed fixture startup failed\n' + credential }],
+    ['foreign', { token: 'foreign-token', error: 'untrusted failure' }],
+    ['wrong-type', { error: { message: 'untrusted failure' } }],
+    ['too-long', { error: 'x'.repeat(1025) }],
+    ['too-large', { error: 'x'.repeat(9000) }],
+    ['wrong-version', { version: 2, error: 'untrusted failure' }],
+  ]) {
+    const marker = join(root, mode + '.json'), dshPath = join(installation, 'bin.cjs')
+    const controller = new AbortController()
+    await writeFile(dshPath, `
+      if (!process.argv.includes('plugin') && !process.argv.includes('--dump-config')) {
+        setInterval(() => {}, 1000);
+        const fs = require('node:fs');
+        fs.writeFileSync(process.env.DSH_DEVELOPER_SERVER_RESULT, JSON.stringify({
+          kind: 'dsh-development-server-private', version: 1, token: process.env.DSH_DEVELOPER_SERVER_TOKEN,
+          ...${JSON.stringify(fields)}
+        }));
+        fs.writeFileSync(${JSON.stringify(marker)}, JSON.stringify({ pid: process.pid, home: process.env.DSH_HOME }));
+      }
+    `)
+    let settled = false
+    const running = runDevelopmentServer(source, { dshPath, signal: controller.signal,
+      onReady() { throw new Error('Error receipts cannot announce readiness') },
+    }).then(() => { throw new Error('Expected startup failure') }, error => { settled = true; return error })
+    try {
+      let observed
+      const deadline = Date.now() + 5000
+      while (!observed && Date.now() < deadline) {
+        try { observed = JSON.parse(await readFile(marker, 'utf8')) } catch {}
+        if (!observed) await new Promise(resolve => setTimeout(resolve, 10))
+      }
+      assert(observed)
+      if (mode !== 'valid') {
+        await new Promise(resolve => setTimeout(resolve, 200))
+        assert.equal(settled, false, mode + ' must not be accepted as a failure receipt')
+        controller.abort()
+      }
+      const error = await running
+      assert.equal(error.code, mode === 'valid' ? 'DEVELOPMENT_SERVER_STARTUP_FAILED' : 'CANCELLED')
+      if (mode === 'valid') {
+        assert.match(error.message, /delayed fixture startup failed/u)
+        assert.match(error.message, /redacted: possible credential/u)
+      }
+      assert(!JSON.stringify(error).includes('fixture-only-value'))
+      assert.throws(() => process.kill(observed.pid, 0), { code: 'ESRCH' })
+      await assert.rejects(stat(observed.home), { code: 'ENOENT' })
+    } finally { controller.abort(); await running }
+  }
+})
+
+test('reports a pre-readiness leader exit without waiting indefinitely for an escaped worker pipe', { timeout: 10_000 }, async t => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-dev-early-exit-'))
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }))
+  await mkdir(join(root, '.git'))
+  const source = join(root, 'plugin'), installation = join(root, 'runtime')
+  await mkdir(source); await mkdir(installation)
+  await writeFile(join(source, 'package.json'), JSON.stringify({ name: 'fixture', dsh: { bundle: { patch: './patch.yml' } } }))
+  await writeFile(join(installation, 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh', version: '1.0.0',
+    publishConfig: { access: 'public' }, bin: { dsh: './bin.cjs' } }))
+  const marker = join(root, 'worker.json'), dshPath = join(installation, 'bin.cjs')
+  await writeFile(dshPath, `
+    if (!process.argv.includes('plugin') && !process.argv.includes('--dump-config')) {
+      const child = require('node:child_process').spawn(process.execPath,
+        ['-e', "setInterval(() => {}, 1000); process.send('ready')"],
+        { detached: true, windowsHide: true, stdio: ['ignore', 'inherit', 'inherit', 'ipc'] });
+      child.once('message', () => {
+        require('node:fs').writeFileSync(${JSON.stringify(marker)}, JSON.stringify({ worker: child.pid, home: process.env.DSH_HOME }));
+        process.stderr.write('Error: fixture leader failed\\n', () => process.exit(7));
+      });
+    }
+  `)
+  const controller = new AbortController()
+  const started = Date.now()
+  try {
+    await assert.rejects(runDevelopmentServer(source, { dshPath, signal: controller.signal }), error => {
+      assert.equal(error.code, 'DEVELOPMENT_SERVER_EXITED')
+      assert.equal(error.details.exitCode, 7)
+      assert.equal(error.details.output.incomplete, true)
+      assert.match(error.details.output.incompleteReason, /Descendants may still be running/)
+      assert.deepEqual(error.details.output.withheld, { stdout: true, stderr: true })
+      assert.equal(error.details.stdout, '[redacted: process output did not finish draining]\n')
+      assert.equal(error.details.stderr, error.details.stdout)
+      return true
+    })
+    assert(Date.now() - started < 8000, 'must not wait for the 30-second readiness deadline')
+    const observed = JSON.parse(await readFile(marker, 'utf8'))
+    // The escaped process is deliberately outside our ownership. Closing the
+    // reader bounds the wait; it must not be reported as descendant cleanup.
+    process.kill(observed.worker, 0)
+    await assert.rejects(stat(observed.home), { code: 'ENOENT' })
+  } finally {
+    controller.abort()
+    const observed = JSON.parse(await readFile(marker, 'utf8').catch(() => '{}'))
+    if (observed.worker) try { process.kill(observed.worker, 'SIGKILL') } catch {}
+  }
+})
+
 test('verification requires behavior assertions rather than registration alone', () => {
   assert.throws(() => validateToolCases([]), { code: 'DEVELOPMENT_CASES_INVALID' })
   assert.throws(() => validateToolCases([{ tool: 'greet', arguments: {} }]), { code: 'DEVELOPMENT_CASES_INVALID' })
@@ -103,6 +277,53 @@ test('human verification receipts keep process cleanup limitations separate from
   assert.ok(text.includes('Process cleanup (win32): ' + report.processCleanup.afterLeaderExit))
   assert.ok(text.includes(report.processCleanup.limitation))
   assert.ok(text.endsWith(report.cleanup))
+})
+
+test('dev CLI prints final shutdown reports and preserves incomplete-drain warnings and JSON metadata', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-dev-final-report-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const cli = fileURLToPath(new URL('../bin/dsh-developer.js', import.meta.url))
+  const development = new URL('../lib/development.js', import.meta.url).href
+  const ready = { ok: true, url: 'http://127.0.0.1:4173/', profile: 'web' }
+  const reason = 'Inherited pipes did not close after the termination attempt; readers were closed. Descendants may still be running.'
+  for (const incomplete of [false, true]) {
+    const report = { ok: true, stopped: true, cleanup: 'disposable profile removed',
+      ...(incomplete ? { output: { incomplete: true, incompleteReason: reason,
+        truncated: { stdout: true, stderr: false }, withheld: { stdout: true, stderr: true } } } : {}) }
+    // Stub only the server lifecycle at the CLI boundary; use the actual entry
+    // point and formatter without a browser, socket or installed DSH profile.
+    const hook = join(root, 'hook.mjs')
+    await writeFile(hook, `
+      import { registerHooks } from 'node:module'
+      registerHooks({ load(url, context, nextLoad) {
+        if (url !== ${JSON.stringify(development)}) return nextLoad(url, context)
+        return { format: 'module', shortCircuit: true, source: ${JSON.stringify(`
+          export * from ${JSON.stringify(development + '?actual')}
+          export async function runDevelopmentServer(source, options) {
+            await options.onReady(${JSON.stringify(ready)})
+            return ${JSON.stringify(report)}
+          }
+        `)} }
+      } })
+    `)
+    for (const json of [false, true]) {
+      const { stdout, stderr } = await promisify(execFile)(process.execPath,
+        ['--import', hook, cli, 'dev', '--source', root, ...(json ? ['--json'] : [])], { timeout: 10_000 })
+      assert.equal(stderr, '')
+      if (json) {
+        const reports = JSON.parse('[' + stdout.trim().replace(/\}\s*\{/gu, '},{') + ']')
+        assert.deepEqual(reports, [ready, report])
+      } else {
+        assert.match(stdout, /http:\/\/127\.0\.0\.1:4173\//u)
+        assert.match(stdout, /Development server stopped\./u)
+        assert.ok(stdout.endsWith(report.cleanup + '\n'))
+        if (incomplete) assert.ok(stdout.includes('WARNING: ' + reason))
+        else assert.doesNotMatch(stdout, /WARNING:/u)
+      }
+    }
+  }
+  assert.match(formatDevelopmentReport({ ok: true, stopped: true, output: { incomplete: true } }),
+    /WARNING: .*descendant cleanup is unverified/u)
 })
 
 test('development execution is CLI-only and its network option cannot alter static native operations', () => {

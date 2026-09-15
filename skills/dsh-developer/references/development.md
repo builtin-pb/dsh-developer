@@ -21,7 +21,7 @@ Follow repository conventions and maintained dependencies. Give each service, re
 In DSH POSIX shells use `node "$DSH_DEVELOPER_BIN"`:
 
 - `run --source <package> --script <name> [-- <args...>]` runs declared scripts with exact arguments, host environment, bounded output and cancellation.
-- `verify --source <plugin-or-tgz> --cases <json> --dsh <executable>` compares real global tool results in a disposable profile. Cases contain `tool`, `arguments`, `expected`; optional `isError`, JSON Pointer `resultPath`, and `maxResultBytes` assert errors, fields and output budgets. Select `--profile`; use `--online` for uncached dependencies. This does not prove model, Agent or UI behavior.
+- `verify --source <plugin-or-tgz> --cases <json> --dsh <executable>` compares real global tool results in a disposable profile. Cases contain `tool`, `arguments`, `expected`; optional `isError`, JSON Pointer `resultPath`, and `maxResultBytes` assert errors, fields and output budgets. Select `--profile`; use `--online` for registry dependencies. This does not prove model, Agent or UI behavior.
 - `dev --source <plugin-or-tgz> --dsh <executable>` owns a disposable Web profile until cancellation. Exercise rendered UI, reload and errors through the admitted browser; HTTP readiness is insufficient.
 
 Verify the built archive and its documented configuration with `--patch <file>` on `verify`/`dev`. Exercise important failures through the actual entry point; check retained state and caller-visible results against independent expectations. Registration or helper tests alone are insufficient.

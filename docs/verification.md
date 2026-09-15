@@ -62,7 +62,17 @@ Regression checks cover directory identity restoration, observed asynchronous
 cleanup failure and truthful transaction cleanup/retention. Injected failures
 establish those controller paths, not universal provider reliability.
 
-Integrated local validation passed **638 tests**, with **31 optional checks
+Cross-platform CI exposed an additional startup boundary on the advisory alpha:
+DSH can keep healthy siblings serving after another enabled plugin fails.
+Development now checks the settled enabled composition before announcing Web
+readiness or invoking tool cases, and rechecks entries mounted before native
+application readiness. Tokened failure receipts preserve activation errors even
+when readiness never arrives. Timeout and cancellation retain protected output;
+incomplete pipe drainage withholds both streams and explicitly leaves descendant
+cleanup unverified. Independent real-Cordis checks covered late entries, disabled
+entries and disposal.
+
+Integrated local validation passed **649 tests**, with **31 optional checks
 skipped**, on macOS ARM64 and Node 24.19.0. A clean tracked-source copy passed
 static Doctor and both reviewed product lifecycle lanes. The product's Codex
 manifest must match its package version; generated bundles retain their fixed
@@ -76,6 +86,20 @@ after two reloads to fill and click successfully. Four real Apple VM checks pass
 rejection, promotion and timeout cleanup. The alpha observation does not add a
 certified audit or isolated-execution lane. Cross-platform results for these
 new changes must come from their own CI revision.
+
+An additional Computer Use pass through actual Chrome checked native onboarding,
+skill and slash-command discovery, the running plugin inventory, capability
+inspection, missing-browser-provider guidance and retained results after reload.
+It found an upstream 0.1.5-rc.2 display defect: generic command nodes do not
+activate an otherwise empty conversation. Two successful developer commands
+were persisted but hidden until the built-in `/goal` added a visible command-input
+node. Inspection of the installed Chat and conversation predicates confirmed
+the cause; the development guide documents the observed keyless workaround.
+An initial accessibility edit also produced a Lexical editor error; reloading
+and entering the complete command through the supported browser input path
+recovered. This run does not establish error-free browser automation or model
+behavior. Capability text now distinguishes unreviewed audit lanes from ordinary
+development support without changing the machine-readable lane classification.
 
 ## Release coherence review
 

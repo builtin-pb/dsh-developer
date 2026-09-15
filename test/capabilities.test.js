@@ -130,6 +130,8 @@ test('does not apply reviewed package semantics to an unrecognized DSH lane', as
     const report = await inspectDshCapabilities(fixture.entry, inspectionOptions(fixture))
     const capability = report.capabilities.find((value) => value.id === 'sandbox.windows-acl')
     assert.equal(report.runtime.lane.claim, 'unsupported')
+    assert.match(formatCapabilityReport(report), /\[unreviewed audit lane\]/u)
+    assert.match(formatCapabilityReport(report), /Ordinary development is checked separately/u)
     assert.equal(capability.status, 'present-unclassified')
     assert.equal(capability.semantics, 'unreviewed')
     assert.equal(capability.partialGuarantee, undefined)

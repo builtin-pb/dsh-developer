@@ -144,6 +144,7 @@ async function main(argv) {
         dshPath: options.dsh, patchPath: options.patch, port: integerOption(options, 'port'), online: options.online, timeoutMs,
         signal: controller.signal, onReady: report => output(report, formatDevelopmentReport),
       })
+      output(report, formatDevelopmentReport)
     }
     if (!report.ok) process.exitCode = 1
     return
