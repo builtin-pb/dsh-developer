@@ -22,7 +22,7 @@ import { executeUiCliAction, formatUiCliReport } from '../lib/ui-cli.js'
 import { setupUi, formatUiSetupReport } from '../lib/ui-setup.js'
 import { formatUpstreamImpactReport, inspectUpstreamImpact } from '../lib/upstream-impact.js'
 import { inspectProject, runProjectScript, formatProjectReport } from '../lib/project.js'
-import { inspectDshKnowledge, formatDshKnowledgeReport } from '../lib/knowledge.js'
+import { inspectDshKnowledge, formatDshKnowledgeReport, KNOWLEDGE_TOPICS } from '../lib/knowledge.js'
 import { verifyDevelopmentPlugin, runDevelopmentServer, formatDevelopmentReport } from '../lib/development.js'
 import { inspectSession, formatSessionReport } from '../lib/session.js'
 
@@ -31,7 +31,8 @@ const USAGE = [
   '',
   'Usage:',
   '  dsh-developer project [--source <directory-or-file>] [--json]',
-  '  dsh-developer knowledge [--dsh <path>] [--upstream <checkout>] [--topic <topic>] [--package <name>] [--json]',
+  '  dsh-developer knowledge [--dsh <path>] [--upstream <checkout>] [--topic <topic>] [--package <name>] [--consumer-root <package-directory>] [--json]',
+  '    Knowledge topics: ' + KNOWLEDGE_TOPICS.join(', ') + '.',
   '  dsh-developer session --source <session.jsonl[.zstd]> [--limit <0..100>] [--json]',
   '  dsh-developer run --source <project> --script <name> [--timeout-ms <ms>] [--json] [-- <script args...>]',
   '  dsh-developer verify --source <plugin-or-tgz> --cases <json> [--patch <path>] [--dsh <path>] [--profile <name>] [--online] [--json]',
@@ -124,7 +125,7 @@ async function main(argv) {
       report = await inspectProject(options.source ?? '.', { signal: controller.signal })
       output(report, formatProjectReport)
     } else if (command === 'knowledge') {
-      report = await inspectDshKnowledge({ dshPath: options.dsh, upstreamRoot: options.upstream, topic: options.topic, packageName: options.package, signal: controller.signal })
+      report = await inspectDshKnowledge({ dshPath: options.dsh, upstreamRoot: options.upstream, topic: options.topic, packageName: options.package, consumerRoot: options.consumerRoot, signal: controller.signal })
       output(report, formatDshKnowledgeReport)
     } else if (command === 'session') {
       report = await inspectSession(required(options, 'source'), { limit: integerOption(options, 'limit'), signal: controller.signal })

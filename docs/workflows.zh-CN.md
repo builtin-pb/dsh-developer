@@ -57,7 +57,7 @@ receipt 把 DSH 可执行文件绑定到你测试过的精确静态 profile 字�
 
 随后按[开发指南](development.md)使用 `verify --profile <名称>` 验证目标运行时，用 `dev` 检查实际 Web 界面，并通过 `--patch` 验证文档中的配置。Doctor 默认运行时审计与 preflight 要求受审通道。对于 0.1.5-rc.2 等其他精确版本，使用静态 Doctor 和上述普通验证路线。本产品和 promotion bundle 继续使用认证发布门禁；安装版本较新本身并不是普通插件的缺陷。
 
-Doctor 检查 package 与 bundle 契约、冷启动依赖被错标为 optional、Host/Client 注入混用、Client 服务冲突、宿主认证 connection 边界之外的插件自建原始 Web 路由，以及无效的 Web 产物。本产品和 promotion bundle 还会检查可复现性及获准的干净 profile 生命周期。检查保持目标仓库只读；静态结果不能证明运行行为。
+Doctor 检查 package 与 bundle 契约、冷启动依赖被错标为 optional、Host/Client 注入混用、Client 服务冲突、上游 connection 服务之外的插件自建原始 Web 路由，以及无效的 Web 产物。通过 connection 注册并不等于已经证明认证有效：不同 DSH 版本的 API 和保护机制有所不同，必须验证实际部署的版本和配置。本产品和 promotion bundle 还会检查可复现性及获准的干净 profile 生命周期。检查保持目标仓库只读；静态结果不能证明运行行为。
 
 把 Creator 中保存的导出直接变成可安装 bundle：
 

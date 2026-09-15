@@ -41,7 +41,7 @@ test('reports the M5 raw Web route as an authentication-boundary review without 
   assert.equal(result.coverage.absenceIsLocal, true)
 })
 
-test('distinguishes an authenticated connection registration from a raw Web route', () => {
+test('distinguishes connection registration from raw routes without certifying runtime authentication', () => {
   const result = inspectWebRouteAuth(new Map([['index.js', [
     "export const inject = ['connection']",
     'export function apply(ctx) {',
@@ -57,9 +57,38 @@ test('distinguishes an authenticated connection registration from a raw Web rout
     call: 'ctx.connection.rpc.handle',
     routePath: '/ping',
     authBoundary: 'host-connection',
-    hostAuthentication: 'connection-boundary',
-    intent: 'authenticated-channel',
+    hostAuthentication: 'requires-exact-runtime-verification',
+    intent: 'connection-managed-channel',
   }])
+})
+
+test('recognizes native Connection Fetch registration while retaining unsupported-context coverage', () => {
+  const source = [
+    "export const inject = ['connection']",
+    'export function apply(ctx) {',
+    "  ctx.connection.fetch.register({ path: '/api/package-panel', methods: ['GET'], fetch: () => Response.json({ ok: true }) })",
+    '}',
+  ].join('\n')
+  const result = inspectWebRouteAuth(new Map([['index.js', source]]), { entryPath: 'index.js' })
+  assert.deepEqual(result.coverage.incompletePaths, [])
+  assert.deepEqual(result.rawRoutes, [])
+  assert.deepEqual(result.connectionRoutes, [{
+    sourcePath: 'index.js', line: 3, call: 'ctx.connection.fetch.register',
+    routePath: '/api/package-panel', authBoundary: 'host-connection',
+    hostAuthentication: 'requires-exact-runtime-verification', intent: 'connection-managed-channel',
+  }])
+  assert.equal(inspectExecutableModuleMetadata(source).context.complete, true)
+  for (const call of [
+    'const register = ctx.connection.fetch.register',
+    'ctx.connection.fetch.unknown({})',
+    'ctx.connection[transport].register({})',
+  ]) {
+    const unsupported = `export function apply(ctx) { ${call} }`
+    const report = inspectWebRouteAuth(new Map([['index.js', unsupported]]), { entryPath: 'index.js' })
+    assert.deepEqual(report.connectionRoutes, [])
+    assert.deepEqual(report.coverage.incompletePaths, ['index.js'])
+    assert.equal(inspectExecutableModuleMetadata(unsupported).context.complete, false)
+  }
 })
 
 test('limits evidence to reachable modules and a proven package-entry apply context', () => {

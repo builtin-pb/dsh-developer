@@ -22,7 +22,7 @@ dsh-developer 把创建、诊断、测试和升级检查整合进 DSH 与 Codex 
 一条命令，加入 DSH Web：
 
 ```sh
-dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.0' --ignore-scripts
+dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.1' --ignore-scripts
 ```
 
 打开或重启 DSH Web（`dsh web`）。[还没安装 DSH？](docs/install.md) · [使用 Codex？](docs/workflows.md#use-it-from-codex)

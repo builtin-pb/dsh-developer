@@ -50,16 +50,27 @@ node bin/dsh-developer.js run --source examples/session-status --script test
 node bin/dsh-developer.js dev --source examples/session-status --dsh /path/to/dsh
 ```
 
-The development CLI installs into a disposable Web profile and prints its local
-authenticated launch URL. Open that URL in your browser, select a session, and
-look next to its title. With a working model configured in that disposable
-instance, send a prompt to observe running → idle. Switch sessions to check the
-binding, reload, and check narrow layouts and your preferred theme. No label is
-mounted without a resolved session header. Keep the launch URL local.
+The development CLI installs into a disposable Web profile and reports a clean
+URL plus a `ui` handoff. Pass that object to the native `dsh_ui` tool, or use the
+shell UI route with the reported `home`:
+
+```sh
+node bin/dsh-developer.js ui --session status-preview --action open --development-server <home-from-dev> --json
+```
+
+Complete the [browser setup](../../docs/development.md#work-with-web) first.
+The handoff authenticates the isolated browser; opening the clean URL alone in
+another browser does not supply its login cookie. No personal browser opens
+automatically. Keep the owning development command running.
+
+Select a session and look beside its title. With a working model configured in
+that disposable instance, send a prompt to observe running → idle. Switch
+sessions, reload, and check narrow layouts and your preferred theme. No label
+is mounted without a resolved session header.
 
 Stop the owning command with Ctrl+C to remove the disposable profile. For a
 predictable edit loop, rebuild with `npm --prefix examples/session-status run
-build`, then restart the development command and reopen its new URL. See the
+build`, then restart the development command and open its new handoff. See the
 repository's [development guide](../../docs/development.md) for the native CLI
 workflow. No real user profile needs to be modified.
 

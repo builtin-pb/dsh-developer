@@ -21,6 +21,10 @@ test('registers one closed structured tool instead of multiplying model schemas'
 })
 
 test('keeps operation-specific argument surfaces closed before execution', () => {
+  const knowledge = { operation: 'knowledge', packageName: '@deepseek-ai/dsh-agent', consumerRoot: '/installed/tools' }
+  assert.deepEqual(parseNativeToolInput(knowledge), knowledge)
+  assert.throws(() => parseNativeToolInput({ ...knowledge, consumerRoot: '' }), /consumerRoot must/u)
+  assert.throws(() => parseNativeToolInput({ operation: 'project', consumerRoot: '/installed/tools' }), /not valid/u)
   assert.deepEqual(parseNativeToolInput({ operation: 'session', source: 'session.jsonl', limit: 0 }),
     { operation: 'session', source: 'session.jsonl', limit: 0 })
   assert.throws(() => parseNativeToolInput({ operation: 'session', source: 'session.jsonl', limit: 101 }), /limit must/u)

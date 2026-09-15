@@ -13,6 +13,16 @@ import { inspectUiCapabilities } from '../lib/ui-capabilities.js'
 import { DshDeveloperError } from '../lib/errors.js'
 
 const run = promisify(execFile)
+function assertSetupRecovery(message, installCli = false, limit = 700) {
+  const suffix = installCli ? ' --install-cli' : ''
+  assert.ok(message.includes('In a DSH agent shell'))
+  assert.ok(message.includes('node "$DSH_DEVELOPER_BIN" ui-setup' + suffix + ' (POSIX)'))
+  assert.ok(message.includes('node "$env:DSH_DEVELOPER_BIN" ui-setup' + suffix + ' (PowerShell)'))
+  assert.ok(message.includes('outside DSH, run node bin/dsh-developer.js ui-setup' + suffix + ' from the dsh-developer checkout root'))
+  assert.doesNotMatch(message, /(?:run|rerun|retry) dsh-developer ui-setup/iu)
+  assert.ok(message.length < limit, 'recovery should remain concise')
+}
+
 async function fixture(t) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-ui-setup-')))
   const previous = Object.fromEntries(Object.values(UI_CLI_ENVIRONMENT).map(key => [key, process.env[key]]))
@@ -86,6 +96,37 @@ test('the actual setup CLI accepts spaced overrides, saves once, and reports no 
   assert.equal((await readUiSettings()).browser, f.browser)
 })
 
+test('shell UI errors explain profile and checkout recovery in text and JSON outside the checkout', async t => {
+  const f = await fixture(t)
+  const entry = resolve('bin/dsh-developer.js')
+  for (const json of [false, true]) {
+    await assert.rejects(run(process.execPath, [entry, 'ui', '--session', 'missing-setup', '--action', 'status',
+      ...(json ? ['--json'] : [])], { cwd: f.root, env: process.env }), error => {
+      assert.equal(error.code, 1)
+      assert.doesNotMatch(error.stderr, /(?:run|rerun|retry) dsh-developer ui-setup|In a DSH shell/iu)
+      assert.ok(Buffer.byteLength(error.stderr) < 2200, 'the complete CLI error should remain bounded')
+      const diagnostic = json ? JSON.parse(error.stderr) : { message: error.stderr }
+      if (json) {
+        assert.equal(diagnostic.code, 'UI_CLI_NOT_CONFIGURED')
+        assert.deepEqual(diagnostic.nextActions.map(action => action.id), ['ui.configure-prerequisites'])
+        const [action] = diagnostic.nextActions
+        assert.equal(action.automatic, false)
+        assertSetupRecovery(action.recovery.text)
+        assert.match(action.recovery.text, /Do not discover or install them automatically during runtime or admission/u)
+      } else {
+        assert.match(error.stderr, /Next action \[ui.configure-prerequisites\]: In a DSH agent shell/u)
+        assert.match(error.stderr, /Do not discover or install them automatically during runtime or admission/u)
+      }
+      assertSetupRecovery(diagnostic.message, false, json ? 700 : 1400)
+      assert.match(diagnostic.message, /Append --install-cli/u)
+      assert.match(diagnostic.message, /restart DSH/u)
+      assert.ok(!error.stderr.includes(f.root))
+      return true
+    })
+  }
+  await assert.rejects(lstat(dirname(f.config)), { code: 'ENOENT' })
+})
+
 test('environment overrides saved fields and complete legacy environment ignores saved state', async t => {
   const f = await fixture(t)
   await setupUi({ cliEntry: f.entry, browserExecutable: f.browser })
@@ -137,7 +178,7 @@ test('optional registration reports unusable storage but does not contain regist
     onConfigurationError: diagnostic => diagnostics.push(diagnostic),
   }), undefined)
   assert.equal(diagnostics[0].code, 'UI_ROOT_INVALID')
-  assert.match(diagnostics[0].nextStep, /ui-setup/u)
+  assertSetupRecovery(diagnostics[0].nextStep)
   await rm(runtime)
   for (const failure of [new Error('unexpected registry failure'), new DshDeveloperError('UI_CONFIG_INVALID', 'registration bug')]) {
     await assert.rejects(registerUiCliToolWithDependencies({
@@ -206,12 +247,19 @@ test('installation failure redacts npm output and cannot save activation; cancel
   await assert.rejects(setupUi({ cliEntry: f.entry, browserExecutable: f.browser, signal }), { code: 'CANCELLED' })
   await assert.rejects(lstat(dirname(f.config)), { code: 'ENOENT' })
   const executable = join(f.root, 'bin', 'node')
+  await assert.rejects(installUiCli(f.config, { executable, runner() { assert.fail('npm is absent') } }), error => {
+    assert.equal(error.code, 'UI_SETUP_NPM_MISSING')
+    assertSetupRecovery(error.message, true)
+    return true
+  })
+  await assert.rejects(lstat(dirname(f.config)), { code: 'ENOENT' })
   const npm = join(dirname(executable), 'node_modules', 'npm')
   await mkdir(join(npm, 'bin'), { recursive: true })
   await writeFile(join(npm, 'package.json'), '{"name":"npm"}')
   await writeFile(join(npm, 'bin', 'npm-cli.js'), '')
   await assert.rejects(installUiCli(f.config, { executable, runner() { throw new Error('private-token secret-local-path') } }), error => {
     assert.equal(error.code, 'UI_SETUP_INSTALL_FAILED')
+    assertSetupRecovery(error.message, true)
     assert.doesNotMatch(JSON.stringify(error), /private-token|secret-local-path/)
     return true
   })
@@ -223,7 +271,11 @@ test('explicit setup repairs malformed ordinary owned settings while runtime rej
   await mkdir(dirname(f.config), { recursive: true })
   for (const invalid of ['broken JSON', '{}', ' '.repeat(8193)]) {
     await writeFile(f.config, invalid)
-    await assert.rejects(loadUiConfiguration(), { code: 'UI_CONFIG_INVALID' })
+    await assert.rejects(loadUiConfiguration(), error => {
+      assert.equal(error.code, 'UI_CONFIG_INVALID')
+      assertSetupRecovery(error.message)
+      return true
+    })
     await setupUi({ cliEntry: f.entry, browserExecutable: f.browser })
     assert.equal((await loadUiConfiguration()).entry, f.entry)
     assert.equal((await readUiSettings()).browser, f.browser)

@@ -38,11 +38,14 @@ async function createOverlayFixture(temporary) {
   await writeFile(join(source, 'cordis.patch.yml'), '- insert:\n    - id: overlay-fixture\n'
     + '      name: dsh-development-overlay-fixture\n      config:\n        value: installed default\n')
   await writeFile(join(source, 'index.js'), `
-import { writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 export const name = 'overlay-fixture'
 export const inject = ['tools']
 export async function apply(ctx, config) {
+  if (config.exitCodeOnShutdown !== undefined) {
+    ctx.effect(() => () => process.exit(config.exitCodeOnShutdown), 'fixture abnormal shutdown')
+  }
   let started = false
   let browserState
   if (config.browserObservationPath) {
@@ -73,6 +76,18 @@ export async function apply(ctx, config) {
       render: (_args, value) => [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value) }] },
     isConcurrencySafe: () => true, execute: async () => {
       if (browserState) return browserState()
+      if (config.workerMarker) {
+        const worker = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000); process.send('ready')"],
+          { stdio: ['ignore', config.workerStdio, config.workerStdio, 'ipc'] })
+        await new Promise(resolve => worker.once('message', resolve))
+        const profilePath = process.env.DSH_HOME + '/profiles/developer-test/'
+        const modules = await readFile(profilePath + 'node_modules/.modules.yaml', 'utf8')
+        const manifest = JSON.parse(await readFile(profilePath + 'package.json', 'utf8'))
+        await writeFile(config.workerMarker, JSON.stringify({ pid: worker.pid, home: process.env.DSH_HOME, modules,
+          patchReload: manifest.dsh.profile.patchReload, watcher: Boolean(ctx.get('hmr')) }))
+        worker.disconnect()
+        worker.unref()
+      }
       if (config.callMarker) await writeFile(config.callMarker, JSON.stringify({ started }))
       return config.structured ? { status: 'ready', details: config.value } : config.value
     },
@@ -92,6 +107,52 @@ export async function apply(ctx, config) {
     '--pack-destination', temporary, '--cache', join(temporary, 'cache')], { cwd: source, timeoutMs: 30_000 })
   return { source, archive: join(temporary, JSON.parse(packed.stdout)[0].filename) }
 }
+
+test('verification reaps native tool workers before removing its disposable profile', {
+  skip: process.platform === 'win32', timeout: 60_000,
+}, async () => {
+  // POSIX process-group cleanup only: taskkill cannot promise this after a
+  // Windows leader exits, so do not claim coverage of that lifecycle here.
+  const temporary = await mkdtemp(join(tmpdir(), 'dsh-verification-workers-'))
+  const marker = join(temporary, 'worker.json')
+  try {
+    const { archive } = await createOverlayFixture(temporary)
+    const fixtureCases = join(temporary, 'cases.json')
+    const patchPath = join(temporary, 'worker.patch.yml')
+    for (const [stdio, expected, ok] of [['ignore', 'installed default', true], ['inherit', 'wrong', false]]) {
+      await writeFile(fixtureCases, JSON.stringify([{ tool: 'overlay_value', arguments: {}, expected }]))
+      await writeFile(patchPath, '- id: overlay-fixture\n  config:\n    value: installed default\n    workerStdio: '
+        + stdio + '\n    workerMarker: ' + JSON.stringify(marker) + '\n')
+      const result = await verifyDevelopmentPlugin(archive, { dshPath, casesPath: fixtureCases, patchPath, timeoutMs: 15_000 })
+      assert.equal(result.ok, ok, JSON.stringify(result))
+      assert.equal(result.cases.length, 1, 'cleanup must retain the native case evidence')
+      assert.equal(result.cases[0].passed, ok)
+      assert.equal(result.processCleanup.platform, process.platform)
+      assert.match(result.processCleanup.afterLeaderExit, /Attempt SIGTERM.*SIGKILL.*await/u)
+      assert.match(result.processCleanup.limitation, /not proof that every descendant exited/u)
+      const worker = JSON.parse(await readFile(marker, 'utf8'))
+      // pnpm 11 writes JSON to .modules.yaml; earlier versions use YAML.
+      let store
+      try { store = JSON.parse(worker.modules).storeDir } catch { store = /^storeDir: (.+)$/mu.exec(worker.modules)?.[1] }
+      assert.ok(store?.startsWith(worker.home + '/pnpm-store/'), 'pnpm must actually use the disposable store: ' + store)
+      if (worker.patchReload !== undefined) {
+        assert.equal(worker.patchReload, 'startup')
+        assert.equal(result.patchReload, 'startup')
+        assert.equal(worker.watcher, false, 'one-shot verification must not start native patch watchers')
+      }
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        try { process.kill(worker.pid, 0) } catch (error) { if (error.code === 'ESRCH') break; throw error }
+        await new Promise(resolve => setTimeout(resolve, 10))
+      }
+      assert.throws(() => process.kill(worker.pid, 0), { code: 'ESRCH' })
+      await assert.rejects(stat(worker.home), { code: 'ENOENT' })
+    }
+  } finally {
+    const worker = JSON.parse(await readFile(marker, 'utf8').catch(() => '{}'))
+    if (worker.pid) { try { process.kill(worker.pid, 'SIGKILL') } catch {} }
+    await rm(temporary, { recursive: true, force: true })
+  }
+})
 
 test('background Web development and verification never launch the default browser', { timeout: 90_000 }, async () => {
   const temporary = await mkdtemp(join(tmpdir(), 'dsh-background-browser-'))
@@ -192,6 +253,34 @@ test('trusted overlay changes a packed native tool result and invalid duplicate 
     assert.throws(() => process.kill(observed.pid, 0), { code: 'ESRCH' })
     await rm(observationPath)
 
+    // A complete failed comparison intentionally exits 1; the selected overlay
+    // loaded successfully and must not be blamed for the test verdict.
+    await writeFile(fixtureCases, JSON.stringify([{ tool: 'overlay_value', arguments: {}, expected: 'wrong expectation' }]))
+    const comparison = await invoke()
+    assert.equal(comparison.exitCode, 1)
+    const comparisonReport = JSON.parse(comparison.stdout)
+    assert.equal(comparisonReport.ok, false)
+    assert.equal(comparisonReport.cases.length, 1)
+    assert.equal(comparisonReport.cases[0].passed, false)
+    assert.equal(comparisonReport.cases[0].value, 'documented override')
+    assert.equal(comparisonReport.diagnostic.code, 'DEVELOPMENT_CASES_FAILED')
+    assert.equal(comparisonReport.diagnostic.exitCode, 1)
+    assert.equal(comparisonReport.diagnostic.failedCases, 1)
+    assert.match(comparisonReport.diagnostic.message, /verification completed; 1 of 1 cases failed/u)
+    assert.doesNotMatch(comparisonReport.diagnostic.message, /boot|overlay|startup/u)
+    await rm(observationPath)
+
+    // Even a complete failed-case receipt cannot explain an unexpected exit.
+    await writeFile(patchPath, '- id: overlay-fixture\n  config:\n    value: documented override\n    exitCodeOnShutdown: 23\n')
+    const unexpectedExit = await invoke()
+    assert.equal(unexpectedExit.exitCode, 1)
+    const unexpectedReport = JSON.parse(unexpectedExit.stdout)
+    assert.equal(unexpectedReport.ok, false)
+    assert.equal(unexpectedReport.cases.length, 1)
+    assert.equal(unexpectedReport.cases[0].passed, false)
+    assert.equal(unexpectedReport.diagnostic.code, 'COMMAND_EXITED')
+    assert.equal(unexpectedReport.diagnostic.exitCode, 23)
+
     // Cordis dump-config can compose this, but actual boot must reject the duplicate id.
     await writeFile(patchPath, '- insert:\n    - id: overlay-fixture\n      name: dsh-development-overlay-fixture\n')
     const duplicate = await invoke()
@@ -199,6 +288,7 @@ test('trusted overlay changes a packed native tool result and invalid duplicate 
     const failed = JSON.parse(duplicate.stdout)
     assert.equal(failed.ok, false)
     assert.equal(failed.cleanup, 'disposable profile removed')
+    assert.equal(failed.diagnostic.code, 'COMMAND_EXITED')
     assert.match(JSON.stringify(failed.diagnostic), /duplicate|already exists/iu)
     assert.match(failed.diagnostic.message, /--patch/u)
     assert.deepEqual(failed.cases, [])
@@ -210,6 +300,7 @@ test('trusted overlay changes a packed native tool result and invalid duplicate 
     const malformed = await invoke()
     assert.equal(malformed.exitCode, 1)
     assert.equal(malformed.stdout, '')
+    assert.equal(JSON.parse(malformed.stderr).code, 'COMMAND_EXITED')
     assert.match(JSON.parse(malformed.stderr).message, /configuration preparation.*--patch/su)
     assert.deepEqual((await readdir(temporary)).filter(name => name.startsWith('dsh-developer-dev-')), [])
   } finally { await rm(temporary, { recursive: true, force: true }) }

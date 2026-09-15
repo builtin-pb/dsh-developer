@@ -170,11 +170,12 @@ jobs:
     name: Native development DSH ${{ matrix.dsh }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
+    continue-on-error: ${{ matrix.dsh == '0.1.6-alpha.1' }}
     strategy:
       fail-fast: false
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
-        dsh: [0.1.1-rc.2, 0.1.5-rc.2]
+        dsh: [0.1.1-rc.2, 0.1.5-rc.2, 0.1.6-alpha.1]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7

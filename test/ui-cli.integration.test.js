@@ -203,3 +203,71 @@ test('drives one agent-owned browser through the exact compact DSH tool surface'
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('direct CLI round-trips frame-qualified snapshot refs after page reload', {
+  skip: !enabled,
+  timeout: 90_000,
+}, async t => {
+  const entry = process.env.DSH_DEVELOPER_PLAYWRIGHT_CLI_ENTRY
+  const browser = process.env.DSH_DEVELOPER_BROWSER_EXECUTABLE
+  assert.ok(entry, 'select the pinned Playwright CLI entry')
+  assert.ok(browser, 'select Chrome or Edge for the isolated headless session')
+  const root = await mkdtemp(join(tmpdir(), 'dsh-ui-ref-reload-'))
+  const server = pageServer()
+  const cliEntry = fileURLToPath(new URL('../bin/dsh-developer.js', import.meta.url))
+  const env = secretFreeEnvironment({
+    DSH_DEVELOPER_PLAYWRIGHT_CLI_ENTRY: entry,
+    DSH_DEVELOPER_BROWSER_EXECUTABLE: browser,
+    DSH_DEVELOPER_UI_CLI_ROOT: root,
+  })
+  const execute = async (...args) => {
+    const result = await runBounded(process.execPath, [cliEntry, 'ui', '--session', 'ref-reload-regression',
+      ...args, '--json'], { cwd: root, env, timeoutMs: 25_000, outputLimit: 128 * 1024,
+      label: 'isolated CLI ref reload regression' })
+    const report = JSON.parse(result.stdout)
+    assert.equal(report.ok, true, JSON.stringify(report))
+    return report
+  }
+  let opened = false
+  try {
+    server.listen(0, '127.0.0.1')
+    await once(server, 'listening')
+    const url = 'http://127.0.0.1:' + server.address().port + '/'
+    const open = await execute('--action', 'open', '--url', url)
+    opened = true
+    assert.equal(open.route.providerVersion, '0.1.18')
+    assert.equal(open.authority.profile, 'isolated-memory')
+    const initial = await execute('--action', 'snapshot', '--depth', '8')
+    const initialRef = elementRef(JSON.parse(initial.result.pageData.content), 'button', 'Verify')
+    assert.match(initialRef, /^e[1-9][0-9]*$/u)
+    for (const name of ['after first reload', 'after second reload']) {
+      // Same-origin navigation reloads the document and advances the provider's frame sequence.
+      await execute('--action', 'navigate', '--url', url)
+      const snapshot = await execute('--action', 'snapshot', '--depth', '8')
+      const tree = JSON.parse(snapshot.result.pageData.content)
+      const input = elementRef(tree, 'textbox', 'Name')
+      const button = elementRef(tree, 'button', 'Verify')
+      assert.match(input, /^f[1-9][0-9]*e[1-9][0-9]*$/u)
+      assert.match(button, /^f[1-9][0-9]*e[1-9][0-9]*$/u)
+      await execute('--action', 'fill', '--target', input, '--text', name)
+      const clicked = await execute('--action', 'click', '--target', button)
+      const rendered = await execute('--action', 'snapshot', '--depth', '8')
+      assert.match(rendered.result.pageData.content, new RegExp('Verified ' + name, 'u'))
+      t.diagnostic(JSON.stringify({ provider: open.route.provider, version: open.route.providerVersion,
+        initialRef, input, button, text: 'Verified ' + name, clickDigest: clicked.evidenceDigest,
+        snapshotDigest: rendered.evidenceDigest }))
+    }
+  } finally {
+    try {
+      if (opened) await execute('--action', 'close')
+    } finally {
+      if (server.listening) {
+        const closed = once(server, 'close')
+        server.close()
+        server.closeAllConnections()
+        await closed
+      }
+      await rm(root, { recursive: true, force: true })
+    }
+  }
+})

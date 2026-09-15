@@ -42,6 +42,50 @@ test('admitted opening retains its process lease when unpublished provider clean
   assert.match(stdout, /retained unpublished cleanup lease/u)
 })
 
+test('observes disposal rejection immediately while cancellation is still settling', async () => {
+  // Strict rejection handling in a child proves the host would survive this race.
+  const script = `
+    import assert from 'node:assert/strict';
+    import { setImmediate } from 'node:timers/promises';
+    import { openIsolatedCellInternal } from ${JSON.stringify(new URL('../lib/isolated-cell-internal.js', import.meta.url).href)};
+    const lifetime = new AbortController();
+    const cleanupFailure = new Error('provider removal failed');
+    let finishCommand, disposeCalls = 0, released = 0, disposalSettled = false;
+    const cell = await openIsolatedCellInternal('fixture', { signal: lifetime.signal }, {
+      scanOrdinaryTree: async () => ({ root: 'fixture', entries: [], fingerprint: 'fixture' }),
+      createWslBubblewrapCell: async () => ({
+        provider: { id: 'fake' },
+        run: () => new Promise((_resolve, reject) => { finishCommand = reject; }),
+        async dispose() {
+          if (++disposeCalls === 1) throw cleanupFailure;
+        },
+      }),
+      onDisposed: () => { released += 1; },
+    });
+    const running = assert.rejects(cell.exec('true'), { code: 'CELL_CANCELLATION_CLEANUP_FAILED' });
+    lifetime.abort();
+    const disposing = assert.rejects(cell.dispose(), (cause) => cause === cleanupFailure)
+      .then(() => { disposalSettled = true; });
+    await setImmediate();
+    assert.equal(disposalSettled, false);
+    assert.equal(released, 0);
+    await assert.rejects(cell.exec('true'), { code: 'CELL_CLOSING' });
+    finishCommand(new Error('command cancelled'));
+    await Promise.all([running, disposing]);
+    assert.equal(released, 0);
+    await cell.dispose();
+    assert.equal(disposeCalls, 2);
+    assert.equal(released, 1);
+    await cell.dispose();
+    assert.equal(released, 1);
+    console.log('disposal rejection observed and ownership retained until retry');
+  `
+  const { stdout } = await promisify(execFile)(process.execPath, [
+    '--unhandled-rejections=strict', '--input-type=module', '-e', script,
+  ], { timeout: 10_000 })
+  assert.match(stdout, /disposal rejection observed and ownership retained until retry/u)
+})
+
 test('runs in a private cell and stages a full changed tree without touching source', async () => {
   const source = await mkdtemp(join(tmpdir(), 'dsh-developer-cell-source-'))
   await writeFile(join(source, 'index.js'), 'export const value = "before"\n', 'utf8')

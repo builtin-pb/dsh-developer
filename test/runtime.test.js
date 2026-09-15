@@ -1,10 +1,19 @@
 import assert from 'node:assert/strict'
+import { createPrivateKey, generateKeyPairSync } from 'node:crypto'
 import { chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 import test from 'node:test'
 import { assertOfficialDshInvocation } from '../lib/dsh-installation.js'
 import { resolveDshInvocation, runBounded, runDsh, secretFreeEnvironment, smokeDshInstall } from '../lib/runtime.js'
+
+test('rejects invalid or unsupported process-group cleanup before spawning', async () => {
+  for (const cleanupProcessGroupOnExit of ['true', 1, {}, ...(process.platform === 'win32' ? [true] : [])]) {
+    await assert.rejects(runBounded('must-not-spawn', [], { cleanupProcessGroupOnExit }), {
+      code: 'COMMAND_OPTIONS_INVALID',
+    })
+  }
+})
 
 test('retains a bounded log tail without terminating a long-lived command', async () => {
   const report = await runBounded(process.execPath, ['-e', "process.stdout.write('x'.repeat(2048) + 'finished')"], {
@@ -13,6 +22,73 @@ test('retains a bounded log tail without terminating a long-lived command', asyn
   assert.equal(report.exitCode, 0)
   assert.equal(report.stdout.length, 64)
   assert.ok(report.stdout.endsWith('finished'))
+})
+
+test('protected output withholds both streams after a PEM marker and preserves original truncation and exit evidence', async () => {
+  for (const stream of ['stdout', 'stderr']) {
+    const other = stream === 'stdout' ? 'stderr' : 'stdout'
+    const code = `
+      process.${stream}.write('-----BEGIN PRI');
+      setTimeout(() => {
+        process.${stream}.write('VATE KEY-----\\n' + 'short body line\\n'.repeat(100));
+        process.${other}.write('Useful diagnostic: 界🙂é\\n');
+        process.exitCode = 7;
+      }, 25);
+    `
+    await assert.rejects(runBounded(process.execPath, ['-e', code], {
+      protectOutput: true, diagnosticOutput: true, outputMode: 'tail', outputLimit: 128,
+    }), error => {
+      assert.equal(error.code, 'COMMAND_EXITED')
+      assert.equal(error.details.exitCode, 7)
+      assert.equal(error.details.exitSignal, null)
+      assert.equal(error.details[stream], '[redacted: process output contained a private key]\n')
+      assert.equal(error.details[other], '[redacted: process output contained a private key]\n')
+      assert.equal(error.details.output.truncated[stream], true)
+      assert.equal(error.details.output.truncated[other], false)
+      assert.equal(error.details.output.withheld[stream], true)
+      assert.equal(error.details.output.withheld[other], true)
+      return true
+    })
+  }
+})
+
+test('raw binary output remains byte-exact even when it includes a private-key marker', async () => {
+  const marker = ['-----BEGIN', 'PRIVATE KEY-----'].join(' ')
+  const input = Buffer.concat([Buffer.from([0, 255, 128]), Buffer.from(marker + '\nbody\n')])
+  const result = await runBounded(process.execPath, ['-e', 'process.stdin.pipe(process.stdout)'], {
+    input, encoding: null, outputLimit: 1024,
+  })
+  assert.deepEqual(result.stdout, input)
+  assert.equal(result.output, undefined)
+  await assert.rejects(runBounded('must-not-spawn', [], { protectOutput: 'true' }), { code: 'COMMAND_OPTIONS_INVALID' })
+})
+
+test('protected output withholds a real PEM body on the opposite stream, in either arrival order', async () => {
+  const pem = generateKeyPairSync('rsa', { modulusLength: 1024 }).privateKey.export({ type: 'pkcs8', format: 'pem' })
+  const begin = ['-----BEGIN', 'PRIVATE KEY-----'].join(' ')
+  const end = ['-----END', 'PRIVATE KEY-----'].join(' ')
+  const lines = pem.split('\n').filter(line => line && !line.startsWith('---')).join('').match(/.{1,16}/gu)
+  const body = lines.join('\n') + '\n' + end + '\n'
+  assert.equal(createPrivateKey(begin + '\n' + body).asymmetricKeyType, 'rsa')
+  for (const headerStream of ['stdout', 'stderr']) {
+    const bodyStream = headerStream === 'stdout' ? 'stderr' : 'stdout'
+    const headerWrite = `process.${headerStream}.write(${JSON.stringify(begin + '\n')})`
+    const bodyWrite = `process.${bodyStream}.write(${JSON.stringify('ordinary noise\n'.repeat(300) + body)})`
+    for (const headerFirst of [true, false]) {
+      const writes = headerFirst ? [headerWrite, bodyWrite] : [bodyWrite, headerWrite]
+      const code = `${writes[0]}; setTimeout(() => { ${writes[1]}; process.exitCode = 7 }, 25)`
+      const result = await runBounded(process.execPath, ['-e', code], {
+        protectOutput: true, outputMode: 'tail', outputLimit: 2048, acceptedExitCodes: [7],
+      })
+      assert.equal(result.exitCode, 7)
+      assert.equal(result.stdout, '[redacted: process output contained a private key]\n')
+      assert.equal(result.stderr, result.stdout)
+      assert.deepEqual(result.output.withheld, { stdout: true, stderr: true })
+      assert.equal(result.output.truncated[headerStream], false)
+      assert.equal(result.output.truncated[bodyStream], true)
+      assert(lines.every(line => !JSON.stringify(result).includes(line)))
+    }
+  }
 })
 
 test('runDsh reports child exit before inherited stdio closes and still drains descendant output', {

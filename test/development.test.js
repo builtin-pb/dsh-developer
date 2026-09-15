@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { generateKeyPairSync } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -8,6 +9,57 @@ import { selectCaseValue } from '../lib/development-probe.js'
 import { parseCliArguments, assertCliCommandOptions } from '../lib/cli-options.js'
 import { deriveNextActions } from '../lib/recovery-actions.js'
 import { parseNativeToolInput } from '../lib/native-tool-internal.js'
+
+test('development startup error tails withhold both streams after a PEM marker', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-dev-private-key-'))
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }))
+  await mkdir(join(root, '.git'))
+  const source = join(root, 'plugin')
+  const installation = join(root, 'runtime')
+  await mkdir(source)
+  await mkdir(installation)
+  await writeFile(join(source, 'package.json'), JSON.stringify({ name: 'fixture', dsh: { bundle: { patch: './patch.yml' } } }))
+  await writeFile(join(installation, 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh', version: '1.0.0',
+    publishConfig: { access: 'public' }, bin: { dsh: './bin.cjs' } }))
+  const pem = generateKeyPairSync('rsa', { modulusLength: 1024 }).privateKey.export({ type: 'pkcs8', format: 'pem' })
+  const body = pem.split('\n').filter(line => line && !line.startsWith('---')).join('').match(/.{1,16}/gu)
+  const begin = ['-----BEGIN', 'PRIVATE KEY-----'].join(' ')
+  const end = ['-----END', 'PRIVATE KEY-----'].join(' ')
+  const log = begin + '\n' + body.join('\n') + '\n' + end + '\n'
+    + 'safe log line\n'.repeat(37420)
+  await writeFile(join(installation, 'log.txt'), log)
+  const dshPath = join(installation, 'bin.cjs')
+  const patchPath = join(root, 'selected.patch.yml')
+  await writeFile(patchPath, '[]\n')
+  for (const stream of ['stdout', 'stderr']) {
+    const other = stream === 'stdout' ? 'stderr' : 'stdout'
+    // Local CLI fixture exercises the public dev path, without launching DSH,
+    // installing dependencies, opening a socket or using a personal profile.
+    await writeFile(dshPath, `
+      if (!process.argv.includes('plugin') && !process.argv.includes('--dump-config')) {
+        const log = require('node:fs').readFileSync(require('node:path').join(__dirname, 'log.txt'));
+        process.${stream}.write(log.subarray(0, 15));
+        setTimeout(() => {
+          process.${stream}.write(log.subarray(15));
+          process.${other}.write('Error: useful startup failure\\n');
+          process.exitCode = 7;
+        }, 25);
+      }
+    `)
+    await assert.rejects(runDevelopmentServer(source, { dshPath, patchPath, timeoutMs: 5000 }), error => {
+      assert.equal(error.code, 'COMMAND_EXITED')
+      assert.equal(error.details.exitCode, 7)
+      assert.equal(error.details[stream], '[redacted: process output contained a private key]\n')
+      assert.equal(error.details[other], '[redacted: process output contained a private key]\n')
+      assert.equal(error.details.output.truncated[stream], true)
+      assert.equal(error.details.output.truncated[other], false)
+      assert.equal(error.details.output.withheld[stream], true)
+      assert.equal(error.details.output.withheld[other], true)
+      assert(body.every(line => !JSON.stringify(error).includes(line)))
+      return true
+    })
+  }
+})
 
 test('verification requires behavior assertions rather than registration alone', () => {
   assert.throws(() => validateToolCases([]), { code: 'DEVELOPMENT_CASES_INVALID' })
@@ -40,6 +92,17 @@ test('explains output budget failures and omitted values in the human report', (
   assert.match(text, /100000 result bytes; limit 4096.*output budget exceeded/u)
   assert.match(text, /PASS allowed.*compared in full/u)
   assert.doesNotMatch(text, /undefined/u)
+})
+
+test('human verification receipts keep process cleanup limitations separate from profile removal', () => {
+  const report = { ok: true, cleanup: 'disposable profile removed', processCleanup: {
+    platform: 'win32', afterLeaderExit: 'The plugin must stop and await its workers before normal exit.',
+    limitation: 'Descendants cannot reliably be found after their leader exits.',
+  } }
+  const text = formatDevelopmentReport(report)
+  assert.ok(text.includes('Process cleanup (win32): ' + report.processCleanup.afterLeaderExit))
+  assert.ok(text.includes(report.processCleanup.limitation))
+  assert.ok(text.endsWith(report.cleanup))
 })
 
 test('development execution is CLI-only and its network option cannot alter static native operations', () => {

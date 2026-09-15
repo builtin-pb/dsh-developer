@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { formatUiCapabilityReport, inspectUiCapabilities } from '../lib/ui-capabilities.js'
+import { UI_SETUP_INSTRUCTION } from '../lib/ui-configuration.js'
 
 const PLAYWRIGHT_CORE = [
   'browser_navigate',
@@ -33,6 +34,10 @@ test('fails closed when the scoped registry has no semantic UI provider', () => 
   assert.equal(report.ok, false)
   assert.equal(report.selected, null)
   assert.equal(report.checks[0].status, 'FAIL')
+  assert.ok(report.checks[0].message.includes(UI_SETUP_INSTRUCTION))
+  assert.match(report.checks[0].message, /Check the calling Agent tool scope/u)
+  assert.ok(report.checks[0].message.length <= 512)
+  assert.doesNotMatch(JSON.stringify(report), /(?:run|rerun|retry) dsh-developer ui-setup|In a DSH shell/iu)
   assert.match(report.evidenceDigest, /^sha256:[a-f0-9]{64}$/u)
   assert.match(formatUiCapabilityReport(report), /^FAIL UI capabilities \(no provider\)/u)
 })

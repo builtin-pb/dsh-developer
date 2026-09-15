@@ -1082,6 +1082,125 @@ test('requires a second exact approval and transactionally applies the sealed tr
   }
 })
 
+for (const rollback of [false, true]) {
+  test('nested directory-to-file replacement ' + (rollback ? 'rolls back original identities' : 'applies successfully'), async () => {
+    const workflow = await makeStagedWorkflow({
+      sourceFiles: { 'tree/nested/old.txt': 'original\n' },
+      stageFiles: { tree: 'replacement\n' },
+      changes: { created: ['tree'], modified: [], deleted: ['tree/nested/old.txt'] },
+      applyBarrier: async (phase) => {
+        if (rollback && phase === 'after-install-candidate') {
+          throw new DshDeveloperError('CELL_INJECTED_PARTIAL_WRITE', 'forced failure after replacement')
+        }
+      },
+    })
+    const paths = ['tree', 'tree/nested', 'tree/nested/old.txt']
+    const before = await Promise.all(paths.map((path) => lstat(join(workflow.source, path), { bigint: true })))
+    try {
+      const approval = await grantOnce(workflow.value, workflow.plan, { operation: 'cell-apply' })
+      assert.equal(approval.decision.kind, 'ask')
+      assert.equal(approval.guard(), undefined)
+      const result = await workflow.value.controller.apply({ planDigest: workflow.plan.planDigest }, {
+        agent: workflow.value.owner, executionToken: approval.token, callId: approval.callId,
+      })
+      assert.equal(result.ok, !rollback, JSON.stringify(result))
+      if (rollback) {
+        assert.equal(result.failure.code, 'CELL_INJECTED_PARTIAL_WRITE')
+        assert.equal(result.rollback.verified, true, JSON.stringify(result))
+        assert.equal(result.cleanup.transactionCleaned, true)
+        assert.equal(await readFile(join(workflow.source, 'tree/nested/old.txt'), 'utf8'), 'original\n')
+        for (const [index, path] of paths.entries()) {
+          const restored = await lstat(join(workflow.source, path), { bigint: true })
+          assert.equal(restored.dev, before[index].dev)
+          assert.equal(restored.ino, before[index].ino)
+        }
+        assert.equal((await scanOrdinaryTree(workflow.source)).fingerprint, workflow.run.source.fingerprintBefore)
+        const discarded = await workflow.value.controller.discard({ planDigest: workflow.plan.planDigest }, {
+          agent: workflow.value.owner,
+        })
+        assert.equal(discarded.cleanup.capacityReleased, true)
+      } else {
+        assert.equal(await readFile(join(workflow.source, 'tree'), 'utf8'), 'replacement\n')
+        assert.equal((await scanOrdinaryTree(workflow.source)).fingerprint, workflow.run.staging.fingerprint)
+        assert.equal(result.cleanup.verified, true)
+        assert.equal(result.cleanup.capacityReleased, true)
+      }
+      assert.equal(workflow.value.controller.status().phase, 'idle')
+    } finally {
+      await rm(workflow.source, { recursive: true, force: true })
+      await chmod(workflow.run.staging.root, 0o700).catch((cause) => { if (cause.code !== 'ENOENT') throw cause })
+      await rm(workflow.run.staging.root, { recursive: true, force: true })
+      if (workflow.value.slot.record?.transaction) {
+        await rm(workflow.value.slot.record.transaction.root, { recursive: true, force: true })
+      }
+    }
+  })
+}
+
+for (const cleanupFails of [false, true]) {
+  test('preparation cancellation reports ' + (cleanupFails ? 'retained transaction cleanup failure' : 'verified transaction cleanup'), async () => {
+    const cancellation = new AbortController()
+    let transactionRoot
+    let cleanupFailed = false
+    const workflow = await makeStagedWorkflow({
+      sourceFiles: { 'file.txt': 'original\n' },
+      stageFiles: { 'file.txt': 'replacement\n' },
+      changes: { created: [], modified: ['file.txt'], deleted: [] },
+      applyBarrier: async (phase, { transaction }) => {
+        if (phase === 'after-backup-copy') {
+          transactionRoot = transaction.root
+          cancellation.abort()
+        }
+        if (cleanupFails && !cleanupFailed && phase === 'before-transaction-cleanup-commit') {
+          cleanupFailed = true
+          throw new DshDeveloperError('EBUSY', 'temporary cleanup failure')
+        }
+      },
+    })
+    try {
+      const approval = await grantOnce(workflow.value, workflow.plan, {
+        operation: 'cell-apply', signal: cancellation.signal,
+      })
+      assert.equal(approval.decision.kind, 'ask')
+      assert.equal(approval.guard(), undefined)
+      const result = await workflow.value.controller.apply({ planDigest: workflow.plan.planDigest }, {
+        agent: workflow.value.owner, executionToken: approval.token, callId: approval.callId,
+        signal: cancellation.signal,
+      })
+      assert.equal(result.ok, false)
+      assert.equal(result.rollback.required, false)
+      assert.equal(await readFile(join(workflow.source, 'file.txt'), 'utf8'), 'original\n')
+      assert.equal((await scanOrdinaryTree(workflow.source)).fingerprint, workflow.run.source.fingerprintBefore)
+      if (cleanupFails) {
+        assert.equal(result.failure.code, 'CELL_APPLY_CLEANUP_FAILED')
+        assert.equal(result.failure.operation.code, 'CANCELLED')
+        assert.equal(result.failure.cleanup.code, 'EBUSY')
+        assert.equal(result.cleanup.verified, false)
+        assert.equal(result.cleanup.capacityReleased, false)
+        assert.equal(result.cleanup.retainedRoot, transactionRoot)
+        assert.equal((await lstat(transactionRoot)).isDirectory(), true)
+        assert.equal(workflow.value.slot.record.transaction.root, transactionRoot)
+        assert.equal(workflow.value.controller.status().phase, 'cleanup-failed')
+      } else {
+        assert.equal(result.failure.code, 'CANCELLED')
+        assert.equal(result.cleanup.transactionCleaned, true)
+        await assert.rejects(lstat(transactionRoot), { code: 'ENOENT' })
+        assert.equal(workflow.value.slot.record.transaction, undefined)
+      }
+      const discarded = await workflow.value.controller.discard({ planDigest: workflow.plan.planDigest }, {
+        agent: workflow.value.owner,
+      })
+      assert.equal(discarded.cleanup.capacityReleased, true)
+      await assert.rejects(lstat(transactionRoot), { code: 'ENOENT' })
+    } finally {
+      await rm(workflow.source, { recursive: true, force: true })
+      await chmod(workflow.run.staging.root, 0o700).catch((cause) => { if (cause.code !== 'ENOENT') throw cause })
+      await rm(workflow.run.staging.root, { recursive: true, force: true })
+      if (transactionRoot !== undefined) await rm(transactionRoot, { recursive: true, force: true })
+    }
+  })
+}
+
 test('rolls back byte-identical source after a partial candidate install and retains the sealed stage', async () => {
   let injected = false
   const workflow = await makeStagedWorkflow({

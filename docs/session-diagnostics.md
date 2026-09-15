@@ -1,11 +1,13 @@
 # Diagnose a DSH session
 
-Read one selected DSH log without replaying tools or sending a model request:
+Read one selected DSH log without replaying tools or sending a model request. From a DSH agent's POSIX shell:
 
 ```sh
-dsh-developer session --source /path/to/session.v3.jsonl.zstd
-dsh-developer session --source /path/to/export.jsonl --limit 10 --json
+node "$DSH_DEVELOPER_BIN" session --source /path/to/session.v3.jsonl.zstd
+node "$DSH_DEVELOPER_BIN" session --source /path/to/export.jsonl --limit 10 --json
 ```
+
+In PowerShell, use `node "$env:DSH_DEVELOPER_BIN"`; from this repository's checkout, use `node bin/dsh-developer.js`. Profile installation does not create a global CLI command.
 
 The report correlates calls and results by turn, step and call ID, parses JSON arguments, samples failures, and reports the last observed `turn/end`. DSH's `error` and `aborted` reasons become `failed` and `cancelled`; the original reason remains available. Later title metadata does not invalidate completion. It supports DSH format 3 in plain JSONL or concatenated Zstandard frames using Node's native decoder. `--limit` selects 0–100 recent calls, default 20. Counts cover all supported events read from the selected file; result-pruning replacements are reported as omissions, not additional executions.
 

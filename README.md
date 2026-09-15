@@ -22,7 +22,7 @@ Already have a plugin? Start there. You don't need to regenerate it or adopt a n
 Add it to DSH Web with one command:
 
 ```sh
-dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.0' --ignore-scripts
+dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.1' --ignore-scripts
 ```
 
 Open or restart DSH Web (`dsh web`). [Need DSH first?](docs/install.md) · [Using Codex?](docs/workflows.md#use-it-from-codex)

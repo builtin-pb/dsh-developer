@@ -1,6 +1,45 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { findSecrets, redactSensitiveOutput } from '../lib/security.js'
+import { createPrivateKeyObserver, findSecrets, redactSensitiveOutput } from '../lib/security.js'
+
+test('private-key observation survives every marker split and stays sticky after clipping', () => {
+  for (const type of ['', 'RSA ', 'EC ', 'OPENSSH ', 'DSA ', 'ENCRYPTED ']) {
+    const marker = Buffer.from('-----BEGIN ' + type + 'PRIVATE KEY-----')
+    for (let split = 1; split < marker.length; split++) {
+      const observe = createPrivateKeyObserver()
+      assert.equal(observe(Buffer.from('ordinary log\n'.repeat(10000))), false)
+      assert.equal(observe(marker.subarray(0, split)), false)
+      assert.equal(observe(marker.subarray(split)), true)
+      assert.equal(observe(Buffer.from('ordinary log\n'.repeat(10000))), true)
+    }
+    const observe = createPrivateKeyObserver()
+    for (let i = 0; i < marker.length; i++) assert.equal(observe(marker.subarray(i, i + 1)), i === marker.length - 1)
+  }
+  const observe = createPrivateKeyObserver()
+  assert.equal(observe(Buffer.from('-----BEGIN PUBLIC KEY-----\nordinary log\n')), false)
+})
+
+test('separates shell assignment names from values without exempting the value', () => {
+  const command = 'DSH_PACKAGE_ROOT=/installed/dsh npm test'
+  for (const text of [command, 'export ' + command + '\n', 'Run `' + command + '`.',
+    JSON.stringify({ scripts: { test: command } }), 'sh -c "' + command + '"']) {
+    assert.deepEqual(findSecrets(text), [])
+    assert.equal(redactSensitiveOutput(text), text)
+  }
+  const raw = ['aB3dE7gH', '9jK2mN4p', 'Q6sT8vW0', 'yZ1cF5iL'].join('')
+  for (const text of ['VALUE=' + raw, 'export VALUE=' + raw, 'VALUE="' + raw + '"', raw + '=ordinary',
+    '`VALUE=' + raw + '`', JSON.stringify({ test: 'VALUE=' + raw }), 'sh -c "VALUE=' + raw + '"']) {
+    assert.ok(findSecrets(text).includes('high-entropy-token'), text)
+  }
+  assert.ok(findSecrets('password=' + 'ordinary-value').includes('credential-assignment'))
+  for (const token of [['aB3dE7gH', '9jK2mN4p', 'Q6sT8vU='].join(''),
+    ['AbCdEfGh', 'IjKlMnOp', 'QrStUvWx', 'YzA='].join('')]) {
+    for (const text of ['Result: ' + token + '.', JSON.stringify({ value: token })]) {
+      assert.ok(findSecrets(text).includes('high-entropy-token'))
+      assert.match(redactSensitiveOutput(text), /redacted/u)
+    }
+  }
+})
 
 test('distinguishes lockfile integrity evidence from credentials', () => {
   const integrity = 'sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA=='

@@ -5,7 +5,7 @@
 Install directly from GitHub into DSH Web:
 
 ```sh
-dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.0' --ignore-scripts
+dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.1' --ignore-scripts
 ```
 
 Open or restart `dsh web`, then describe your plugin idea or problem. The installed skill is available to the model automatically. You do not need to clone this repository, install its development dependencies yourself, or run its tests to use it.
@@ -20,7 +20,7 @@ With Node.js `^22.18.0 || >=24.11.0` installed, run:
 
 ```sh
 npm install --global pnpm@11.7.0 @deepseek-ai/dsh@0.1.5-rc.2
-dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.0' --ignore-scripts
+dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.1' --ignore-scripts
 dsh web
 ```
 
@@ -34,11 +34,17 @@ Ordinary development uses the host execution policy and does not need an isolate
 
 Inside a DSH agent's shell, invoke the installed CLI as `node "$DSH_DEVELOPER_BIN" <operation>` on POSIX or `node "$env:DSH_DEVELOPER_BIN" <operation>` in PowerShell. DSH supplies that absolute entry and defaults CLI checks to its running installation. Profile installation does not add a global `dsh-developer` command. Examples using `node bin/dsh-developer.js` require this repository's checkout as the working directory.
 
-To modify dsh-developer itself, use the checkout-based workflow in [Contributing](contributing.md) or [Mac development](macos.md). The installation commands above select the v0.1.0 Git tag; unpublished local edits require a checkout installation.
+To modify dsh-developer itself, use the checkout-based workflow in [Contributing](contributing.md) or [Mac development](macos.md). The installation commands above select the v0.1.1 Git tag; unpublished local edits require a checkout installation.
 
 ## Verification
 
-A fresh npm installation of DSH `0.1.5-rc.2` and pnpm `11.7.0` succeeded on macOS ARM64 with Node `24.19.0`. Ordinary development against that DSH version passed native tool verification, packed plugin installation, configuration overrides, Web startup and rendered Client checks. These results concern the local development version of this plugin; they do not update the repository state fetched by GitHub.
+On 15 September 2026, the earlier `v0.1.0` GitHub command installed into a
+fresh disposable Web profile on macOS ARM64 with Node 24.19.0, pnpm 11.7.0 and
+DSH 0.1.5-rc.2. That installed copy booted and its native knowledge tool reported
+the selected DSH version correctly. Browser opening was explicitly disabled
+for the check. No model request or personal profile was used.
 
-
-The earlier unpinned GitHub command was tested on macOS with DSH 0.1.1-rc.2 and pnpm 11.7.0 in a fresh disposable profile and empty package store. It installed the dependency graph, registered the bundle, and started DSH Web with an HTTP 200 response. That trial followed the repository's default branch at remote revision `4bf78c2027bd82c9d6e377c2efc3394baa0dd7dd`; it does not verify the v0.1.0 tag selected above. Windows uses the same DSH/pnpm installation interface, but this fresh-install trial was run on Mac.
+This verifies the tagged installation, not unreleased checkout changes. See
+[verification results](verification.md) for subsequent fixes, native runtime
+and platform checks, and the distinction between deterministic tests and
+agent development trials.

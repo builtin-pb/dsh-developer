@@ -23,7 +23,7 @@ node bin/dsh-developer.js preflight --source . --profile web
 
 Doctor tests this product's plugin lifecycle in a disposable profile. An ordinary target plugin is inspected under the documented execution restrictions; a static audit is not proof that arbitrary code ran successfully.
 
-CI covers deterministic checks on Windows, macOS and Linux, the certified audit lanes on Windows/macOS, and ordinary development on three hosts. See the [development guide](development.md) for self-hosting and the explicit native-runtime test script. The isolated providers need their own local infrastructure. Run the [Mac integration suite](macos.md#enable-isolated-build-and-apply) on Apple silicon/macOS 26 with the reviewed container service and image installed. Windows provider tests use `DSH_DEVELOPER_WSL_CELL_TEST=1` and the configured WSL distribution.
+CI covers deterministic checks on Windows, macOS and Linux, the certified audit lanes on Windows/macOS, and ordinary development on three hosts. DSH 0.1.6-alpha.1 runs as an advisory development candidate; it does not extend the reviewed audit lanes. See the [development guide](development.md) for self-hosting and the explicit native-runtime test script. The isolated providers need their own local infrastructure. Run the [Mac integration suite](macos.md#enable-isolated-build-and-apply) on Apple silicon/macOS 26 with the reviewed container service and image installed. Windows provider tests use `DSH_DEVELOPER_WSL_CELL_TEST=1` and the configured WSL distribution.
 
 ## Change a boundary carefully
 

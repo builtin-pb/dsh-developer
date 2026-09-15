@@ -24,8 +24,9 @@ test('keeps both human-facing READMEs strong, concise, linked, and package-visib
   }
   assert.match(englishGuide, /browser-service collisions/u)
   assert.match(chineseGuide, /Client 服务冲突/u)
-  assert.match(englishGuide, /raw plugin-owned Web routes outside the authenticated connection boundary/u)
-  assert.match(chineseGuide, /宿主认证 connection 边界之外的插件自建原始 Web 路由/u)
+  assert.match(englishGuide, /raw plugin-owned Web routes outside the upstream connection service/u)
+  assert.match(englishGuide, /Connection registration alone does not prove authentication/u)
+  assert.match(chineseGuide, /上游 connection 服务之外的插件自建原始 Web 路由/u)
   assert.match(englishGuide, /migration --source .*--from-dsh 0\.1\.1-rc\.2 --to-dsh 0\.1\.2-alpha\.3/u)
   assert.match(chineseGuide, /源码走廊/u)
   assert.match(englishGuide, /It never edits source/u)
@@ -57,8 +58,8 @@ test('pins the AST runtime and records its direct MIT license evidence', async (
   assert.match(templates, /engines: \{ node: '>=22\.18' \}/u)
   assert.match(doctor, /expectedNodeRange = options\.productSource[\s\S]*: '>=22\.18'/u)
   for (const [name, version] of [
-    ['@babel/parser', '8.0.4'],
-    ['@babel/traverse', '8.0.4'],
+    ['@babel/parser', '8.0.5'],
+    ['@babel/traverse', '8.0.5'],
   ]) {
     assert.equal(manifest.dependencies[name], version)
     const installed = lock.packages[`node_modules/${name}`]

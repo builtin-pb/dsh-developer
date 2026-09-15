@@ -1,6 +1,81 @@
 # Development verification
 
-These are local and CI observations from 10–11 September 2026, covering the development workflow added after repository revision `4bf78c2`. They describe what was exercised, not a claim that dsh-developer already completes every development task reliably. The [development guide](development.md) explains how to use the capabilities; the [strategy](development-strategy.md) retains the broader goal and unfinished milestones.
+These are local and CI observations from 10–15 September 2026. Dated sections distinguish the released version from subsequent checkout work. They describe what was exercised, not a claim that dsh-developer already completes every development task reliably. The [development guide](development.md) explains how to use the capabilities; the [strategy](development-strategy.md) retains the broader goal and unfinished milestones.
+
+## v0.1.1 developer rollout review — 15 September
+
+A fresh install of the public v0.1.0 Git tag booted on DSH 0.1.5-rc.2 and invoked
+the native knowledge tool. Independent code reviews then found several
+connections the earlier gates missed: unresolved toolchain metadata could
+select npm, verbose builds could be stopped by the output cap, and following a
+nested dependency import could select another installed version. The revised
+runner retains bounded log tails; knowledge follows an explicit physical
+consumer and accounts for manifest reads within its shared budget.
+Output protection observes private-key headers before truncation and withholds
+both streams, including when a header spans process-output chunks.
+
+Verification now uses an explicit temporary pnpm store and startup-only patch
+loading where the profile supports it. It preserves the first cancellation
+cause, distinguishes failed assertions from startup errors, and attempts owned
+process-group cleanup after exit on POSIX. Windows post-exit worker cleanup is
+not claimed; plugins must dispose their workers. Native UI admission now checks
+the calling Agent's tool catalog. A harmless shell assignment in documentation
+no longer triggers the entropy heuristic; independent review also retained
+padded-token detection. The AST dependencies were updated to 8.0.5; npm reported
+no known production dependency advisories on this date.
+
+A fresh Codex actor, limited to the installed skill, public examples and exact
+DSH packages, implemented a Git TODO/FIXME overview and then configurable tags
+and team exclusions. The first version passed seven tests and ten archive cases;
+the maintenance version passed ten tests and eighteen archive cases. Independent
+native checks confirmed Unicode references, live edits, bounded results and
+explicit partial status at the 20,000-file and 32 MiB read limits. The team
+configuration also passed eight cases using the repaired default verification
+profile. These are assisted development observations, not a DeepSeek comparison
+or a reliable-autonomy estimate. Neither generated plugin is shipped.
+
+That trial exposed the documentation false positive and unnecessary verifier
+watchers. Its claim that failed CLI checks returned success was investigated
+and disproved: trailing shell commands had masked the CLI's actual exit status.
+Private first artifacts and corrections were preserved before follow-up work.
+
+A second fresh actor built a read-only package-script panel using native DSH
+Web slots. Its archive passed four tests and rendered refresh, empty states,
+malformed/missing/unreadable-file recovery, keyboard use and two viewport
+checks on 0.1.5-rc.2. An unauthenticated request returned 401; displayed script
+text was not executed. Independent archive checks covered Unicode, unusual
+script keys, live rereads and the exact 1 MiB input boundary. One configured
+project was the declared scope; dark mode and broad accessibility coverage were
+not assessed. Neither actor used a model API or a personal browser profile.
+
+The Web trial exposed unsupported native Fetch registration in static analysis
+and navigation-generated browser references rejected by the action validator.
+Both were repaired. Doctor now distinguishes Connection registration from
+authentication evidence: the older reviewed runtime and current runtime have
+different protections, so exact-runtime authentication still needs execution
+evidence. The panel's static audit passes after the parser repair; its rendered
+checks remain separate from the native-tool-only verifier.
+
+Further failure-path review found nested directory-to-file Apply, early provider
+disposal rejection and cancellation during transaction preparation defects.
+Regression checks cover directory identity restoration, observed asynchronous
+cleanup failure and truthful transaction cleanup/retention. Injected failures
+establish those controller paths, not universal provider reliability.
+
+Integrated local validation passed **638 tests**, with **31 optional checks
+skipped**, on macOS ARM64 and Node 24.19.0. A clean tracked-source copy passed
+static Doctor and both reviewed product lifecycle lanes. The product's Codex
+manifest must match its package version; generated bundles retain their fixed
+version contract. Mismatched product metadata was separately rejected.
+
+The native development suite passed 14 checks on each of DSH 0.1.1-rc.2,
+0.1.5-rc.2 and advisory 0.1.6-alpha.1 on macOS ARM64. Two real headless-browser
+checks passed authentication, interaction, reload, network restrictions and
+cleanup. A separate real browser regression used returned frame-qualified refs
+after two reloads to fill and click successfully. Four real Apple VM checks passed Build/Apply, oversized export
+rejection, promotion and timeout cleanup. The alpha observation does not add a
+certified audit or isolated-execution lane. Cross-platform results for these
+new changes must come from their own CI revision.
 
 ## Release coherence review
 
@@ -10,7 +85,7 @@ Isolated Apply now uses exclusive file publication and rolls back only controlle
 
 Integrated local validation passed **603 tests**, with **33 optional checks skipped**. Four real Apple-container checks separately passed: admitted VM Build/Apply, oversized-export rejection, generated promotion through DSH, and fork/exit churn with timeout cleanup. Failure-combination regressions use injected filesystem/provider faults; they do not establish live Windows provider coverage. The packaged candidate passed release/preview lifecycle checks and two native knowledge cases on DSH 0.1.5-rc.2. Browser lifecycle changes have deterministic coverage; no new rendered-browser trial was performed for this review.
 
-Setup and workflow instructions now distinguish ordinary current-runtime development from the exact reviewed audit and isolated-execution lanes. Installation examples select the v0.1.0 tag. These repairs strengthen the implemented workflow; they do not guarantee correctness of arbitrary generated projects.
+Setup and workflow instructions now distinguish ordinary current-runtime development from the exact reviewed audit and isolated-execution lanes. At that release, installation examples selected the v0.1.0 tag. These repairs strengthen the implemented workflow; they do not guarantee correctness of arbitrary generated projects.
 
 The first release CI run then exposed a Windows verification race on DSH 0.1.1-rc.2: native cases passed, but an early exit interrupted the launcher's unfinished startup. Verification now waits for the official CLI entry to complete startup before invoking tools or requesting exit. Older launchers evaluate that entry directly; current launchers expose `runCli`. Real delayed-startup and failed-startup fixtures cover both versions, including the older lane that previously lacked readiness coverage. This does not change the separately observed Web readiness boundary.
 

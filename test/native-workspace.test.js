@@ -5,6 +5,28 @@ import { join, relative } from 'node:path'
 import test from 'node:test'
 import { registerNativeCommandsWithDependencies } from '../lib/native-commands.js'
 import { registerNativeToolWithDependencies } from '../lib/native-tool.js'
+import { createUiCliToolDefinition } from '../lib/ui-cli-tool.js'
+
+test('UI command admits the calling Agent catalog and retains the unscoped human command', async () => {
+  const definition = createUiCliToolDefinition({ execute() {}, disposeOwner() {} })
+  const restrictedAgent = { id: 'restricted' }
+  const permittedAgent = { id: 'permitted' }
+  const tools = {
+    get: name => name === definition.name ? definition : undefined,
+    schemas: agent => agent === restrictedAgent ? [] : [definition],
+  }
+  const commands = new Map()
+  registerNativeCommandsWithDependencies({ tools, commands: { register(value) { commands.set(value.name, value) } } })
+  const command = commands.get('dsh-developer-ui')
+  const restricted = await command.handler({ agent: restrictedAgent, rawInput: '{}' })
+  assert.equal(restricted.kind, 'error')
+  assert.match(restricted.text, /^FAIL UI capabilities/u)
+  for (const agent of [permittedAgent, undefined]) {
+    const permitted = await command.handler({ agent, rawInput: '{}' })
+    assert.equal(permitted.kind, 'success')
+    assert.match(permitted.text, /^PASS UI capabilities/u)
+  }
+})
 
 function nativeSurfaces() {
   let definition

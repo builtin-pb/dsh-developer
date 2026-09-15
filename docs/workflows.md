@@ -57,7 +57,7 @@ Inspect an ordinary repository from DSH Web:
 
 Then use the [development workflow](development.md) to test the intended runtime with `verify --profile <name>` and rendered Web behavior with `dev`, including the documented configuration via `--patch`. Doctor's default runtime audit and preflight require the reviewed lanes. On other exact versions, including 0.1.5-rc.2, use static Doctor and this ordinary verification route. Keep certified gates for product and promoted release checks; a newer installation alone is not an ordinary plugin defect.
 
-Doctor checks package and bundle contracts, boot-required packages marked optional, Host/Client injection mixups, browser-service collisions, raw plugin-owned Web routes outside the authenticated connection boundary, and invalid Web artifacts. Product/promoted bundle checks also cover reproducibility and the admitted clean-profile lifecycle. The repository stays read-only during inspection; static findings do not prove behavior.
+Doctor checks package and bundle contracts, boot-required packages marked optional, Host/Client injection mixups, browser-service collisions, raw plugin-owned Web routes outside the upstream connection service, and invalid Web artifacts. Connection registration alone does not prove authentication: its APIs and protections differ across DSH versions, so verify the exact runtime and configuration. Product/promoted bundle checks also cover reproducibility and the admitted clean-profile lifecycle. The repository stays read-only during inspection; static findings do not prove behavior.
 
 Turn a saved Creator export into an installable bundle:
 

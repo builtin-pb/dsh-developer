@@ -12,6 +12,7 @@ import {
   withNextActions,
 } from '../lib/recovery-actions.js'
 import { inspectUiCapabilities } from '../lib/ui-capabilities.js'
+import { UI_SETUP_INSTRUCTION } from '../lib/ui-configuration.js'
 import { inspectSourceMigration } from '../lib/source-migration.js'
 
 const DIGEST = 'sha256:' + 'a'.repeat(64)
@@ -623,6 +624,14 @@ test('distinguishes UI prerequisite failure from provider admission failure', ()
   })
   assert.deepEqual(ids(admission), ['ui.resolve-admission'])
   assert.match(admission[0].recovery.text, /Keep browser execution, file transfer, and non-loopback navigation denied/u)
+  assert.match(admission[0].recovery.text, /check the calling Agent tool scope before any UI action/u)
+  for (const [action] of [prerequisite, admission]) {
+    assert.equal(action.automatic, false)
+    assert.equal(action.authorityClass, 'operator-configuration')
+    assert.ok(action.recovery.text.includes(UI_SETUP_INSTRUCTION))
+    assert.doesNotMatch(action.recovery.text, /(?:run|rerun|retry) dsh-developer ui-setup|In a DSH shell/iu)
+    assert.ok(action.recovery.text.length <= 512)
+  }
 })
 
 test('native boundary returns the full set while rendering only the first action', async () => {

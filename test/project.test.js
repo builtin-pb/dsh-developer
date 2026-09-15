@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
+import { createPrivateKey, generateKeyPairSync } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
-import { inspectProject, resolvePackageManager, runProjectScript } from '../lib/project.js'
+import { inspectProject, resolvePackageManager, runProjectScript, formatProjectReport } from '../lib/project.js'
 import { runBounded } from '../lib/runtime.js'
 
 async function fixture(t, manifest = {}) {
@@ -68,6 +69,107 @@ test('cancellation and malformed metadata do not trigger project code', async t 
   await assert.rejects(inspectProject(root, { signal: AbortSignal.abort() }), { code: 'CANCELLED' })
   await writeFile(join(root, 'package.json'), '{broken')
   await assert.rejects(inspectProject(root), { code: 'PROJECT_MANIFEST_INVALID' })
+})
+
+test('unsupported declarations cannot become executable through a lockfile', async t => {
+  const root = await fixture(t, { name: 'unsupported', packageManager: 'bun@1.2.0', scripts: { check: 'node missing.cjs' } })
+  await writeFile(join(root, 'package-lock.json'), '{}')
+  for (const declaration of ['bun@1.2.0', '', null, 42]) {
+    await writeFile(join(root, 'package.json'), JSON.stringify({ packageManager: declaration, scripts: { check: 'node missing.cjs' } }))
+    const report = await inspectProject(root)
+    assert.equal(report.ok, false)
+    assert.equal(report.packageManager.name, null)
+    assert.equal(report.tasks[0].argv, null)
+    await assert.rejects(runProjectScript(root, 'check'), { code: 'PROJECT_TASK_UNAVAILABLE' })
+  }
+})
+
+test('a containing declaration does not hide conflicting nearer lockfiles', async t => {
+  const root = await fixture(t, { packageManager: 'pnpm@11.7.0' })
+  const nested = join(root, 'packages', 'nested')
+  await mkdir(nested, { recursive: true })
+  await writeFile(join(nested, 'package.json'), JSON.stringify({ scripts: { check: 'node missing.cjs' } }))
+  await writeFile(join(root, 'pnpm-lock.yaml'), 'lockfileVersion: 9')
+  await writeFile(join(nested, 'package-lock.json'), '{}')
+  const report = await inspectProject(nested)
+  assert.equal(report.ok, false)
+  assert.deepEqual(report.packageManager.lockfiles, [join(nested, 'package-lock.json'), join(root, 'pnpm-lock.yaml')])
+  assert.equal(report.tasks[0].argv, null)
+  await assert.rejects(runProjectScript(nested, 'check'), { code: 'PROJECT_TASK_UNAVAILABLE' })
+  await rm(join(nested, 'package-lock.json'))
+  assert.equal((await inspectProject(nested)).ok, true)
+})
+
+test('large script logs retain tails without killing successful or failing scripts', async t => {
+  const root = await fixture(t, { name: 'noisy', scripts: { check: 'node check.cjs' } })
+  await writeFile(join(root, 'check.cjs'), `
+    const fs = require('node:fs');
+    process.stdout.write('ordinary build log\\n'.repeat(40000));
+    process.stderr.write('ordinary error log\\n'.repeat(40000));
+    setTimeout(() => {
+      fs.writeFileSync('finished', 'yes');
+      console.log('BUILD FINISHED'); console.error('ERROR LOG FINISHED');
+      process.exitCode = Number(process.argv[2]);
+    }, 50);
+  `)
+  for (const code of [0, 7]) {
+    await rm(join(root, 'finished'), { force: true })
+    const report = await runProjectScript(root, 'check', { args: [String(code)] })
+    assert.equal(report.exitCode, code)
+    assert.equal(report.ok, code === 0)
+    assert.equal(await readFile(join(root, 'finished'), 'utf8'), 'yes')
+    assert.deepEqual(report.output.truncated, { stdout: true, stderr: true })
+    assert.match(report.stdout, /BUILD FINISHED/u)
+    assert.match(report.stderr, /ERROR LOG FINISHED/u)
+    assert(Buffer.byteLength(report.stdout) <= report.output.limitBytes)
+    assert(Buffer.byteLength(report.stderr) <= report.output.limitBytes)
+    assert.match(formatProjectReport(report), /Earlier stdout and stderr omitted/u)
+  }
+})
+
+test('tail metadata distinguishes an exact byte limit from one extra byte', async t => {
+  const root = await fixture(t, { name: 'exact-output', scripts: { check: 'node check.cjs' } })
+  await writeFile(join(root, 'check.cjs'), `process.stderr.write('x'.repeat(Number(process.argv[2])))`)
+  for (const [size, truncated] of [[524288, false], [524289, true]]) {
+    const report = await runProjectScript(root, 'check', { args: [String(size)] })
+    assert.equal(report.output.truncated.stderr, truncated)
+    assert.equal(report.output.truncated.stdout, false)
+    assert.equal(report.ok, true)
+  }
+})
+
+test('project tails withhold valid short-line PEM keys even after the opening marker is discarded', async t => {
+  const root = await fixture(t, { name: 'pem-output', scripts: { check: 'node check.cjs' } })
+  const pem = generateKeyPairSync('rsa', { modulusLength: 1024 }).privateKey.export({ type: 'pkcs8', format: 'pem' })
+  const body = pem.split('\n').filter(line => line && !line.startsWith('---')).join('').match(/.{1,16}/gu)
+  const begin = ['-----BEGIN', 'PRIVATE KEY-----'].join(' ')
+  const end = ['-----END', 'PRIVATE KEY-----'].join(' ')
+  const wrapped = begin + '\n' + body.join('\n') + '\n' + end + '\n'
+  createPrivateKey(wrapped) // Real dummy key; short lines bypass individual-line entropy heuristics.
+  const log = wrapped + 'safe log line\n'.repeat(37420)
+  assert(Buffer.byteLength(log) > 524288)
+  assert(Buffer.byteLength(log) - 524288 < wrapped.length)
+  await writeFile(join(root, 'log.txt'), log)
+  await writeFile(join(root, 'check.cjs'), `
+    const fs = require('node:fs');
+    const stream = process.argv[2], other = stream === 'stdout' ? 'stderr' : 'stdout';
+    process[stream].write(fs.readFileSync('log.txt'));
+    process[other].write('Useful build diagnostic: 界🙂é\\n');
+    process.exitCode = 7;
+  `)
+  for (const stream of ['stdout', 'stderr']) {
+    const other = stream === 'stdout' ? 'stderr' : 'stdout'
+    const report = await runProjectScript(root, 'check', { args: [stream] })
+    assert.equal(report.ok, false)
+    assert.equal(report.exitCode, 7)
+    assert.equal(report[stream], '[redacted: process output contained a private key]\n')
+    assert.equal(report[other], '[redacted: process output contained a private key]\n')
+    assert.equal(report.output.truncated[stream], true)
+    assert.equal(report.output.truncated[other], false)
+    assert.equal(report.output.withheld[stream], true)
+    assert.equal(report.output.withheld[other], true)
+    assert(body.every(line => !JSON.stringify(report).includes(line)))
+  }
 })
 
 test('runs the selected real script in its package and preserves a failing exit status', async t => {

@@ -3,11 +3,12 @@ import { createHash } from 'node:crypto'
 import { access, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, relative } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { KNOWLEDGE_TOPICS, inspectDshKnowledge, formatDshKnowledgeReport } from '../lib/knowledge.js'
 import { runBounded } from '../lib/runtime.js'
+import { registerNativeToolWithDependencies } from '../lib/native-tool.js'
 
 const COMMIT = 'c291e7961a515f6d7af9304e7fd1d257929aef26'
 const SECRET = 'PRIVATE_CONFIGURATION_MUST_NOT_BE_READ'
@@ -690,4 +691,102 @@ test('allows peer closures beyond 32 packages while bounding packages and edges'
   assert.equal(edgeCap.development.usage.edges, edgeCap.limits.developmentEdges)
   assert(edgeCap.development.missing.some(item => item.reason === 'peer-edge-limit'))
   assert(edgeCap.usage.readBytes <= edgeCap.limits.totalReadBytes)
+})
+
+test('all identity manifests share the read budget regardless of export visibility', async t => {
+  for (const hidden of [false, true]) await t.test(hidden ? 'hidden' : 'exported', async t => {
+    const f = await fixture(t)
+    const name = i => '@deepseek-ai/bounded-peer-' + i
+    const manifests = new Map()
+    for (let i = 0; i < 12; i++) {
+      const root = await f.installedPackage(name(i), {
+        version: '1.0.0', description: 'a'.repeat(800 * 1024),
+        peerDependencies: i < 11 ? { [name(i + 1)]: '*' } : {},
+        exports: hidden ? { '.': './index.js' } : { '.': './index.js', './package.json': './package.json' },
+      })
+      manifests.set(name(i), await readFile(join(root, 'package.json')))
+    }
+    const report = await inspectDshKnowledge({ dshPath: f.entry, packageName: name(0) })
+    assert.equal(report.development.complete, false)
+    assert(report.development.missing.some(item => item.reason === 'total-read-limit'))
+    assert(report.warnings.some(item => item.includes('inspection limit')))
+    const inspected = Object.keys(report.development.dependencies)
+    assert(inspected.length < 12)
+    const expectedBytes = (await readFile(join(f.installed, 'package.json'))).length
+      + inspected.reduce((sum, name) => sum + manifests.get(name).length, 0)
+    assert.equal(report.usage.readBytes, expectedBytes)
+    assert(report.usage.readBytes <= report.limits.totalReadBytes)
+    assert(report.usage.readBytes > 6 * 1024 * 1024)
+  })
+})
+
+test('follows an import from its physical consumer through library, CLI and native lookup', async t => {
+  const f = await fixture(t)
+  const tools = '@deepseek-ai/dsh-tools', agent = '@deepseek-ai/dsh-agent'
+  const consumer = await f.installedPackage(tools, { version: '1.0.0', peerDependencies: { [agent]: '*' } })
+  const nested = await f.installedPackage(agent, { version: '1.0.0' }, consumer)
+  const outer = await f.installedPackage(agent, { version: '2.0.0' })
+  await write(join(consumer, 'lib/types/index.d.ts'), `export { Agent } from '${agent}';\n`)
+  await write(join(nested, 'lib/types/index.d.ts'), 'export interface Agent { oldId: string }\n')
+  await write(join(outer, 'lib/types/index.d.ts'), 'export interface Agent { newId: number }\n')
+  const initial = await inspectDshKnowledge({ dshPath: f.entry, packageName: tools })
+  assert.equal(initial.development.dependencies[agent], '1.0.0')
+  assert.equal((await inspectDshKnowledge({ dshPath: f.entry, packageName: agent })).development.dependencies[agent], '2.0.0')
+  function check(report) {
+    assert.equal(report.development.dependencies[agent], '1.0.0')
+    assert.equal(report.resolution.consumerRoot, consumer)
+    assert.equal(report.resolution.consumerManifestPath, join(consumer, 'package.json'))
+    assert.equal(report.resolution.consumerName, tools)
+    assert.equal(report.resolution.consumerVersion, '1.0.0')
+    assert(report.evidence.some(item => item.packageVersion === '1.0.0' && item.excerpt.includes('oldId')))
+    assert(!report.evidence.some(item => item.excerpt.includes('newId')))
+    assert.match(formatDshKnowledgeReport(report), /Resolve imports from:/u)
+  }
+  check(await inspectDshKnowledge({ dshPath: f.entry, packageName: agent, consumerRoot: consumer }))
+  const cli = fileURLToPath(new URL('../bin/dsh-developer.js', import.meta.url))
+  const output = await runBounded(process.execPath, [cli, 'knowledge', '--dsh', f.entry,
+    '--package', agent, '--consumer-root', consumer, '--json'])
+  check(JSON.parse(output.stdout))
+  const previousEntry = process.argv[1]
+  process.argv[1] = f.entry
+  t.after(() => { process.argv[1] = previousEntry })
+  let definition
+  registerNativeToolWithDependencies({
+    tools: { register(value) { definition = value }, guard() {}, schemas() { return [] } },
+    agents: { *roots() {} }, authoritySources: {}, onToolsPreExecute() {}, onToolsResult() {}, effect() {},
+  })
+  const invocation = { agent: { session: { header: { cwd: f.root } } }, signal: new AbortController().signal }
+  for (const consumerRoot of [consumer, relative(f.root, consumer)]) {
+    check((await definition.execute({ operation: 'knowledge', packageName: agent, consumerRoot }, invocation)).report)
+  }
+  const alias = join(f.root, 'consumer-link')
+  try { await symlink(consumer, alias, 'junction') } catch (error) {
+    if (process.platform === 'win32' && error.code === 'EPERM') return t.diagnostic('Directory symlink unavailable; direct consumer checks passed.')
+    throw error
+  }
+  check(await inspectDshKnowledge({ dshPath: f.entry, packageName: agent, consumerRoot: alias }))
+  // A bad nearest manifest must not cause the explicit consumer to fall back
+  // to the valid, different version available from DSH itself.
+  await write(join(nested, 'package.json'), '{')
+  const broken = await inspectDshKnowledge({ dshPath: f.entry, packageName: agent, consumerRoot: alias })
+  assert.equal(broken.development.complete, false)
+  assert.equal(broken.evidence.length, 0)
+  await assert.rejects(access(f.marker), { code: 'ENOENT' })
+})
+
+test('consumer basis requires an installed package query and ordinary package metadata', async t => {
+  const f = await fixture(t)
+  const packageName = '@deepseek-ai/dsh-agent'
+  await assert.rejects(inspectDshKnowledge({ dshPath: f.entry, consumerRoot: f.installed }), { code: 'KNOWLEDGE_CONSUMER_INVALID' })
+  await assert.rejects(inspectDshKnowledge({ upstreamRoot: f.upstream, packageName, consumerRoot: f.installed }), { code: 'KNOWLEDGE_CONSUMER_INVALID' })
+  await assert.rejects(inspectDshKnowledge({ dshPath: f.entry, packageName, consumerRoot: f.root }), { code: 'KNOWLEDGE_CONSUMER_INVALID' })
+  await assert.rejects(inspectDshKnowledge({ dshPath: f.entry, packageName, consumerRoot: '' }), { code: 'KNOWLEDGE_PATH_INVALID' })
+  const plugin = join(f.root, 'ordinary-plugin')
+  await write(join(plugin, 'package.json'), { name: 'my-plugin', version: '1.0.0' })
+  await f.installedPackage(packageName, { version: '3.0.0' }, plugin)
+  const report = await inspectDshKnowledge({ dshPath: f.entry, packageName, consumerRoot: plugin })
+  assert.equal(report.development.dependencies[packageName], '3.0.0')
+  assert.equal(report.resolution.consumerName, 'my-plugin')
+  await write(join(plugin, 'package.json'), { name: ['my-plugin'] })
+  await assert.rejects(inspectDshKnowledge({ dshPath: f.entry, packageName, consumerRoot: plugin }), { code: 'KNOWLEDGE_CONSUMER_INVALID' })
 })

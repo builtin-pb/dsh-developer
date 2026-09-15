@@ -219,6 +219,20 @@ test('keeps generated bundles strict when their Codex manifest is missing', asyn
   }
 })
 
+test('keeps generated bundle versions fixed independently of this product release', async () => {
+  const root = await generatedFixture()
+  try {
+    const path = join(root, '.codex-plugin/plugin.json')
+    const manifest = JSON.parse(await readFile(path, 'utf8'))
+    manifest.version = '0.1.1'
+    await writeFile(path, JSON.stringify(manifest))
+    const report = await doctorPlugin(root, { runtime: 'skip' })
+    const check = report.checks.find(value => value.id === 'manifest.codex-plugin')
+    assert.equal(check.status, 'FAIL')
+    assert.match(check.message, /Generated Codex plugin version must be 0\.1\.0/u)
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
 test('accepts the native DSH whenToUse skill hint', async () => {
   const root = await generatedFixture()
   try {
@@ -811,7 +825,22 @@ test('reviews raw plugin-owned Web routes without blocking intentional public in
     assert.equal(connectionCheck.blocking, false)
     assert.deepEqual(connectionCheck.evidence.rawRoutes, [])
     assert.equal(connectionCheck.evidence.connectionRoutes[0].authBoundary, 'host-connection')
-    assert.match(connectionCheck.message, /local absence is not a safety proof/u)
+    assert.match(connectionCheck.message, /Authentication depends on the exact runtime/u)
+    assert.equal(connectionCheck.evidence.connectionRoutes[0].hostAuthentication, 'requires-exact-runtime-verification')
+    assert.match(connectionCheck.recovery, /unauthenticated-request behavior/u)
+
+    await writeFile(join(root, 'index.js'), [
+      "export const inject = ['connection']",
+      'export function apply(ctx) {',
+      "  ctx.connection.fetch.register({ path: '/api/ping', methods: ['GET'], fetch: () => Response.json({ ok: true }) })",
+      '}',
+    ].join('\n'), 'utf8')
+    const fetchReport = await doctorPlugin(root, { runtime: 'skip' })
+    assert.equal(fetchReport.ok, true, JSON.stringify(fetchReport.checks, null, 2))
+    const fetchCheck = fetchReport.checks.find((candidate) => candidate.id === 'web.raw-route-auth')
+    assert.equal(fetchCheck.status, 'PASS')
+    assert.equal(fetchCheck.evidence.connectionRoutes[0].call, 'ctx.connection.fetch.register')
+    assert.equal(fetchCheck.evidence.connectionRoutes[0].routePath, '/api/ping')
 
     await writeFile(join(root, 'index.js'), [
       "import './broken.js'",

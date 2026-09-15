@@ -66,6 +66,25 @@ test('keeps the safe UI action vocabulary closed and credential-free', () => {
   )
 })
 
+test('accepts bounded provider element refs, including frame-qualified refs after navigation', () => {
+  for (const target of ['e1', 'e140', 'e999999', 'f1e140', 'f12e34', 'f999999e999999']) {
+    for (const operation of ['click', 'hover', 'check', 'uncheck', 'snapshot', 'screenshot', 'fill', 'select']) {
+      const input = { operation, target, ...(['fill', 'select'].includes(operation) ? { text: 'value' } : {}) }
+      assert.deepEqual(parseUiCliInput(input), input)
+    }
+  }
+  for (const target of [
+    'e0', 'e01', 'f0e1', 'f01e1', 'f1e0', 'f1e01', 'e1000000', 'f1000000e1', 'f1e1000000',
+    'f1', 'f1e', 'f1f2e3', 'F1e2', 'f1E2', ' e1', 'e1 ', 'f1e2\n',
+    'button', '#e1', '[ref=f1e2]', 'aria-ref=f1e2', 'f1e2 >> button', 'f1e2,button',
+    'f1e2;alert(1)', 'f1e2()', 'f1e2/*x*/', 'f1e2\u0000', 'f١e2', 'f1e２',
+    'f' + '1'.repeat(20) + 'e2',
+  ]) {
+    assert.throws(() => parseUiCliInput({ operation: 'click', target }),
+      { code: 'UI_INPUT_INVALID' }, JSON.stringify(target))
+  }
+})
+
 test('find and log results reach the rendered tool content', () => {
   const rendered = formatUiCliReport({ operation: 'find', session: { digest: 'sha256:' + 'a'.repeat(64) },
     evidenceDigest: 'sha256:' + 'b'.repeat(64), result: { provider: { result: 'Found 1 match: button Continue [ref=e15]' } } })
@@ -190,10 +209,14 @@ test('maps safe actions to argv-only Playwright CLI calls with bounded artifacts
     }
     if (operation === 'snapshot') {
       return {
-        stdout: JSON.stringify({ snapshot: ['- textbox "Name" [ref=e2]'] }),
+        stdout: JSON.stringify({ snapshot: ['- textbox "Name" [ref=f1e140]'] }),
         stderr: '',
         exitCode: 0,
       }
+    }
+    if (operation === 'click') {
+      assert.equal(args[3], 'f1e140')
+      return { stdout: JSON.stringify({ result: 'Clicked' }), stderr: '', exitCode: 0 }
     }
     if (operation === 'find') {
       return {
@@ -239,10 +262,13 @@ test('maps safe actions to argv-only Playwright CLI calls with bounded artifacts
     assert.equal(opened.result.provider.session, undefined)
 
     const snapshot = await controller.execute('agent-session', { operation: 'snapshot', depth: 4 })
-    assert.deepEqual(JSON.parse(snapshot.result.pageData.content), ['- textbox "Name" [ref=e2]'])
+    assert.deepEqual(JSON.parse(snapshot.result.pageData.content), ['- textbox "Name" [ref=f1e140]'])
     assert.equal(snapshot.result.artifacts.length, 0)
     assert.equal(snapshot.result.provider.snapshot, undefined)
     assert.equal(snapshot.result.storage.maximumBytes, 8 * 1024 * 1024)
+    const clicked = await controller.execute('agent-session', { operation: 'click', target: 'f1e140' })
+    assert.equal(clicked.ok, true)
+    assert.ok(calls.some(call => call.args[2] === 'click' && call.args[3] === 'f1e140'))
 
     const waited = await controller.execute('agent-session', {
       operation: 'wait',

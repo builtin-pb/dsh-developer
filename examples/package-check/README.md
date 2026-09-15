@@ -40,6 +40,11 @@ It imports the real Cordis `Context` and DSH `ToolDefinition` types; no local
 substitutes or private files are needed. DSH packages are development-only.
 The compiled plugin's sole runtime dependency is `semver`.
 
+This example deliberately compiles against the older reviewed `0.1.1-rc.2`
+type baseline. For a new plugin, use `knowledge` on your intended DSH runtime
+and pin its reported peer closure; copying these development versions does
+not select the runtime that will load your plugin.
+
 Tests cover range boundaries, prereleases, invalid input, canonical results,
 and Cordis registration/disposal. To run the registry test against an existing
 DSH installation, set `DSH_PACKAGE_ROOT` to its package directory (the directory

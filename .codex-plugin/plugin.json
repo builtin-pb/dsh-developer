@@ -1,6 +1,6 @@
 {
   "name": "dsh-developer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The single plugin you need for DSH",
   "author": {
     "name": "MetaFlow contributors"
@@ -8,11 +8,11 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "DSH Developer",
-    "shortDescription": "Describe the DSH plugin. It builds and proves it.",
-    "longDescription": "Own any DSH plugin request: answer or inspect directly, and turn requested changes into a plan and tested result.",
+    "shortDescription": "Build and test plugins and DSH itself.",
+    "longDescription": "Develop DeepSeek Harness plugins and core: inspect exact APIs, implement changes, run native checks, and diagnose failures.",
     "developerName": "MetaFlow contributors",
     "category": "Developer Tools",
     "capabilities": [],
-    "defaultPrompt": "Use $dsh-developer to own this DSH plugin request: answer or inspect directly when appropriate; for requested changes, plan, implement, test, and repair within the authorized scope."
+    "defaultPrompt": "Use $dsh-developer for this DSH development request: answer or inspect directly when appropriate; for requested changes, plan, implement, test, and repair within the authorized scope."
   }
 }
