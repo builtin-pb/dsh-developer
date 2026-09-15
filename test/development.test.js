@@ -4,7 +4,7 @@ import { generateKeyPairSync } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import test from 'node:test'
 import { formatDevelopmentReport, runDevelopmentServer, validateToolCases, verifyDevelopmentPlugin } from '../lib/development.js'
@@ -308,7 +308,7 @@ test('dev CLI prints final shutdown reports and preserves incomplete-drain warni
     `)
     for (const json of [false, true]) {
       const { stdout, stderr } = await promisify(execFile)(process.execPath,
-        ['--import', hook, cli, 'dev', '--source', root, ...(json ? ['--json'] : [])], { timeout: 10_000 })
+        ['--import', pathToFileURL(hook).href, cli, 'dev', '--source', root, ...(json ? ['--json'] : [])], { timeout: 10_000 })
       assert.equal(stderr, '')
       if (json) {
         const reports = JSON.parse('[' + stdout.trim().replace(/\}\s*\{/gu, '},{') + ']')
