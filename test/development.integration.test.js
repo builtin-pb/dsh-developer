@@ -366,6 +366,8 @@ test('trusted overlay reaches Web boot and preserves cancellation and cleanup', 
         assert.equal(observed.value, 'web override')
         assert.equal(observed.home, value.home)
         assert.equal(observed.pid, value.pid)
+        assert.equal(value.workspace.path, join(value.home, 'workspace'))
+        assert.deepEqual(await readdir(value.workspace.path), [], 'archive workspace must not expose profile data or the package store')
         controller.abort()
       },
     })

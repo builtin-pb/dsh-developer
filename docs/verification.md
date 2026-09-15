@@ -72,6 +72,13 @@ incomplete pipe drainage withholds both streams and explicitly leaves descendant
 cleanup unverified. Independent real-Cordis checks covered late entries, disabled
 entries and disposal.
 
+Archive previews now create an empty workspace separate from the disposable
+profile and package store; source-directory previews retain the selected project.
+Native checks exercise both paths. An alpha macOS CI startup-failure case still
+timed out in one follow-up run and passed in the next without a runtime change;
+its intermittent cause remains unresolved. The check never announced readiness
+for the failed plugin, and the alpha lane remains advisory.
+
 Integrated local validation passed **649 tests**, with **31 optional checks
 skipped**, on macOS ARM64 and Node 24.19.0. A clean tracked-source copy passed
 static Doctor and both reviewed product lifecycle lanes. The product's Codex
