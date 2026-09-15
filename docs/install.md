@@ -38,13 +38,13 @@ To modify dsh-developer itself, use the checkout-based workflow in [Contributing
 
 ## Verification
 
-On 15 September 2026, the earlier `v0.1.0` GitHub command installed into a
-fresh disposable Web profile on macOS ARM64 with Node 24.19.0, pnpm 11.7.0 and
-DSH 0.1.5-rc.2. That installed copy booted and its native knowledge tool reported
-the selected DSH version correctly. Browser opening was explicitly disabled
-for the check. No model request or personal profile was used.
+The release review exercised both a public Git-tag installation (`v0.1.0`)
+and the `v0.1.1` archive in disposable profiles on macOS ARM64 with Node
+24.19.0, pnpm 11.7.0 and DSH 0.1.5-rc.2. Installed native tools reported the
+selected runtime and resolved declarations from the actual consuming package.
+Browser opening was explicitly disabled; no model request or personal profile
+was used. Tagged-installation evidence accompanies the [GitHub release](https://github.com/builtin-pb/dsh-developer/releases/tag/v0.1.1).
 
-This verifies the tagged installation, not unreleased checkout changes. See
-[verification results](verification.md) for subsequent fixes, native runtime
-and platform checks, and the distinction between deterministic tests and
-agent development trials.
+See [verification results](verification.md) for native runtime and platform
+checks, rendered Web observations and the distinction between deterministic
+tests and agent development trials.

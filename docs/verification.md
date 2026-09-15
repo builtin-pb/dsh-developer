@@ -91,8 +91,11 @@ checks passed authentication, interaction, reload, network restrictions and
 cleanup. A separate real browser regression used returned frame-qualified refs
 after two reloads to fill and click successfully. Four real Apple VM checks passed Build/Apply, oversized export
 rejection, promotion and timeout cleanup. The alpha observation does not add a
-certified audit or isolated-execution lane. Cross-platform results for these
-new changes must come from their own CI revision.
+certified audit or isolated-execution lane. The [rollout CI run at
+`1a3c3c4`](https://github.com/builtin-pb/dsh-developer/actions/runs/35033208568)
+passed all 18 jobs, including all three development versions on Windows,
+macOS and Ubuntu. The archive workspace correction was separately exercised
+on all three local runtimes before its final CI run.
 
 An additional Computer Use pass through actual Chrome checked native onboarding,
 skill and slash-command discovery, the running plugin inventory, capability

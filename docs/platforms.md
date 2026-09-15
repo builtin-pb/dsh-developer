@@ -15,7 +15,7 @@ Local ordinary-development evidence covers macOS ARM64 and Debian 12 ARM64 with 
 
 Earlier ordinary-development runs also passed on DSH 0.1.1-rc.2 and 0.1.5-rc.1. Rendered packed Client behavior was checked on macOS with 0.1.5-rc.1 and 0.1.5-rc.2; Linux UI evidence covers compilation and automated registry/component tests.
 
-The [v0.1.0 CI run at `cb27149`](https://github.com/builtin-pb/dsh-developer/actions/runs/34564186509) passed all 15 jobs, including native development on Windows, macOS and Ubuntu with DSH 0.1.1-rc.2 and 0.1.5-rc.2. These checks cover source/archive verification, overlays, HTTP authentication, process cleanup and background-browser suppression. They do not establish rendered Windows browser automation, every architecture or musl. [Verification results](verification.md) distinguish that release from subsequent local changes and experiments.
+The [v0.1.1 rollout CI run at `1a3c3c4`](https://github.com/builtin-pb/dsh-developer/actions/runs/35033208568) passed all 18 jobs, including native development on Windows, macOS and Ubuntu with DSH 0.1.1-rc.2, 0.1.5-rc.2 and advisory 0.1.6-alpha.1. These checks cover source/archive verification, overlays, HTTP authentication, process cleanup and background-browser suppression. They do not establish rendered Windows browser automation, every architecture or musl. [Verification results](verification.md) retain the intermittent alpha startup timeout observed in earlier CI and distinguish native checks from rendered Web experiments. The [v0.1.0 release run](https://github.com/builtin-pb/dsh-developer/actions/runs/34564186509) remains the earlier 15-job baseline.
 
 ## Why these routes
 
