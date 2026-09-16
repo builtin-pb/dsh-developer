@@ -41,6 +41,6 @@ Runtime lanes: 0.1.5-rc.2 blocking, 0.1.6-alpha.1 advisory; providers need separ
 
 Publishing, registry/provider/GitHub changes, personal profiles and wider targets need authority. Disposable profiles are in scope. Preserve ambiguous staging; schedule nothing after cancellation.
 
-At completion, review the whole run against the user's intent: retries, setup friction, workarounds and verification gaps. Fix in-scope problems. Report material friction or a smooth result with evidence. For actionable product friction, [draft feedback](references/feedback.md) and ask before submitting.
+At completion, review the whole run against the user's intent: retries, setup friction, workarounds and verification gaps. Fix in-scope problems. Report material friction or a smooth result with evidence. Offer to [report product friction](references/feedback.md); prepare and submit it after consent.
 
 Return the answer or findings with evidence, assumptions and material limits. For Build, return the tested outcome—or an exact blocker and recovery.
