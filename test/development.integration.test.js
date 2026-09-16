@@ -105,6 +105,8 @@ export async function apply(ctx, config) {
       render: (_args, value) => [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value) }] },
     isConcurrencySafe: () => true, execute: async () => {
       calls += 1
+      if (config.processDiagnostic) console.error(config.processDiagnostic)
+      if (config.errorOnCall === calls) throw new Error(config.errorMessage)
       if (config.interruptOnCall === calls) {
         await writeFile(config.interruptMarker, JSON.stringify({ home: process.env.DSH_HOME, pid: process.pid }))
         if (config.interruptMode === 'exit') process.exit(23)
@@ -224,6 +226,69 @@ test('verifies workspace-relative and Agent-scoped tools with native policy and 
       assert.match(JSON.stringify(report.cases[2].content), /turn/i)
       assert.deepEqual(JSON.parse(await readFile(disposed, 'utf8')), { id: report.agent.id, registered: false })
       assert.equal(await readFile(join(workspace, 'marker.txt'), 'utf8'), 'selected workspace\n')
+    }
+  } finally { await rm(temporary, { recursive: true, force: true }) }
+})
+
+test('retains native completion and verdicts while withholding a credential-like diagnostic path', { timeout: 60_000 }, async () => {
+  const temporary = await mkdtemp(join(tmpdir(), 'dsh-protected-receipt-'))
+  try {
+    const { archive } = await createOverlayFixture(temporary)
+    const patchPath = join(temporary, 'diagnostic.patch.yml'), fixtureCases = join(temporary, 'cases.json')
+    const diagnosticPath = '/private/tmp/dsh-enhancements-september16-evening/authoring-trial/fixtures/policy/README.md'
+    await writeFile(patchPath, '- id: overlay-fixture\n  config:\n    value: ready\n    errorOnCall: 2\n'
+      + '    errorMessage: ' + JSON.stringify('File has not been read: ' + diagnosticPath) + '\n')
+    for (const mode of ['matching', 'wrong-message', 'unexpected-error']) {
+      const expectedError = mode !== 'unexpected-error', expectedPass = mode === 'matching'
+      await writeFile(fixtureCases, JSON.stringify([
+        { name: 'before error', tool: 'overlay_value', arguments: {}, expected: 'ready' },
+        { name: 'diagnostic', tool: 'overlay_value', arguments: {}, isError: expectedError, expected: null,
+          ...(expectedError ? { errorContains: mode === 'matching' ? 'has not been read' : 'unrelated failure' } : {}) },
+        { name: 'after error', tool: 'overlay_value', arguments: {}, expected: 'ready' },
+      ]))
+      const report = await verifyDevelopmentPlugin(archive, { dshPath, casesPath: fixtureCases, patchPath, online: true })
+      assert.equal(report.complete, true, JSON.stringify(report))
+      assert.equal(report.ok, expectedPass)
+      assert.equal(report.phase, 'complete')
+      assert.deepEqual(report.cases.map(item => item.passed), [true, expectedPass, true])
+      assert.equal(report.cases[1].contentWithheld, true)
+      assert.equal(report.outputProtection.withheld, true)
+      assert(!JSON.stringify(report).includes(diagnosticPath))
+      if (!expectedPass) {
+        assert.equal(report.diagnostic.code, 'DEVELOPMENT_CASES_FAILED')
+        assert.deepEqual(report.cases[1].failures, [expectedError ? 'error-message-mismatch' : 'unexpected-error'])
+      }
+    }
+  } finally { await rm(temporary, { recursive: true, force: true }) }
+})
+
+test('private-key protection covers both native result and process diagnostic channels', { timeout: 60_000 }, async () => {
+  const temporary = await mkdtemp(join(tmpdir(), 'dsh-cross-channel-protection-'))
+  try {
+    const { archive } = await createOverlayFixture(temporary)
+    const patchPath = join(temporary, 'protection.patch.yml'), fixtureCases = join(temporary, 'cases.json')
+    const marker = ['-----BEGIN', 'PRIVATE KEY-----'].join(' ')
+    const fragment = 'short-body-fragment'
+    for (const markerInProcess of [true, false]) {
+      await writeFile(patchPath, '- id: overlay-fixture\n  config:\n    structured: true\n'
+        + '    value: ' + JSON.stringify(markerInProcess ? fragment : marker) + '\n'
+        + '    processDiagnostic: ' + JSON.stringify(markerInProcess ? marker : fragment) + '\n')
+      await writeFile(fixtureCases, JSON.stringify([{ tool: 'overlay_value', arguments: {},
+        resultPath: '/status', expected: markerInProcess ? 'ready' : 'wrong' }]))
+      const report = await verifyDevelopmentPlugin(archive, { dshPath, casesPath: fixtureCases, patchPath, online: true })
+      assert.equal(report.complete, true, JSON.stringify(report))
+      assert.equal(report.ok, markerInProcess)
+      assert.equal(report.cases[0].passed, markerInProcess)
+      assert.equal(report.cases[0].valueWithheld, true)
+      assert.equal(report.outputProtection.reason, 'private-key')
+      assert(!JSON.stringify(report).includes(marker))
+      assert(!JSON.stringify(report).includes(fragment))
+      if (!markerInProcess) {
+        assert.equal(report.diagnostic.code, 'DEVELOPMENT_CASES_FAILED')
+        assert.equal(report.diagnostic.stderr, undefined)
+        assert.equal(report.diagnostic.stdout, undefined)
+        assert.deepEqual(report.diagnostic.output.withheld, { stdout: true, stderr: true })
+      }
     }
   } finally { await rm(temporary, { recursive: true, force: true }) }
 })
@@ -624,9 +689,9 @@ test('owns Web startup, cancellation, endpoint and profile cleanup', { timeout: 
   assert.throws(() => process.kill(ready.pid, 0), { code: 'ESRCH' })
 })
 
-test('native Host hot reload disposes and reapplies edited source in the same Web process', { timeout: 60_000 }, async () => {
+test('native Host hot reload disposes and reapplies edited source in the same Web process', { timeout: 60_000 }, async t => {
   const temporary = await mkdtemp(join(tmpdir(), 'dsh-native-hmr-'))
-  const source = join(temporary, 'plugin # source'), marker = join(temporary, 'lifecycle.jsonl')
+  const source = join(temporary, 'plugin # & source'), marker = join(temporary, 'lifecycle.jsonl')
   const controller = new AbortController()
   let ready
   const reloads = []
@@ -638,6 +703,15 @@ test('native Host hot reload disposes and reapplies edited source in the same We
   }
   try {
     await mkdir(source)
+    // Exercise both the source and the native pnpm store argument on Windows.
+    // os.tmpdir checks TEMP before TMP; keep this test's homes under its fixture.
+    if (process.platform === 'win32') {
+      const temporaryHomes = join(temporary, 'temporary # & profiles')
+      await mkdir(temporaryHomes)
+      const previous = process.env.TEMP
+      process.env.TEMP = temporaryHomes
+      t.after(() => { if (previous === undefined) delete process.env.TEMP; else process.env.TEMP = previous })
+    }
     await writeFile(join(source, 'package.json'), JSON.stringify({ name: 'dsh-native-hmr-fixture', version: '1.0.0',
       type: 'module', main: './index.js', dsh: { bundle: { patch: './cordis.patch.yml' } } }))
     await writeFile(join(source, 'cordis.patch.yml'), '- insert:\n    - id: native-hmr-fixture\n      name: dsh-native-hmr-fixture\n')
@@ -685,7 +759,9 @@ test('native Host hot reload disposes and reapplies edited source in the same We
       },
     })
     assert.equal(report.stopped, true)
-    assert.deepEqual((await records()).at(-1), { event: 'dispose', version: 5, pid: ready.pid })
+    // Cancellation owns process termination, not successful execution of every
+    // native disposer: Windows uses taskkill and POSIX has a bounded grace.
+    // Reload disposal is asserted above while the process is still running.
     await assert.rejects(stat(ready.home), { code: 'ENOENT' })
     assert.throws(() => process.kill(ready.pid, 0), { code: 'ESRCH' })
   } finally { controller.abort(); await rm(temporary, { recursive: true, force: true }) }

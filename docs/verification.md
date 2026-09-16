@@ -2,16 +2,50 @@
 
 These are local and CI observations from 10–16 September 2026. Dated sections distinguish the released version from subsequent checkout work. They describe what was exercised, not a claim that dsh-developer already completes every development task reliably. The [development guide](development.md) explains how to use the capabilities; the [strategy](development-strategy.md) retains the broader goal and unfinished milestones.
 
+## Authoring exercise and protected verification — 16 September, unreleased
+
+A fresh actor built a small README-command retrieval plugin through `project`,
+`knowledge`, `run`, static Doctor and packed native verification. Independent
+fixtures covered actual Agent workspaces, empty and bounded results, errors,
+and a second-README maintenance change. Its final archive passed 19 unit tests
+and 32 cases in ten complete native CLI batches. A deliberately wrong expected
+value and an exceeded output budget failed as intended. This was a development
+exercise, not a controlled comparison of models or a rendered-Web trial; the
+experimental plugin remains private.
+
+The exercise found that a normal path in a native write-denial message could
+trigger credential detection and silently discard a completed receipt. The
+verifier now retains validated outcomes while explicitly withholding suspect
+fields. Repeating the original three-case policy batch passed without changing
+its workspace, archive or expected values. The detector remains conservative;
+the path-bearing content was withheld. Private-key detection propagates across
+full results, invocation/cleanup exceptions and process streams before clipping.
+Native cross-channel tests preserve verdicts while suppressing payload fragments.
+
+`errorContains` now distinguishes an intended rendered error from unrelated
+failures. The actual native write denial passed its literal message assertion
+even with protected content; an actual missing-Agent error failed an assertion
+expecting invalid arguments. Full validation passed 720 tests with 31 optional
+tests skipped, and the current-runtime native suite passed all 20 tests on
+macOS ARM64/Node 24.19.0.
+
 ## Native Host hot reload — 16 September, unreleased
 
 The opt-in `dev --watch` route uses DSH's existing Cordis HMR service. Native
 tests on macOS ARM64/Node 24.19.0 passed with DSH 0.1.1-rc.2, 0.1.5-rc.2 and
 0.1.6-alpha.1. A source path containing spaces and `#` reloaded an imported
 module in the same process; syntax and activation failures produced public
-status notifications, and subsequent edits recovered. Cancellation disposed
-the last active plugin and removed the disposable profile. An independent
+status notifications, and subsequent edits recovered. Cancellation stopped
+the owned process and removed the disposable profile. An independent
 experiment also observed no reload for an unimported file or an imported file
 outside the selected root, and confirmed watcher closure on process exit.
+The first CI run exposed an overstrong shutdown assertion: bounded process
+termination does not guarantee that every native plugin disposer ran. Reload
+disposal is checked while the process remains alive; shutdown checks ownership
+and profile removal. That run also exposed Windows source-install argument
+handling for a path containing spaces and `#`. Windows-only quoting now covers
+the source and store arguments; the native CI fixture includes spaces, `#` and
+`&` in both locations. Paths with shell-variable markers remain unsupported.
 
 Focused unit tests cover overlapping attempts, warnings during settlement,
 disposal and metadata-only notifications. Full validation through

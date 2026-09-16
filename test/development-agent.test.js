@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { apply } from '../lib/development-probe.js'
+import { protectVerificationReceipt, validVerificationReceipt } from '../lib/development-receipt.js'
+import { findSecrets } from '../lib/security.js'
 
 // These contexts test probe orchestration only. Actual Agent/policy behavior
 // belongs to the native DSH integration tests, not these test doubles.
@@ -254,6 +256,60 @@ test('invocation and cleanup diagnostics are withheld and bounded independently'
     assert.match(text, /redacted/u)
   }
 })
+
+for (const scenario of ['invocation', 'cleanup', 'cleanup-after-invocation-failure']) {
+  test(`raw ${scenario} PEM detection survives diagnostic clipping and protects earlier case output`, async t => {
+    const marker = ['-----BEGIN', 'PRIVATE KEY-----'].join(' ')
+    // Short body fragments evade standalone token detection; the marker in a
+    // different channel is what makes their disclosure unsafe.
+    const fragment = 'QUJDREVGR0hJSktM'
+    assert.deepEqual(findSecrets(fragment), [])
+    const privateFailure = () => new Error('padding\n'.repeat(400) + marker + '\n' + fragment)
+    const invocationFails = scenario !== 'cleanup'
+    const state = await fixture(t, {
+      execute: (_input, state) => {
+        if (invocationFails && state.executions.length === 2) {
+          throw scenario === 'invocation' ? privateFailure() : new Error('ordinary invocation failure')
+        }
+        return { ...result(), content: [{ type: 'text', text: fragment }] }
+      },
+      dispose: () => {
+        throw scenario === 'invocation' ? new Error('ordinary cleanup failure') : privateFailure()
+      },
+    })
+    state.start()
+    const { code, receipt } = await state.finish()
+    assert.equal(code, 1)
+    assert.equal(state.disposalCalls, 1)
+    assert.equal(receipt.privateKeyOutput, true)
+    assert.equal(state.disposeReceipt.privateKeyOutput, scenario === 'invocation' ? true : undefined)
+    assert.equal(receipt.cases.length, invocationFails ? 1 : 2)
+    assert(receipt.cases.every(item => item.passed && item.privateKeyOutput === undefined))
+    assert.equal(receipt.phase, 'agent-dispose')
+    assert.equal(receipt.complete, false)
+    assert.equal(receipt.ok, false)
+    const failureField = scenario === 'cleanup-after-invocation-failure' ? 'cleanupError' : 'error'
+    assert.equal(receipt[failureField].length, 2048)
+    assert(!JSON.stringify(receipt).includes(marker), 'marker has disappeared before parent projection')
+    assert.deepEqual(findSecrets(JSON.stringify(receipt)), [], 'sticky evidence must survive loss of the marker')
+    assert.equal(validVerificationReceipt(receipt, cases, state.root), true)
+    // Incomplete draining must not downgrade the known private-key reason.
+    const projected = protectVerificationReceipt(receipt, cases, 'incomplete-process-output')
+    assert.equal(validVerificationReceipt(projected, cases, state.root), true)
+    assert.deepEqual(projected.outputProtection, { withheld: true, reason: 'private-key' })
+    assert.equal(projected.phase, receipt.phase)
+    assert.equal(projected.complete, false)
+    assert.equal(projected.ok, false)
+    assert.deepEqual(projected.activeCase, receipt.activeCase)
+    assert(projected.cases.every(item => item.passed && item.valueWithheld && item.contentWithheld))
+    assert(projected.error)
+    assert.equal(Object.hasOwn(projected, 'cleanupError'), Object.hasOwn(receipt, 'cleanupError'))
+    assert.equal(projected.agent.metadataWithheld, true)
+    assert(!JSON.stringify(projected).includes(fragment))
+    assert(!JSON.stringify(projected).includes('ordinary cleanup failure'))
+    assert(!JSON.stringify(projected).includes('ordinary invocation failure'))
+  })
+}
 
 test('cancellation drains a cooperative invocation and disposes without requesting an exit', async t => {
   const entered = deferred()

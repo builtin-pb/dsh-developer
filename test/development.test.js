@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import test from 'node:test'
-import { formatDevelopmentReport, runDevelopmentServer, validateToolCases, validReloadObservation, validVerificationReceipt, verifyDevelopmentPlugin } from '../lib/development.js'
+import { developmentPathArgument, formatDevelopmentReport, runDevelopmentServer, validateToolCases, validReloadObservation, validVerificationReceipt, verifyDevelopmentPlugin } from '../lib/development.js'
 import { apply as verifyTools, observeToolCase, selectCaseValue } from '../lib/development-probe.js'
 import { parseCliArguments, assertCliCommandOptions } from '../lib/cli-options.js'
 import { deriveNextActions } from '../lib/recovery-actions.js'
@@ -249,6 +249,19 @@ test('verification requires behavior assertions rather than registration alone',
   assert.doesNotThrow(() => validateToolCases([{ ...cases[0], name: '空结果 / empty results' }]))
   for (const name of ['', '   ', null, 42, 'line\nbreak', 'a'.repeat(129)]) {
     assert.throws(() => validateToolCases([{ ...cases[0], name }]), { code: 'DEVELOPMENT_CASES_INVALID' })
+  }
+})
+
+test('specific error assertions require explicit error cases and bounded nonblank literals', () => {
+  const base = { tool: 'fixture', arguments: {}, isError: true }
+  const cases = [{ ...base, errorContains: 'NOT_FOUND' }]
+  assert.equal(validateToolCases(cases), cases)
+  for (const errorContains of ['', '  \n', null, 4, {}, 'x'.repeat(513)]) {
+    assert.throws(() => validateToolCases([{ ...base, errorContains }]), { code: 'DEVELOPMENT_CASES_INVALID' })
+  }
+  for (const isError of [false, undefined]) {
+    assert.throws(() => validateToolCases([{ ...base, isError, expected: null, errorContains: 'NOT_FOUND' }]),
+      { code: 'DEVELOPMENT_CASES_INVALID' })
   }
 })
 
@@ -504,6 +517,16 @@ test('native hot reload is opt-in, dev-only and rejects archives before installi
   await writeFile(archive, 'not an archive')
   await assert.rejects(runDevelopmentServer(archive, { watch: true, dshPath: 'missing-dsh' }),
     { code: 'DEVELOPMENT_WATCH_SOURCE_INVALID' })
+})
+
+test('Windows native plugin arguments retain path boundaries without expanding variables', () => {
+  for (const path of ['C:\\work space\\plugin # & source', 'C:\\临时 目录\\pnpm-store', 'D:\\plain\\plugin.tgz']) {
+    assert.equal(developmentPathArgument(path, 'win32'), '"' + path + '"')
+    assert.equal(developmentPathArgument(path, 'linux'), path)
+  }
+  for (const path of ['C:\\%USERNAME%\\plugin', 'C:\\!NAME!\\plugin', 'C:\\bad"name', 'C:\\line\nbreak']) {
+    assert.throws(() => developmentPathArgument(path, 'win32'), { code: 'DEVELOPMENT_PATH_UNSUPPORTED' })
+  }
 })
 
 test('reload observations require bounded metadata and never label inactive entries settled', () => {
