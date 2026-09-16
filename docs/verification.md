@@ -2,6 +2,23 @@
 
 These are local and CI observations from 10–16 September 2026. Dated sections distinguish the released version from subsequent checkout work. They describe what was exercised, not a claim that dsh-developer already completes every development task reliably. The [development guide](development.md) explains how to use the capabilities; the [strategy](development-strategy.md) retains the broader goal and unfinished milestones.
 
+## Native Host hot reload — 16 September, unreleased
+
+The opt-in `dev --watch` route uses DSH's existing Cordis HMR service. Native
+tests on macOS ARM64/Node 24.19.0 passed with DSH 0.1.1-rc.2, 0.1.5-rc.2 and
+0.1.6-alpha.1. A source path containing spaces and `#` reloaded an imported
+module in the same process; syntax and activation failures produced public
+status notifications, and subsequent edits recovered. Cancellation disposed
+the last active plugin and removed the disposable profile. An independent
+experiment also observed no reload for an unimported file or an imported file
+outside the selected root, and confirmed watcher closure on process exit.
+
+Focused unit tests cover overlapping attempts, warnings during settlement,
+disposal and metadata-only notifications. Full validation through
+`dsh-developer run` passed 694 tests, with 31 optional tests skipped; all 18
+current-runtime native integration tests passed. These are Host lifecycle
+observations, not browser hot-reload or model-development evidence.
+
 ## Agent verification and failure diagnostics — 16 September, unreleased
 
 Native verification now identifies named cases and distinct assertion failures,
@@ -22,6 +39,8 @@ current-runtime native suite passed all 17 tests, including cancellation during
 an Agent-scoped invocation. Unit checks separately cover failed preset mounting,
 teardown failure and interruption. These observations do not establish model
 turns, interactive approval behavior or arbitrary tools' lack of network calls.
+The integrated Agent verification change at `e70da51` also passed all 18 CI jobs,
+including the native current-runtime suite on Windows.
 
 Session diagnostics now preserve recognized failed shell process observations
 independently of the recent-call window. A synthetic corpus follows the four

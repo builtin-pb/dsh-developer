@@ -111,6 +111,16 @@ node bin/dsh-developer.js dev --source ./my-plugin --dsh /path/to/dsh
 
 The command creates a disposable Web profile, registers the source project with DSH's native workspace service, requests an available port, and reports the bound process’s URL after checking its page and, where available, receiving native startup readiness. An archive uses an empty temporary workspace. It reports a clean URL and a `ui` action for the owned server. The private launch token stays in its temporary profile. It does not automatically open a browser.
 
+Add `--watch` for native Host hot reload from a source directory:
+
+```sh
+node bin/dsh-developer.js dev --source ./my-plugin --watch --dsh /path/to/dsh
+```
+
+This enables DSH's Cordis HMR service and its required Node loader support for the disposable server. Changes to loaded Host modules inside the selected package reload their dependent plugin entries in the same process. Keep the project's build/watch command running when the Host entry uses compiled output. Client bundling still follows the project's own workflow; this option does not provide browser HMR. Packed archives cannot be watched. Dependencies outside the selected directory, ignored files and changes to package installation require a restart.
+
+Reload notifications report native attempts, activation state and cumulative HMR warnings. A syntax error can leave the previous code running even when every entry remains active; a warning makes that uncertainty visible. A later settled attempt means the enabled entries activated, not that the changed behavior is correct. Exercise it in the browser or rerun `verify`. Notifications contain only status metadata, not raw plugin logs. JSON consumers may receive readiness, reload and shutdown objects; `sequence` orders observed status updates, not source edits, and rapid intermediate updates may be coalesced.
+
 Prepare the browser once with the CLI's `ui-setup` operation (explicit `--install-cli` if the pinned CLI is missing), then restart DSH for native registration. For disposable setup storage and environment overrides, see [Agent-native UI](../skills/dsh-developer/references/agent-native-ui.md). Shell UI reads saved configuration immediately.
 
 Invalid UI configuration leaves core developer commands available and `dsh_ui` unregistered. DSH logs the configuration error code and setup instruction; repair it and restart before using native UI. Unexpected activation errors still propagate.
@@ -129,7 +139,7 @@ Exercise the plugin’s actual UI, reload, state and errors, then close the brow
 
 This route executes trusted local development code. The isolated browser keeps its login cookie in memory, restricts networking to the selected DSH server, and closes when that server or its owning `dev` process ends. Native streaming and same-server redirects keep their normal behavior; requests to other servers are blocked, including requests from browser workers. This is not containment for a hostile plugin. Personal profiles, arbitrary cookie imports and generic token-bearing navigation remain unavailable.
 
-Web readiness also requires all enabled profile entries to activate. The observer listens for failed entries before Web services are available and preserves their errors through unrelated startup rollback. Failures before observation starts, import failures without a fiber, or a failing plugin stuck in its own cleanup can still reach the startup timeout. Timeouts retain bounded, protected process diagnostics after attempted owned cleanup. If inherited pipes do not close, both streams are withheld and the report warns that descendants may remain alive. The server runs until cancellation; `--timeout-ms` can set an explicit lifetime. Logs retain a bounded tail without terminating the server for accumulated output. Stop the owning terminal with Ctrl+C to terminate its process group and remove its profile. The CLI prints a final shutdown report, including incomplete cleanup observations. Restart after Host changes; build/watch Client assets through the project’s own workflow.
+Web readiness also requires all enabled profile entries to activate. The observer listens for failed entries before Web services are available and preserves their errors through unrelated startup rollback. Failures before observation starts, import failures without a fiber, or a failing plugin stuck in its own cleanup can still reach the startup timeout. Timeouts retain bounded, protected process diagnostics after attempted owned cleanup. If inherited pipes do not close, both streams are withheld and the report warns that descendants may remain alive. The server runs until cancellation; `--timeout-ms` can set an explicit lifetime. Logs retain a bounded tail without terminating the server for accumulated output. Stop the owning terminal with Ctrl+C to terminate its process group and remove its profile. The CLI prints a final shutdown report, including incomplete cleanup observations. Without `--watch`, restart after Host changes.
 
 ## Develop the harness and this plugin
 

@@ -624,6 +624,73 @@ test('owns Web startup, cancellation, endpoint and profile cleanup', { timeout: 
   assert.throws(() => process.kill(ready.pid, 0), { code: 'ESRCH' })
 })
 
+test('native Host hot reload disposes and reapplies edited source in the same Web process', { timeout: 60_000 }, async () => {
+  const temporary = await mkdtemp(join(tmpdir(), 'dsh-native-hmr-'))
+  const source = join(temporary, 'plugin # source'), marker = join(temporary, 'lifecycle.jsonl')
+  const controller = new AbortController()
+  let ready
+  const reloads = []
+  const records = async () => (await readFile(marker, 'utf8').catch(() => '')).trim().split('\n').filter(Boolean).map(JSON.parse)
+  const until = async predicate => {
+    const deadline = Date.now() + 10_000
+    while (!await predicate() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 50))
+    assert(await predicate(), 'expected native reload observation before deadline')
+  }
+  try {
+    await mkdir(source)
+    await writeFile(join(source, 'package.json'), JSON.stringify({ name: 'dsh-native-hmr-fixture', version: '1.0.0',
+      type: 'module', main: './index.js', dsh: { bundle: { patch: './cordis.patch.yml' } } }))
+    await writeFile(join(source, 'cordis.patch.yml'), '- insert:\n    - id: native-hmr-fixture\n      name: dsh-native-hmr-fixture\n')
+    await writeFile(join(source, 'value.js'), 'export const version = 1\n')
+    await writeFile(join(source, 'index.js'), `
+      import { appendFileSync } from 'node:fs'
+      import { version } from './value.js'
+      export const name = 'native-hmr-fixture'
+      export function apply(ctx) {
+        const record = event => appendFileSync(${JSON.stringify(marker)}, JSON.stringify({ event, version, pid: process.pid }) + '\\n')
+        record('apply')
+        if (version === 4) throw new Error('fixture reload activation failed')
+        ctx.effect(() => () => record('dispose'))
+      }
+    `)
+    const report = await runDevelopmentServer(source, { dshPath, watch: true, signal: controller.signal,
+      onReload: observation => reloads.push(observation),
+      onReady: async value => {
+        ready = value
+        assert.deepEqual(value.reload, { mode: 'native-host-hmr', root: await realpath(source) })
+        // Readiness covers native activation, not the filesystem watcher's initial scan.
+        await new Promise(resolve => setTimeout(resolve, 500))
+        await writeFile(join(source, 'value.js'), 'export const version = 2\n')
+        await until(async () => (await records()).some(item => item.event === 'apply' && item.version === 2))
+        assert.deepEqual(await records(), [
+          { event: 'apply', version: 1, pid: value.pid },
+          { event: 'dispose', version: 1, pid: value.pid },
+          { event: 'apply', version: 2, pid: value.pid },
+        ])
+        await until(() => reloads.at(-1)?.status === 'settled')
+        await writeFile(join(source, 'value.js'), 'export const version = ;\n')
+        await until(() => reloads.at(-1)?.status === 'warning')
+        assert(reloads.at(-1).warnings > 0)
+        assert.equal((await records()).at(-1).version, 2, 'syntax failure retains the previous plugin')
+        await writeFile(join(source, 'value.js'), 'export const version = 3\n')
+        await until(async () => (await records()).at(-1)?.version === 3 && reloads.at(-1)?.status === 'settled')
+        await writeFile(join(source, 'value.js'), 'export const version = 4\n')
+        await until(() => reloads.at(-1)?.status === 'failed')
+        assert(reloads.at(-1).inactive > 0)
+        await writeFile(join(source, 'value.js'), 'export const version = 5\n')
+        await until(async () => (await records()).at(-1)?.version === 5 && reloads.at(-1)?.status === 'settled')
+        assert.equal(reloads.at(-1).inactive, 0)
+        assert(reloads.at(-1).warnings > 0, 'recovery retains the warning history')
+        controller.abort()
+      },
+    })
+    assert.equal(report.stopped, true)
+    assert.deepEqual((await records()).at(-1), { event: 'dispose', version: 5, pid: ready.pid })
+    await assert.rejects(stat(ready.home), { code: 'ENOENT' })
+    assert.throws(() => process.kill(ready.pid, 0), { code: 'ESRCH' })
+  } finally { controller.abort(); await rm(temporary, { recursive: true, force: true }) }
+})
+
 test('never announces a foreign server as DSH readiness', { timeout: 45_000 }, async () => {
   const foreign = createServer((_req, res) => res.end('not DSH'))
   await new Promise(resolve => foreign.listen(0, '127.0.0.1', resolve))

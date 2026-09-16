@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import test from 'node:test'
-import { formatDevelopmentReport, runDevelopmentServer, validateToolCases, validVerificationReceipt, verifyDevelopmentPlugin } from '../lib/development.js'
+import { formatDevelopmentReport, runDevelopmentServer, validateToolCases, validReloadObservation, validVerificationReceipt, verifyDevelopmentPlugin } from '../lib/development.js'
 import { apply as verifyTools, observeToolCase, selectCaseValue } from '../lib/development-probe.js'
 import { parseCliArguments, assertCliCommandOptions } from '../lib/cli-options.js'
 import { deriveNextActions } from '../lib/recovery-actions.js'
@@ -430,6 +430,7 @@ test('dev CLI prints final shutdown reports and preserves incomplete-drain warni
   const cli = fileURLToPath(new URL('../bin/dsh-developer.js', import.meta.url))
   const development = new URL('../lib/development.js', import.meta.url).href
   const ready = { ok: true, url: 'http://127.0.0.1:4173/', profile: 'web', workspace: { id: 'workspace', path: '/example' } }
+  const reload = { kind: 'dsh-development-reload', sequence: 2, attempt: 1, warnings: 1, status: 'warning', active: 1, inactive: 0 }
   const reason = 'Inherited pipes did not close after the termination attempt; readers were closed. Descendants may still be running.'
   for (const incomplete of [false, true]) {
     const report = { ok: true, stopped: true, cleanup: 'disposable profile removed',
@@ -445,7 +446,9 @@ test('dev CLI prints final shutdown reports and preserves incomplete-drain warni
         return { format: 'module', shortCircuit: true, source: ${JSON.stringify(`
           export * from ${JSON.stringify(development + '?actual')}
           export async function runDevelopmentServer(source, options) {
+            if (options.watch !== true) throw new Error('watch option did not reach the server')
             await options.onReady(${JSON.stringify(ready)})
+            await options.onReload(${JSON.stringify(reload)})
             return ${JSON.stringify(report)}
           }
         `)} }
@@ -453,14 +456,15 @@ test('dev CLI prints final shutdown reports and preserves incomplete-drain warni
     `)
     for (const json of [false, true]) {
       const { stdout, stderr } = await promisify(execFile)(process.execPath,
-        ['--import', pathToFileURL(hook).href, cli, 'dev', '--source', root, ...(json ? ['--json'] : [])], { timeout: 10_000 })
+        ['--import', pathToFileURL(hook).href, cli, 'dev', '--source', root, '--watch', ...(json ? ['--json'] : [])], { timeout: 10_000 })
       assert.equal(stderr, '')
       if (json) {
         const reports = JSON.parse('[' + stdout.trim().replace(/\}\s*\{/gu, '},{') + ']')
-        assert.deepEqual(reports, [ready, report])
+        assert.deepEqual(reports, [ready, reload, report])
       } else {
         assert.match(stdout, /http:\/\/127\.0\.0\.1:4173\//u)
         assert.match(stdout, /Development server stopped\./u)
+        assert.match(stdout, /reload warning; current code may be stale/u)
         assert.doesNotMatch(stdout, /Verification workspace|\[object Object\]/u)
         assert.ok(stdout.endsWith(report.cleanup + '\n'))
         if (incomplete) assert.ok(stdout.includes('WARNING: ' + reason))
@@ -484,6 +488,32 @@ test('development execution is CLI-only and its network option cannot alter stat
     assert.throws(() => parseNativeToolInput({ operation, source: 'plugin', patch: 'trusted.yml' }), /not valid/u)
   }
   assert.deepEqual(parseNativeToolInput({ operation: 'project' }), { operation: 'project' })
+})
+
+test('native hot reload is opt-in, dev-only and rejects archives before installing DSH', async t => {
+  const parsed = parseCliArguments(['dev', '--source', 'plugin', '--watch'])
+  assertCliCommandOptions(parsed.command, parsed.options)
+  assert.equal(parsed.options.watch, true)
+  assert.throws(() => assertCliCommandOptions('verify', { watch: true }), /does not accept/u)
+  for (const watch of ['true', 1, null, {}]) {
+    await assert.rejects(runDevelopmentServer('missing source', { watch }), { code: 'DEVELOPMENT_WATCH_INVALID' })
+  }
+  const root = await mkdtemp(join(tmpdir(), 'dsh-watch-selection-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const archive = join(root, 'plugin.tgz')
+  await writeFile(archive, 'not an archive')
+  await assert.rejects(runDevelopmentServer(archive, { watch: true, dshPath: 'missing-dsh' }),
+    { code: 'DEVELOPMENT_WATCH_SOURCE_INVALID' })
+})
+
+test('reload observations require bounded metadata and never label inactive entries settled', () => {
+  const observation = { sequence: 1, attempt: 0, warnings: 1, status: 'warning', active: 1, inactive: 0 }
+  assert.equal(validReloadObservation(observation), true)
+  for (const change of [{ sequence: 0 }, { attempt: -1 }, { warnings: Infinity }, { active: '1' },
+    { inactive: Number.MAX_SAFE_INTEGER + 1 }, { status: 'success' }, { status: 'settled', inactive: 1 }]) {
+    assert.equal(validReloadObservation({ ...observation, ...change }), false)
+  }
+  assert.doesNotMatch(formatDevelopmentReport({ kind: 'dsh-development-reload', ...observation }), /PASS|FAIL/u)
 })
 
 test('rejects invalid overlay selections before installing or booting DSH', async () => {
