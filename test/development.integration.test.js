@@ -44,6 +44,32 @@ import { spawn } from 'node:child_process'
 export const name = 'overlay-fixture'
 export const inject = ['tools']
 export async function apply(ctx, config) {
+  if (config.webWorkspaceMarker) ctx.inject(['agents', 'workspaceRegistry'], webCtx => {
+    const observe = async () => {
+      try {
+        await webCtx.loader.await()
+        const controller = webCtx.get('sessionController')
+        let created, api
+        if (controller) { created = await controller.create({}); api = 'session-controller' }
+        else {
+          const response = await webCtx.get('apiProxy').sessions.create({ rpcId: 'preview-create', method: 'session.create', payload: {} })
+          if (!response.result.ok) throw new Error(response.result.error.message)
+          created = response.result.value
+          api = 'legacy-api-proxy'
+        }
+        const { sessionId } = created
+        const agent = webCtx.agents.get(sessionId)
+        const result = await webCtx.tools.execute({ callId: 'preview-workspace-read', name: 'read',
+          arguments: { file_path: 'workspace.txt' }, agent, signal: new AbortController().signal })
+        await writeFile(config.webWorkspaceMarker, JSON.stringify({ api, cwd: agent.session.header.cwd,
+          processCwd: process.cwd(), workspaces: webCtx.workspaceRegistry.list().map(item => item.path),
+          isError: result.isError, line: result.value?.lines?.[0]?.text }))
+      } catch (error) { await writeFile(config.webWorkspaceMarker, JSON.stringify({ error: error.message })) }
+    }
+    const ready = webCtx.get('appReady')
+    if (ready) webCtx.effect(() => ready.onReady(() => { void observe() }))
+    else setTimeout(() => { void observe() }, 0)
+  })
   if (config.agentChecks) {
     const calls = new Map()
     ctx.on('agent/disposed', ({ agent }) => writeFileSync(config.agentDisposedMarker,
@@ -235,7 +261,7 @@ test('retains native completion and verdicts while withholding a credential-like
   try {
     const { archive } = await createOverlayFixture(temporary)
     const patchPath = join(temporary, 'diagnostic.patch.yml'), fixtureCases = join(temporary, 'cases.json')
-    const diagnosticPath = '/private/tmp/dsh-enhancements-september16-evening/authoring-trial/fixtures/policy/README.md'
+    const diagnosticPath = '/tmp/' + ['plugin-development', 'workspace-2026', 'projects', 'commands', 'README.md'].join('/')
     await writeFile(patchPath, '- id: overlay-fixture\n  config:\n    value: ready\n    errorOnCall: 2\n'
       + '    errorMessage: ' + JSON.stringify('File has not been read: ' + diagnosticPath) + '\n')
     for (const mode of ['matching', 'wrong-message', 'unexpected-error']) {
@@ -765,6 +791,44 @@ test('native Host hot reload disposes and reapplies edited source in the same We
     await assert.rejects(stat(ready.home), { code: 'ENOENT' })
     assert.throws(() => process.kill(ready.pid, 0), { code: 'ESRCH' })
   } finally { controller.abort(); await rm(temporary, { recursive: true, force: true }) }
+})
+
+test('Web preview selects a sample workspace independently of source or archive installation', { timeout: 60_000 }, async () => {
+  const temporary = await realpath(await mkdtemp(join(tmpdir(), 'dsh-preview-workspace-')))
+  try {
+    const { source, archive } = await createOverlayFixture(temporary)
+    const workspace = join(temporary, 'sample 工作 project')
+    await mkdir(workspace)
+    await writeFile(join(workspace, 'workspace.txt'), 'preview workspace\n')
+    const marker = join(temporary, 'workspace-observation.json'), patchPath = join(temporary, 'workspace.patch.yml')
+    await writeFile(patchPath, '- id: overlay-fixture\n  config:\n    webWorkspaceMarker: ' + JSON.stringify(marker) + '\n')
+    for (const selection of [source, archive]) {
+      await rm(marker, { force: true })
+      const controller = new AbortController()
+      let ready
+      const report = await runDevelopmentServer(selection, { dshPath, patchPath, workspacePath: workspace,
+        online: true, signal: controller.signal, onReady: async value => {
+          ready = value
+          assert.equal(value.workspace.path, workspace)
+          assert.equal(value.source, await realpath(selection))
+          const deadline = Date.now() + 10_000
+          let observed
+          while (!observed && Date.now() < deadline) {
+            try { observed = JSON.parse(await readFile(marker, 'utf8')) } catch {}
+            if (!observed) await new Promise(resolve => setTimeout(resolve, 50))
+          }
+          assert(observed, 'the native Web session must finish its workspace read')
+          assert(['session-controller', 'legacy-api-proxy'].includes(observed.api))
+          assert.deepEqual(observed, { api: observed.api, cwd: workspace, processCwd: workspace, workspaces: [workspace],
+            isError: false, line: 'preview workspace' })
+          controller.abort()
+        },
+      })
+      assert.equal(report.stopped, true)
+      await assert.rejects(stat(ready.home), { code: 'ENOENT' })
+      assert.equal(await readFile(join(workspace, 'workspace.txt'), 'utf8'), 'preview workspace\n')
+    }
+  } finally { await rm(temporary, { recursive: true, force: true }) }
 })
 
 test('never announces a foreign server as DSH readiness', { timeout: 45_000 }, async () => {

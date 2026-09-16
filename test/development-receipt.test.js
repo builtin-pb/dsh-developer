@@ -13,7 +13,7 @@ function receipt(cases, results) {
 const text = value => [{ type: 'text', text: value }]
 
 test('a conservative path finding withholds the error text without losing completed case outcomes', () => {
-  const path = '/private/tmp/dsh-enhancements-september16-evening/authoring-trial/fixtures/policy/README.md'
+  const path = '/tmp/' + ['plugin-development', 'workspace-2026', 'projects', 'commands', 'README.md'].join('/')
   assert.deepEqual(findSecrets(path), ['high-entropy-token'])
   const cases = [{ name: 'denied write', tool: 'write', arguments: {}, isError: true, expected: null }]
   const raw = receipt(cases, [{ isError: true, value: null, content: text('File has not been read: ' + path) }])

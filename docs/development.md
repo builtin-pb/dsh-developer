@@ -117,6 +117,14 @@ node bin/dsh-developer.js dev --source ./my-plugin --dsh /path/to/dsh
 
 The command creates a disposable Web profile, registers the source project with DSH's native workspace service, requests an available port, and reports the bound process’s URL after checking its page and, where available, receiving native startup readiness. An archive uses an empty temporary workspace. It reports a clean URL and a `ui` action for the owned server. The private launch token stays in its temporary profile. It does not automatically open a browser.
 
+Use `--workspace` to preview either a source directory or an archive against a separate, existing project:
+
+```sh
+node bin/dsh-developer.js dev --source ./my-plugin --workspace ./sample-project --watch --dsh /path/to/dsh
+```
+
+The selected directory becomes the registered workspace and the server's working directory, so a new Web session defaults to it and native relative file tools operate there. Host watching still follows the plugin source. Workspace changes persist after the temporary profile is removed; use a disposable sample project when testing writes.
+
 Add `--watch` for native Host hot reload from a source directory:
 
 ```sh

@@ -2,6 +2,17 @@
 
 These are local and CI observations from 10–16 September 2026. Dated sections distinguish the released version from subsequent checkout work. They describe what was exercised, not a claim that dsh-developer already completes every development task reliably. The [development guide](development.md) explains how to use the capabilities; the [strategy](development-strategy.md) retains the broader goal and unfinished milestones.
 
+## Web workspace selection — 16 September, unreleased
+
+`dev --workspace` previews source packages and packed archives against a separate
+sample project. On macOS ARM64/Node 24.19.0, native tests passed with DSH
+0.1.1-rc.2, 0.1.5-rc.2 and 0.1.6-alpha.1. Each used the runtime's actual Web
+session API without an explicit session directory, then invoked native `read`
+with a relative filename through the created Agent. Session defaults, the
+registered workspace and the observed file all selected the sample project;
+its file survived profile cleanup unchanged. These are Web backend checks,
+not rendered browser observations or model turns.
+
 ## Authoring exercise and protected verification — 16 September, unreleased
 
 A fresh actor built a small README-command retrieval plugin through `project`,

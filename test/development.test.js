@@ -390,17 +390,19 @@ test('partial or mismatched verification receipts cannot establish a complete ve
   assert.match(formatDevelopmentReport(partial), /Interrupted during #2 next "next case"/u)
 })
 
-test('Agent verification requires an existing directory before any runtime preparation', async t => {
+test('Agent verification and Web preview require an existing workspace before runtime preparation', async t => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-agent-workspace-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   const file = join(root, 'file')
   await writeFile(file, '')
   for (const workspacePath of ['', ' ', null, false, file, join(root, 'absent'), 'invalid\0path']) {
     await assert.rejects(verifyDevelopmentPlugin(root, { workspacePath }), { code: 'DEVELOPMENT_WORKSPACE_INVALID' })
+    await assert.rejects(runDevelopmentServer(root, { workspacePath }), { code: 'DEVELOPMENT_WORKSPACE_INVALID' })
   }
   const parsed = parseCliArguments(['verify', '--workspace', root])
   assert.doesNotThrow(() => assertCliCommandOptions(parsed.command, parsed.options))
-  for (const command of ['project', 'dev', 'run', 'doctor']) {
+  assert.doesNotThrow(() => assertCliCommandOptions('dev', parsed.options))
+  for (const command of ['project', 'run', 'doctor']) {
     assert.throws(() => assertCliCommandOptions(command, parsed.options), /does not accept/u)
   }
   assert.throws(() => parseNativeToolInput({ operation: 'project', workspace: root }), /not valid/u)
@@ -460,6 +462,7 @@ test('dev CLI prints final shutdown reports and preserves incomplete-drain warni
           export * from ${JSON.stringify(development + '?actual')}
           export async function runDevelopmentServer(source, options) {
             if (options.watch !== true) throw new Error('watch option did not reach the server')
+            if (options.workspacePath !== source) throw new Error('workspace option did not reach the server')
             await options.onReady(${JSON.stringify(ready)})
             await options.onReload(${JSON.stringify(reload)})
             return ${JSON.stringify(report)}
@@ -469,7 +472,7 @@ test('dev CLI prints final shutdown reports and preserves incomplete-drain warni
     `)
     for (const json of [false, true]) {
       const { stdout, stderr } = await promisify(execFile)(process.execPath,
-        ['--import', pathToFileURL(hook).href, cli, 'dev', '--source', root, '--watch', ...(json ? ['--json'] : [])], { timeout: 10_000 })
+        ['--import', pathToFileURL(hook).href, cli, 'dev', '--source', root, '--watch', '--workspace', root, ...(json ? ['--json'] : [])], { timeout: 10_000 })
       assert.equal(stderr, '')
       if (json) {
         const reports = JSON.parse('[' + stdout.trim().replace(/\}\s*\{/gu, '},{') + ']')
@@ -479,6 +482,7 @@ test('dev CLI prints final shutdown reports and preserves incomplete-drain warni
         assert.match(stdout, /Development server stopped\./u)
         assert.match(stdout, /reload warning; current code may be stale/u)
         assert.doesNotMatch(stdout, /Verification workspace|\[object Object\]/u)
+        assert.match(stdout, /Web workspace: \/example/u)
         assert.ok(stdout.endsWith(report.cleanup + '\n'))
         if (incomplete) assert.ok(stdout.includes('WARNING: ' + reason))
         else assert.doesNotMatch(stdout, /WARNING:/u)

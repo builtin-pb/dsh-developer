@@ -36,7 +36,7 @@ const USAGE = [
   '  dsh-developer session --source <session.jsonl[.zstd]> [--limit <0..100>] [--json]',
   '  dsh-developer run --source <project> --script <name> [--timeout-ms <ms>] [--json] [-- <script args...>]',
   '  dsh-developer verify --source <plugin-or-tgz> --cases <json> [--workspace <directory>] [--patch <path>] [--dsh <path>] [--profile <name>] [--online] [--json]',
-  '  dsh-developer dev --source <plugin-or-tgz> [--watch] [--patch <path>] [--dsh <path>] [--port <number>] [--online] [--json]',
+  '  dsh-developer dev --source <plugin-or-tgz> [--workspace <directory>] [--watch] [--patch <path>] [--dsh <path>] [--port <number>] [--online] [--json]',
   '  run, verify and dev execute trusted project code under the calling host policy.',
   '  --patch selects one trusted Cordis overlay after the installed bundle/profile and before the development probe.',
   '  dsh-developer admit-cell [--dsh <path>] [--wsl-distro <name>] [--json]',
@@ -143,6 +143,7 @@ async function main(argv) {
     } else {
       report = await runDevelopmentServer(required(options, 'source'), {
         dshPath: options.dsh, patchPath: options.patch, port: integerOption(options, 'port'), watch: options.watch, online: options.online, timeoutMs,
+        workspacePath: options.workspace,
         signal: controller.signal, onReady: report => output(report, formatDevelopmentReport),
         onReload: report => output(report, formatDevelopmentReport),
       })

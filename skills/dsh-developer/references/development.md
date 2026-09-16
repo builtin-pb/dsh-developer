@@ -18,11 +18,11 @@ Follow repository conventions and maintained dependencies. Give each service, re
 
 ## Exercise and deliver
 
-In DSH POSIX shells use `node "$DSH_DEVELOPER_BIN"`:
+In POSIX shells use `node "$DSH_DEVELOPER_BIN"`:
 
-- `run --source <package> --script <name> [-- <args...>]` runs declared scripts with exact arguments, host environment, bounded output and cancellation.
+- `run --source <package> --script <name> [-- <args...>]` runs scripts with exact arguments, host environment, bounded output and cancellation.
 - `verify --source <plugin-or-tgz> --cases <json> --dsh <executable>` compares native results in a disposable profile. Cases use `tool`, `arguments`, `expected`; optional `isError`, `errorContains`, JSON Pointer `resultPath`, and `maxResultBytes` assert errors, fields and output budgets. Add `--workspace <dir>` for one real Agent under native policies. Select `--profile`; use `--online` for registry dependencies. Check model/UI behavior separately.
-- `dev --source <plugin-or-tgz> --dsh <executable>` owns a disposable Web profile until cancellation; `--watch` reloads Host modules from source directories. Exercise rendered UI and errors; HTTP readiness is insufficient.
+- `dev --source <plugin-or-tgz> --dsh <executable>` owns a disposable Web profile; `--workspace <dir>` selects a sample project, `--watch` reloads Host source modules. Exercise rendered UI and errors; HTTP readiness is insufficient.
 
 Verify the built archive and its documented configuration with `--patch <file>` on `verify`/`dev`. Exercise important failures through the actual entry point; check retained state and caller-visible results against independent expectations. Registration or helper tests alone are insufficient.
 
