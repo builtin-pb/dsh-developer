@@ -19,10 +19,10 @@ dsh-developer 把创建、诊断、测试和升级检查整合进 DSH 与 Codex 
 
 ## 安装
 
-将已发布的 `v0.1.1` tag 安装到 DSH Web：
+将已发布的 `v0.1.2` tag 安装到 DSH Web：
 
 ```sh
-dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.1' --ignore-scripts
+dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.2' --ignore-scripts
 ```
 
 当前源码需要[从 checkout 安装](docs/contributing.md)。打开或重启 DSH Web（`dsh web`）。[还没安装 DSH？](docs/install.md) · [使用 Codex？](docs/workflows.md#use-it-from-codex)
