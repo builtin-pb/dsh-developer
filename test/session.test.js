@@ -526,6 +526,164 @@ test('prioritizes native results over echoed args and bounds summaries across ma
   assert.equal(report.calls[1].result.truncated, true)
 })
 
+// Inline synthetic corpus transcribed from the public 0.1.5-rc.2 packages:
+// tool-bash/render, tool-pwsh/render, tool-bash-persistent/index and
+// tool-pwsh-persistent/index. Agent-loop appendToolResult persists content and
+// isError, not the tools' canonical ShellRunResult. No runtime install or real
+// session is needed to exercise these log shapes.
+const shellReset = name => `The persistent ${name} shell was reset; the next ${name} call starts from the workspace with a fresh current directory and environment.`
+const shellCall = (id, name = 'bash', args = {}) => call(id, { command: 'npm test', description: 'Run package regression tests', ...args }, { name })
+
+test('recognizes public fresh and persistent shell renderings separately from tool errors', async (t) => {
+  const f = await fixture(t)
+  const corpus = [
+    ['bash', 'test failed\n[stderr]\nAssertionError\n[exit code: 1]', { kind: 'nonzero-exit', exitCode: 1 }],
+    ['pwsh', '(no output)\n[exit code: 7]', { kind: 'nonzero-exit', exitCode: 7 }],
+    ['pwsh', 'Interrupted\n[exit code: -1073741510]', { kind: 'nonzero-exit', exitCode: -1073741510 }],
+    ['bash', '(no output)\n[killed by signal: SIGTERM]', { kind: 'signal', signal: 'SIGTERM' }],
+    ['bash', 'partial\n[timed out after 1000ms]\n[killed by signal: SIGKILL]', { kind: 'timeout', timeoutMs: 1000, signal: 'SIGKILL' }],
+    ['pwsh', 'partial\n[timed out after 2000ms]\n[exit code: 1]', { kind: 'timeout', timeoutMs: 2000, exitCode: 1 }],
+    ['bash', '(no output)\n[timed out after 1000ms]', { kind: 'timeout', timeoutMs: 1000 }],
+    ['bash', '(no output)\n[timed out after 1000.5ms]', { kind: 'timeout', timeoutMs: 1000.5 }],
+    ['bash', 'denied\n[sandbox: file access denied under workspace-write mode]\n[exit code: 1]', { kind: 'nonzero-exit', exitCode: 1 }],
+    ['bash', 'FAIL tests\n[Command finished with exit code 2]', { kind: 'nonzero-exit', exitCode: 2 }],
+    ['bash', '[Command finished with exit code 2]', { kind: 'nonzero-exit', exitCode: 2 }],
+    ['pwsh', '[exit code: 3]', { kind: 'nonzero-exit', exitCode: 3 }],
+    ['bash', `[shell exited: code 4]\n${shellReset('bash')}`, { kind: 'shell-exited', exitCode: 4 }],
+    ['pwsh', `partial\n[shell killed by signal: SIGTERM]\n${shellReset('pwsh')}`, { kind: 'signal', signal: 'SIGTERM' }],
+    ['bash', `Your command timed out after 1 seconds or experienced an OOM error. Below is partial output:\npartial\n[Command timed out or OOM]\n${shellReset('bash')}`, { kind: 'timeout-or-oom' }],
+    ['pwsh', `Your command timed out after 2 seconds or experienced an OOM error. Below is partial output:\npartial\n${shellReset('pwsh')}`, { kind: 'timeout-or-oom' }],
+  ]
+  for (const [name, text, expected] of corpus) {
+    const report = await inspectSession(await f.write(v3(shellCall('command', name), result('command', text), end())))
+    assert.equal(report.ok, true)
+    assert.equal(report.completion.state, 'completed')
+    assert.equal(report.counts.failedTools, 0)
+    assert.equal(report.counts.processFailures, 1, text)
+    assert.deepEqual(report.errors, [])
+    assert.equal(report.calls[0].status, 'succeeded', 'status still describes the tool envelope')
+    assert.deepEqual(report.calls[0].result.process, { evidence: 'dsh-shell-rendered-status', ...expected })
+    assert.equal(report.processFailures[0].command, 'npm test')
+    const human = formatSessionReport(report)
+    assert.match(human, /succeeded \(tool envelope\); process/u)
+    assert.match(human, /Process (?:bash|pwsh) \[command\]/u)
+  }
+  const error = await inspectSession(await f.write(v3(shellCall('error'), result('error', 'spawn failed\n[exit code: 1]', true), end())))
+  assert.equal(error.counts.failedTools, 1)
+  assert.equal(error.counts.processFailures, 0, 'an infrastructure error is not an observed command exit')
+})
+
+test('does not infer process failures from generic JSON, other tools, unsupported shapes or nonterminal markers', async (t) => {
+  const f = await fixture(t)
+  const corpus = [
+    ['custom_plugin', 'failed\n[exit code: 1]'],
+    ['shell', 'failed\n[exit code: 1]'],
+    ['job_output', 'failed\n[status: completed, exit code: 1]'],
+    ['run_code', JSON.stringify({ result: { exitCode: 1 } })],
+    ['bash', JSON.stringify({ exitCode: 1, stderr: 'failure' })],
+    ['bash', JSON.stringify({ args: {}, result: { exitCode: 1, signal: null, timedOut: false, aborted: false, timeoutMs: 1000,
+      stdout: { text: '', truncated: false }, stderr: { text: 'failure', truncated: false } } })],
+    ['bash', 'output mentions [exit code: 1]'],
+    ['bash', 'output\n[exit code: 1]\nstill output'],
+    ['bash', 'output\n[exit code: 1]\n'],
+    ['bash', 'output\n[timed out after 1000ms]\n'],
+    ['bash', '(no output)'],
+    ['pwsh', ''],
+    ['bash', 'ok\n[Command finished with exit code 0]'],
+    ['pwsh', 'ok\n[exit code: 0]'],
+    ['bash', 'bad\n[exit code: 9007199254740992]'],
+    ['bash', 'bad\n[killed by signal: SECRET_VALUE]'],
+    ['pwsh', 'bad\n[Command finished with exit code 1]'],
+    ['bash', `[shell exited: code 1]\n${shellReset('pwsh')}`],
+    ['bash', `[shell exited: code 0]\n${shellReset('bash')}`],
+    ['pwsh', `[shell exited]\n${shellReset('pwsh')}`],
+    ['bash', 'started background job job-1'],
+  ]
+  for (const [name, text] of corpus) {
+    const report = await inspectSession(await f.write(v3(shellCall('command', name), result('command', text), end())))
+    assert.equal(report.counts.processFailures, 0, `${name}: ${text}`)
+    assert.equal(report.calls[0].result.process, undefined)
+  }
+  for (const args of [{ run_in_background: true }, { run_in_background: 'false' }, { command: '' }, { command: 1 }]) {
+    const report = await inspectSession(await f.write(v3(shellCall('command', 'bash', args), result('command', 'failed\n[exit code: 1]'))))
+    assert.equal(report.counts.processFailures, 0)
+  }
+  const multiple = result('command', 'failed\n[exit code: 1]')
+  multiple.data.message.content[0].content.push({ type: 'text', text: 'extra' })
+  assert.equal((await inspectSession(await f.write(v3(shellCall('command'), multiple)))).counts.processFailures, 0)
+})
+
+test('retains the latest ten process observations independently of recent calls and tool errors', async (t) => {
+  const f = await fixture(t)
+  const failures = Array.from({ length: 12 }, (_, i) => [shellCall(`exit-${i}`), result(`exit-${i}`, `failure ${i}\n[exit code: 1]`)]).flat()
+  const later = Array.from({ length: 25 }, (_, i) => [shellCall(`ok-${i}`), result(`ok-${i}`, 'ok')]).flat()
+  const path = await f.write(v3(...failures, call('tool-error'), result('tool-error', 'native failure', true), ...later, end()))
+  for (const limit of [0, 1, 20, 100]) {
+    const report = await inspectSession(path, { limit })
+    assert.equal(report.counts.processFailures, 12)
+    assert.equal(report.counts.failedTools, 1)
+    assert.equal(report.processFailures.length, 10)
+    assert.equal(report.processFailures[0].callId, 'exit-2')
+    assert.equal(report.processFailures.at(-1).callId, 'exit-11')
+    assert.equal(report.omissions.processFailures, 2)
+    assert.equal(report.errors.length, 1)
+    if (limit <= 20) assert(report.calls.every(item => item.callId.startsWith('ok-')))
+    assert.match(formatSessionReport(report), /2 process samples/u)
+  }
+})
+
+test('attributes process observations only after unambiguous correlation and ignores pruning replacements', async (t) => {
+  const f = await fixture(t)
+  const failed = id => result(id, 'failure\n[exit code: 2]')
+  const report = await inspectSession(await f.write(v3(
+    failed('before'), shellCall('before'),
+    shellCall('duplicate-call'), shellCall('duplicate-call'), failed('duplicate-call'),
+    shellCall('duplicate-result'), failed('duplicate-result'), failed('duplicate-result'),
+    failed('unmatched'),
+    shellCall('wrong-step'), { ...failed('wrong-step'), data: { ...failed('wrong-step').data, step: 2 } },
+    shellCall('same-id'), failed('same-id'),
+    call('same-id', { command: 'exit 0' }, { name: 'bash', step: 2 }), result('same-id', 'ok', false, { step: 2 }), end(),
+  )), { limit: 0 })
+  assert.equal(report.counts.processFailures, 2)
+  assert.deepEqual(report.processFailures.map(item => [item.callId, item.step]), [['before', 1], ['same-id', 1]])
+  const original = failed('pruned')
+  const replacement = { ...result('pruned', 'omitted'), surfaceOp: { op: 'replace', startSeq: 1, endSeq: 1 }, sourceEventSeqs: [1] }
+  const pruned = await inspectSession(await f.write(v3(shellCall('pruned'), original, replacement, end())))
+  assert.equal(pruned.counts.processFailures, 1)
+  assert.equal(pruned.processFailures[0].exitCode, 2)
+  assert.equal(pruned.counts.duplicateResults, 0)
+})
+
+test('extracts shell status before clipping while protecting commands, output and bounded reports', async (t) => {
+  const f = await fixture(t)
+  const events = Array.from({ length: 100 }, (_, i) => [
+    shellCall(`failure-${i}`, 'bash', { command: '界'.repeat(1100) + ' token=DO_NOT_DISCLOSE' }),
+    result(`failure-${i}`, '界'.repeat(1500) + '\npassword=DO_NOT_DISCLOSE\n[exit code: 7]'),
+  ]).flat()
+  const report = await inspectSession(await f.write(v3(...events, end())), { limit: 100 })
+  assert.equal(report.counts.processFailures, 100)
+  assert.equal(report.counts.failedTools, 0)
+  assert.equal(report.processFailures.length, 10)
+  assert.equal(report.omissions.processFailures, 90)
+  assert(report.processFailures.every(item => item.exitCode === 7 && item.truncated))
+  assert(report.calls.length < 100)
+  for (const text of [JSON.stringify(report), formatSessionReport(report)]) {
+    assert(!text.includes('DO_NOT_DISCLOSE'))
+    assert(Buffer.byteLength(text) <= report.limits.outputBytes)
+  }
+  const largeSamples = Array.from({ length: 12 }, (_, i) => [
+    shellCall(`large-${i}`, 'bash', { command: '界'.repeat(1100) }),
+    result(`large-${i}`, '界'.repeat(1100) + '\n[exit code: 9]'),
+  ]).flat()
+  const bounded = await inspectSession(await f.write(v3(...largeSamples, end())), { limit: 0 })
+  assert.equal(bounded.counts.processFailures, 12)
+  assert.equal(bounded.omissions.processFailures, 12 - bounded.processFailures.length)
+  assert(bounded.processFailures.length > 0)
+  assert.equal(bounded.processFailures.at(-1).callId, 'large-11')
+  assert(Buffer.byteLength(JSON.stringify(bounded)) <= bounded.limits.outputBytes)
+  assert(Buffer.byteLength(formatSessionReport(bounded)) <= bounded.limits.outputBytes)
+})
+
 test('redacts secrets, private-key blocks and private fields without exposing unrelated message bodies', async (t) => {
   const f = await fixture(t)
   const secret = 'sk-' + ['9aBcDeFgHiJk', 'LmNoPqRsTuVw'].join('')
