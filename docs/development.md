@@ -14,7 +14,7 @@ node bin/dsh-developer.js knowledge --upstream /path/to/deepseek-harness/package
 node bin/dsh-developer.js knowledge --dsh /path/to/dsh --topic ui --package @deepseek-ai/dsh-api-session-controller
 ```
 
-`project` identifies the nearest package, containing DSH checkout, ancestor package-manager declaration and lockfiles, scripts, and instruction files. It does not import the project or traverse `node_modules`. Select a subpackage or source file when working in a monorepo; scripts still run in that package. Conflicting toolchain metadata needs resolution before running scripts. Read the project’s instructions before editing.
+`project` identifies the nearest package, containing DSH checkout, ancestor package-manager declaration and lockfiles, scripts, and instruction files. It does not import the project or traverse `node_modules`. Select a subpackage or source file when working in a monorepo; scripts still run in that package. Instruction files follow the selected path from outermost to innermost, including directories below the package root and new directories without a manifest. Conflicting toolchain metadata needs resolution before running scripts. Read the project’s instructions before editing.
 
 `knowledge` returns local version and package identities, source/declaration excerpts, file hashes, and explicit omissions. Topics cover tools, lifecycle, configuration, packaging, UI, core, and testing. Its default is `tool`. The excerpt is a starting point: follow imports and read the relevant implementation, consumer and tests with ordinary file tools. A checkout’s HEAD does not establish that its working files are clean, and equal version strings do not prove equal source. Missing packaged documentation does not mean an API is absent.
 

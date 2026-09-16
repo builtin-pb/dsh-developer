@@ -54,6 +54,23 @@ test('does not leave the Agent workspace through parent traversal or a project s
   await assert.rejects(inspectProject('linked', { sourceRoot: root }), { code: 'PROJECT_OUTSIDE_WORKSPACE' })
 })
 
+test('keeps instructions along a selected source path without changing the script directory', async t => {
+  const root = await fixture(t, { name: 'plugin', scripts: { test: 'node --test' } })
+  const nested = join(root, 'src', 'client')
+  await mkdir(nested, { recursive: true })
+  await writeFile(join(nested, 'index.js'), '')
+  const instructions = [join(root, 'AGENTS.md'), join(root, 'src', 'AGENTS.md'), join(nested, 'AGENTS.md')]
+  await Promise.all(instructions.map(path => writeFile(path, 'Directory-specific conventions')))
+  const selected = await inspectProject(join(nested, 'index.js'))
+  assert.equal(selected.project.root, root)
+  assert.equal(selected.tasks[0].cwd, root)
+  assert.deepEqual(selected.instructionFiles, instructions)
+  const confined = await inspectProject('index.js', { sourceRoot: nested })
+  assert.equal(confined.project.kind, 'empty')
+  assert.deepEqual(confined.instructionFiles, [instructions[2]])
+  assert.match(formatProjectReport(confined), /Instructions:/u)
+})
+
 test('distinguishes an upstream checkout and reports conflicting package managers', async t => {
   const root = await fixture(t, { name: '@deepseek-ai/dsh-root', packageManager: 'pnpm@11.7.0' })
   await mkdir(join(root, 'packages', 'core'), { recursive: true })
