@@ -8,6 +8,7 @@ import { withCreatorFingerprint } from '../lib/creator-export.js'
 import { doctorPlugin } from '../lib/doctor.js'
 import { writeFilesExclusive } from '../lib/files.js'
 import { renderGeneratedBundle } from '../lib/templates.js'
+import { PNG } from './fixtures/asset-bytes.js'
 
 const ordinaryPluginFixture = fileURLToPath(new URL('./fixtures/ordinary-dsh-plugin/', import.meta.url))
 
@@ -105,6 +106,55 @@ test('assesses an ordinary hand-written DSH plugin without generated Codex bundl
   assert.equal(docs.recovery, 'Add README.md before a public release.')
   assert.equal(report.checks.find((check) => check.id === 'manifest.package').status, 'PASS')
   assert.equal(report.checks.find((check) => check.id === 'dsh.entrypoint').status, 'PASS')
+})
+
+test('Doctor audits a plugin with a PNG and detects an asset changed during verification', async () => {
+  const { parent, root } = await copiedOrdinaryFixture()
+  try {
+    await writeFile(join(root, 'logo.png'), PNG)
+    const report = await doctorPlugin(root, { runtime: 'skip' })
+    assert.equal(report.ok, true, JSON.stringify(report.checks))
+    assert.deepEqual(report, JSON.parse(JSON.stringify(report)))
+    const assets = report.checks.find((check) => check.id === 'source.ordinary-tree').evidence.binaryAssets
+    assert.equal(assets.length, 1)
+    assert.equal(assets[0].path, 'logo.png')
+    assert.equal(assets[0].mediaType, 'image/png')
+    assert.equal(report.checks.find((check) => check.id === 'verification.freshness').status, 'PASS')
+
+    const changed = await doctorPlugin(root, {
+      checkDshVersion: async () => {
+        const modified = Buffer.from(PNG)
+        modified[45] ^= 1
+        await writeFile(join(root, 'logo.png'), modified)
+        return { version: '0.1.5-rc.2', invocation: {} }
+      },
+    })
+    assert.equal(changed.ok, false)
+    assert.equal(changed.checks.find((check) => check.id === 'verification.freshness').evidence.code, 'STALE_VERIFICATION')
+  } finally {
+    await rm(parent, { recursive: true, force: true })
+  }
+})
+
+test('an accepted image cannot satisfy the executable entry or bundle patch contract', async () => {
+  for (const field of ['main', 'patch']) {
+    const { parent, root } = await copiedOrdinaryFixture()
+    try {
+      await writeFile(join(root, 'logo.png'), PNG)
+      const manifestPath = join(root, 'package.json')
+      const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+      if (field === 'main') {
+        delete manifest.exports
+        manifest.main = './logo.png'
+      } else manifest.dsh.bundle.patch = './logo.png'
+      await writeFile(manifestPath, JSON.stringify(manifest))
+      const report = await doctorPlugin(root, { runtime: 'skip' })
+      assert.equal(report.ok, false)
+      assert.equal(report.checks.find((check) => check.id === 'dsh.entrypoint').evidence.code, 'BINARY_FILE')
+    } finally {
+      await rm(parent, { recursive: true, force: true })
+    }
+  }
 })
 
 test('audits an extensionless non-dot main and blocks a missing declared entry', async () => {

@@ -57,6 +57,8 @@ Inspect an ordinary repository from DSH Web:
 
 Then use the [development workflow](development.md) to test the intended runtime with `verify --profile <name>` and rendered Web behavior with `dev`, including the documented configuration via `--patch`. Doctor's default runtime audit and preflight use the reviewed lanes: `0.1.5-rc.2` blocking and `0.1.6-alpha.1` advisory. On other exact versions, use static Doctor and this ordinary verification route. Product and promoted release checks retain their exact-runtime gates; a newer installation alone is not an ordinary plugin defect.
 
+Repository audits accept PNG, JPEG, GIF, WebP and ICO images and WOFF, WOFF2, TTF and OTF fonts when the filename and binary header agree. Assets count toward the existing snapshot limits and freshness fingerprint; they are not parsed as source or decoded for content inspection. Visible credential markers are still checked. Isolated Build/Apply transfers remain limited to UTF-8 text trees.
+
 Doctor checks package and bundle contracts, boot-required packages marked optional, Host/Client injection mixups, browser-service collisions, raw plugin-owned Web routes outside the upstream connection service, and invalid Web artifacts. Connection registration alone does not prove authentication: its APIs and protections differ across DSH versions, so verify the exact runtime and configuration. Product/promoted bundle checks also cover reproducibility and the admitted clean-profile lifecycle. The repository stays read-only during inspection; static findings do not prove behavior.
 
 Turn a saved Creator export into an installable bundle:

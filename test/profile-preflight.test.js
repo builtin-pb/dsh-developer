@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
+import { PNG } from './fixtures/asset-bytes.js'
 import { DSH_COMPATIBILITY_TARGET } from '../lib/constants.js'
 import { DshDeveloperError } from '../lib/errors.js'
 import { formatProfilePreflightReport, inspectProfilePreflight } from '../lib/profile-preflight.js'
@@ -28,6 +29,7 @@ async function fixture(extra = {}) {
     '',
   ].join('\n'), 'utf8')
   await writeFile(join(root, 'cordis.patch.yml'), '- insert: []\n', 'utf8')
+  await writeFile(join(root, 'logo.png'), PNG)
   return root
 }
 

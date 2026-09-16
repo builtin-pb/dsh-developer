@@ -13,7 +13,7 @@ Development CI also tests script arguments on pnpm 11.7.0, Yarn Classic 1.22.22 
 
 ## Install the current checkout
 
-The README's `v0.1.2` Git tag is a published artifact, not this working tree. To exercise current changes from a checkout:
+The README's `v0.1.3` Git tag is a published artifact, not this working tree. To exercise current changes from a checkout:
 
 ```sh
 npm ci --ignore-scripts

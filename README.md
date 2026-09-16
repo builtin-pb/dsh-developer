@@ -21,10 +21,10 @@ Already have a plugin? Start there. You don't need to regenerate it or adopt a n
 
 ## Install
 
-Install the published `v0.1.2` tag into DSH Web:
+Install the published `v0.1.3` tag into DSH Web:
 
 ```sh
-dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.2' --ignore-scripts
+dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.3' --ignore-scripts
 ```
 
 Open or restart DSH Web (`dsh web`). For development from source, use a [checkout installation](docs/contributing.md). [Need DSH first?](docs/install.md) · [Using Codex?](docs/workflows.md#use-it-from-codex)

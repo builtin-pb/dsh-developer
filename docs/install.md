@@ -5,7 +5,7 @@
 Install directly from GitHub into DSH Web:
 
 ```sh
-dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.2' --ignore-scripts
+dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.3' --ignore-scripts
 ```
 
 Open or restart `dsh web`, then describe your plugin idea or problem. The installed skill is available to the model automatically. You do not need to clone this repository, install its development dependencies yourself, or run its tests to use it.
@@ -20,7 +20,7 @@ With Node.js `^22.18.0 || >=24.11.0` installed, run:
 
 ```sh
 npm install --global pnpm@11.7.0 @deepseek-ai/dsh@0.1.5-rc.2
-dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.2' --ignore-scripts
+dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.3' --ignore-scripts
 dsh web
 ```
 
@@ -34,7 +34,7 @@ Ordinary development uses the host execution policy and does not need an isolate
 
 Inside a DSH agent's shell, invoke the installed CLI as `node "$DSH_DEVELOPER_BIN" <operation>` on POSIX or `node "$env:DSH_DEVELOPER_BIN" <operation>` in PowerShell. DSH supplies that absolute entry and defaults CLI checks to its running installation. Profile installation does not add a global `dsh-developer` command. Examples using `node bin/dsh-developer.js` require this repository's checkout as the working directory.
 
-To modify dsh-developer itself, use the checkout-based workflow in [Contributing](contributing.md) or [Mac development](macos.md). The installation commands above select the v0.1.2 Git tag; unpublished local edits require a checkout installation.
+To modify dsh-developer itself, use the checkout-based workflow in [Contributing](contributing.md) or [Mac development](macos.md). The installation commands above select the v0.1.3 Git tag; unpublished local edits require a checkout installation.
 
 ## Verification
 
