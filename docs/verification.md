@@ -13,6 +13,20 @@ registered workspace and the observed file all selected the sample project;
 its file survived profile cleanup unchanged. These are Web backend checks,
 not rendered browser observations or model turns.
 
+## Development diagnostics — 16 September, unreleased
+
+Case-file diagnostics identify the one-based case number, schema field and
+correction without echoing argument values or unknown property names. Human
+startup reports now include bounded, protected process excerpts. Process/CLI
+checks covered missing dependencies, long stacks, stdout fallback and withheld
+streams. Native startup checks retained the real activation failure in the
+human report. A separate missing-import experiment retained `ERR_MODULE_NOT_FOUND`;
+path-bearing lines were conservatively redacted. Cross-channel regressions
+cover startup receipt messages as well as both process streams. Full validation
+passed 737 tests, with 31 optional tests skipped; the native suite passed all
+21 tests, with three focused native startup/protection checks repeated after
+the final withholding change.
+
 ## Authoring exercise and protected verification — 16 September, unreleased
 
 A fresh actor built a small README-command retrieval plugin through `project`,
@@ -57,6 +71,19 @@ and profile removal. That run also exposed Windows source-install argument
 handling for a path containing spaces and `#`. Windows-only quoting now covers
 the source and store arguments; the native CI fixture includes spaces, `#` and
 `&` in both locations. Paths with shell-variable markers remain unsupported.
+All nine native jobs passed in the [follow-up run](https://github.com/builtin-pb/dsh-developer/actions/runs/35137289044),
+including all three Windows runtimes. Two unrelated source-audit failures in
+that run were repaired afterward; both release-to-preview product jobs passed
+in the [workspace follow-up](https://github.com/builtin-pb/dsh-developer/actions/runs/35139211078).
+The Windows findings were added to the [existing upstream report](https://github.com/deepseek-ai/deepseek-harness/discussions/2485#discussioncomment-18470249).
+
+An independent native-only reproduction found that a replacement can start
+before an old asynchronous disposer finishes. On 0.1.5-rc.2, replacement lock
+acquisition failed 1 ms after disposal began; the old lock was released at
+201 ms. Wrapper trials also observed this on 0.1.1-rc.2 and correctly reported
+failed activation. The [upstream discussion](https://github.com/deepseek-ai/deepseek-harness/discussions/6883)
+contains the direct reproduction. This limits exclusive-resource hot reload;
+it does not affect the separate process-restart route.
 
 Focused unit tests cover overlapping attempts, warnings during settlement,
 disposal and metadata-only notifications. Full validation through

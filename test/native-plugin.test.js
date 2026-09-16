@@ -11,7 +11,7 @@ import { UI_CLI_ENVIRONMENT } from '../lib/ui-configuration.js'
 
 test('the shipped activation graph remains complete within its bounded audit', async () => {
   const library = new URL('../lib/', import.meta.url)
-  const paths = ['index.js', ...(await readdir(library, { recursive: true }))
+  const paths = ['package.json', 'index.js', ...(await readdir(library, { recursive: true }))
     .filter(path => path.endsWith('.js')).map(path => 'lib/' + path.replaceAll('\\', '/'))]
   const files = new Map(await Promise.all(paths.map(async path => [path,
     await readFile(new URL('../' + path, import.meta.url), 'utf8')])))

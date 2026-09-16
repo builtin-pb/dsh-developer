@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
+import { PRODUCT_VERSION } from '../lib/constants.js'
 
 const SLOGAN = 'The single plugin you need for DSH'
 const METAFLOW = '[MetaFlow](https://github.com/builtin-pb/metaflow)'
@@ -14,6 +15,9 @@ test('keeps both human-facing READMEs strong, concise, linked, and package-visib
     readFile(new URL('../docs/workflows.zh-CN.md', import.meta.url), 'utf8'),
   ])
   const manifest = JSON.parse(manifestText)
+  const plugin = JSON.parse(await readFile(new URL('../.codex-plugin/plugin.json', import.meta.url), 'utf8'))
+  assert.equal(PRODUCT_VERSION, manifest.version, 'generated and attested metadata must identify the installed product')
+  assert.equal(plugin.version, manifest.version, 'both installation surfaces must identify the same product version')
   assert.match(english, /\[简体中文\]\(README\.zh-CN\.md\)/u)
   assert.match(chinese, /\[English\]\(README\.md\)/u)
   for (const value of [english, chinese]) {

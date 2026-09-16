@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { runDevelopmentServer, verifyDevelopmentPlugin } from '../lib/development.js'
+import { formatDevelopmentReport, runDevelopmentServer, verifyDevelopmentPlugin } from '../lib/development.js'
 import { resolvePackageManager } from '../lib/project.js'
 import { runBounded, secretFreeEnvironment } from '../lib/runtime.js'
 import { inspectDshKnowledge } from '../lib/knowledge.js'
@@ -48,6 +48,13 @@ export async function apply(ctx, config) {
     const observe = async () => {
       try {
         await webCtx.loader.await()
+        // Start after the parent receives dev readiness, which includes its
+        // asynchronous workspace registration, just as a browser user would.
+        const deadline = Date.now() + 15000
+        while (!await readFile(config.webWorkspaceMarker + '.start').catch(() => undefined)) {
+          if (Date.now() > deadline) throw new Error('parent did not begin the Web workspace check')
+          await new Promise(resolve => setTimeout(resolve, 25))
+        }
         const controller = webCtx.get('sessionController')
         let created, api
         if (controller) { created = await controller.create({}); api = 'session-controller' }
@@ -438,6 +445,7 @@ test('DSH launcher startup must finish before verification; current Web also wai
     assert.equal(failed.ok, false)
     assert.deepEqual(failed.cases, [])
     assert.match(JSON.stringify(failed.diagnostic), /delayed fixture startup failed/u)
+    assert.match(formatDevelopmentReport(failed), /delayed fixture startup failed/u)
     await assert.rejects(stat(callMarker), { code: 'ENOENT' })
 
     // Older Web launchers expose no appReady service. Verification above uses
@@ -804,12 +812,14 @@ test('Web preview selects a sample workspace independently of source or archive 
     await writeFile(patchPath, '- id: overlay-fixture\n  config:\n    webWorkspaceMarker: ' + JSON.stringify(marker) + '\n')
     for (const selection of [source, archive]) {
       await rm(marker, { force: true })
+      await rm(marker + '.start', { force: true })
       const controller = new AbortController()
       let ready
       const report = await runDevelopmentServer(selection, { dshPath, patchPath, workspacePath: workspace,
         online: true, signal: controller.signal, onReady: async value => {
           ready = value
           assert.equal(value.workspace.path, workspace)
+          await writeFile(marker + '.start', 'ready')
           assert.equal(value.source, await realpath(selection))
           const deadline = Date.now() + 10_000
           let observed

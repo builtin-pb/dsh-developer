@@ -23,7 +23,7 @@ import { setupUi, formatUiSetupReport } from '../lib/ui-setup.js'
 import { formatUpstreamImpactReport, inspectUpstreamImpact } from '../lib/upstream-impact.js'
 import { inspectProject, runProjectScript, formatProjectReport } from '../lib/project.js'
 import { inspectDshKnowledge, formatDshKnowledgeReport, KNOWLEDGE_TOPICS } from '../lib/knowledge.js'
-import { verifyDevelopmentPlugin, runDevelopmentServer, formatDevelopmentReport } from '../lib/development.js'
+import { verifyDevelopmentPlugin, runDevelopmentServer, formatDevelopmentDiagnostic, formatDevelopmentReport } from '../lib/development.js'
 import { inspectSession, formatSessionReport } from '../lib/session.js'
 
 const USAGE = [
@@ -317,6 +317,7 @@ main(argv).catch((error) => {
     ? JSON.stringify(boundary, null, 2) + '\n'
     : (diagnostic.verification?.kind === 'dsh-development-verification'
       ? formatDevelopmentReport(diagnostic.verification) + '\n' : '')
-      + appendFirstNextAction(diagnostic.code + ': ' + diagnostic.message, boundary) + '\n')
+      + appendFirstNextAction(['dev', 'verify'].includes(argv[0]) && !diagnostic.verification
+        ? formatDevelopmentDiagnostic(diagnostic) : diagnostic.code + ': ' + diagnostic.message, boundary) + '\n')
   process.exitCode = error instanceof DshDeveloperError && error.code === 'CANCELLED' ? 130 : 1
 })
