@@ -19,13 +19,13 @@ dsh-developer 把创建、诊断、测试和升级检查整合进 DSH 与 Codex 
 
 ## 安装
 
-一条命令，加入 DSH Web：
+将已发布的 `v0.1.1` tag 安装到 DSH Web：
 
 ```sh
 dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.1' --ignore-scripts
 ```
 
-打开或重启 DSH Web（`dsh web`）。[还没安装 DSH？](docs/install.md) · [使用 Codex？](docs/workflows.md#use-it-from-codex)
+当前源码需要[从 checkout 安装](docs/contributing.md)。打开或重启 DSH Web（`dsh web`）。[还没安装 DSH？](docs/install.md) · [使用 Codex？](docs/workflows.md#use-it-from-codex)
 
 ## 然后，直接说你想做什么
 
@@ -46,6 +46,6 @@ dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.1' --ignore-s
 - [平台选择](docs/platforms.md)：Windows、Mac 与 Linux 的路线、要求和验证范围。
 - [参与贡献](docs/contributing.md)：从 `npm test` 开始，进一步验证与 DSH 的集成。
 
-原生开发面向 Windows、macOS 和 Linux。工具与 Web 工作流已在 macOS 和 Linux ARM64 上使用 **DSH 0.1.5-rc.2** 实测；正式发布审计仍固定在 **0.1.1-rc.2**。验证范围见[实测结果](docs/verification.md)和[平台指南](docs/platforms.md)。
+当前 checkout 以 **DSH 0.1.5-rc.2** 为阻断检查通道，以 **0.1.6-alpha.1** 为提示通道。这两个精确运行时上的 headless/Web preflight、原生验证、产品兼容性、委派和批准检查已通过。原生开发面向 Windows、macOS 和 Linux；这些结果不证明所有宿主或隔离 provider。rc.2 的 Apple 隔离另已通过四项真实集成检查；每台宿主仍需独立的 provider 准入。范围见[实测结果](docs/verification.md)和[平台指南](docs/platforms.md)。
 
 由 [MetaFlow](https://github.com/builtin-pb/metaflow) 设计与实现。采用 [MIT 许可证](LICENSE)。

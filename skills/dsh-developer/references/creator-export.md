@@ -9,11 +9,11 @@ Use UTF-8 JSON with these required fields:
 - packageName: lowercase npm package name
 - author and one-line description
 - goal and instructions
-- compatibilityTarget: 0.1.1-rc.2
+- compatibilityTarget: 0.1.5-rc.2 (the current blocking target)
 
 The optional arrays decisions and unresolvedRisks contain unique strings. The optional arrays tools and resources contain objects with a kebab-case name and a purpose. These are preserved as explicitly labelled implementation intentions in the generated skill; the current release does not create native tools or resource files from them. Unknown fields are rejected so an exporter cannot silently lose intent.
 
-Creator should emit the fingerprint. While developing an exporter, calculate the expected value without mutating the draft:
+Older exports must update compatibilityTarget and recompute their fingerprint before promotion; the historical migration ledger does not migrate this contract. Creator should emit the fingerprint. While developing an exporter, calculate the expected value without mutating the draft:
 
     node bin/dsh-developer.js fingerprint --source <creator-draft.json>
 

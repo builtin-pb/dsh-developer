@@ -5,8 +5,8 @@ import test from 'node:test'
 
 const enabled = process.env.DSH_DEVELOPER_NATIVE_CELL_JOURNEY_TEST === '1'
 const lanes = [
-  ['release', process.env.DSH_DEVELOPER_RELEASE_TOOLS_ROOT, process.env.DSH_DEVELOPER_RELEASE_DSH, '0.1.1-rc.2'],
-  ['preview', process.env.DSH_DEVELOPER_PREVIEW_TOOLS_ROOT, process.env.DSH_DEVELOPER_PREVIEW_DSH, '0.1.2-alpha.3'],
+  ['release', process.env.DSH_DEVELOPER_RELEASE_TOOLS_ROOT, process.env.DSH_DEVELOPER_RELEASE_DSH, '0.1.5-rc.2'],
+  ['preview', process.env.DSH_DEVELOPER_PREVIEW_TOOLS_ROOT, process.env.DSH_DEVELOPER_PREVIEW_DSH, '0.1.6-alpha.1'],
 ]
 
 function runFreshProcess(lane, toolsRoot, dshPath, version) {
@@ -51,7 +51,8 @@ for (const [lane, toolsRoot, dshPath, version] of lanes) {
     assert.equal(report.remainingProcesses, 0)
     assert.equal(report.cleanupVerified, true)
     assert.equal(report.applyVerified, true)
-    assert.equal(report.rollbackVerified, true)
+    assert.equal(report.concurrentEditPreserved, true)
+    assert.equal(report.recoveryRetained, true)
     assert.equal(report.secondPlan, true)
   })
 }

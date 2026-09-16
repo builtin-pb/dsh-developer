@@ -2,7 +2,12 @@ import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
 import test from 'node:test'
+import { DSH_COMPATIBILITY_TARGET, DSH_PREVIEW_TARGET } from '../lib/constants.js'
+import { assertOfficialDshInvocation, locateInstalledDshPackage, resolveInstalledDshEntry } from '../lib/dsh-installation.js'
+import { resolveDshInvocation } from '../lib/runtime.js'
 import {
   capabilitySpecs,
   formatCapabilityReport,
@@ -14,7 +19,7 @@ async function writeJson(path, value) {
   await writeFile(path, JSON.stringify(value, null, 2) + '\n', 'utf8')
 }
 
-async function fakeDsh(version = '0.1.1-rc.2', options = {}) {
+async function fakeDsh(version = DSH_COMPATIBILITY_TARGET, options = {}) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-developer-capabilities-'))
   const dshRoot = join(root, 'node_modules', '@deepseek-ai', 'dsh')
   const entry = join(dshRoot, 'lib', 'bin.js')
@@ -36,7 +41,7 @@ async function fakeDsh(version = '0.1.1-rc.2', options = {}) {
   async function addPackage(name, packageOptions = {}) {
     await writeJson(join(dshRoot, 'node_modules', ...name.split('/'), 'package.json'), {
       name,
-      version,
+      version: packageOptions.version ?? version,
       main: 'lib/index.js',
       ...(packageOptions.unpublished ? { private: true } : { publishConfig: { access: 'public' } }),
     })
@@ -68,17 +73,9 @@ function inspectionOptions(fixture) {
 test('reports exact lane evidence without turning absent optional capabilities into failures', async () => {
   const fixture = await fakeDsh()
   try {
-    for (const name of [
-      '@deepseek-ai/dsh-skill',
-      '@deepseek-ai/dsh-commands',
-      '@deepseek-ai/dsh-shell-env',
-      '@deepseek-ai/dsh-tools',
-      '@deepseek-ai/dsh-subagent',
-      '@deepseek-ai/dsh-sandbox',
-      '@deepseek-ai/dsh-sandbox-policy',
-      '@deepseek-ai/dsh-sandbox-local',
-      '@deepseek-ai/dsh-sandbox-windows-acl',
-    ]) await fixture.addPackage(name)
+    for (const name of new Set(capabilitySpecs()
+      .filter((value) => !['subagent.acp', 'team.experimental', 'session.snapshot-support'].includes(value.id))
+      .flatMap((value) => value.packages))) await fixture.addPackage(name)
     await fixture.addPackage('@deepseek-ai/dsh-experimental-agent-team', { unpublished: true })
 
     const first = await inspectDshCapabilities(fixture.entry, inspectionOptions(fixture))
@@ -88,10 +85,18 @@ test('reports exact lane evidence without turning absent optional capabilities i
     assert.equal(first.capabilities.find((value) => value.id === 'subagent.core').status, 'native')
     assert.equal(first.capabilities.find((value) => value.id === 'subagent.acp').status, 'absent')
     const windowsSandbox = first.capabilities.find((value) => value.id === 'sandbox.windows-acl')
-    assert.equal(windowsSandbox.status, 'partial')
-    assert.equal(windowsSandbox.semantics, 'reviewed')
-    assert.match(windowsSandbox.partialGuarantee, /network/u)
-    assert.equal(first.capabilities.find((value) => value.id === 'team.experimental').status, 'experimental')
+    assert.equal(windowsSandbox.status, 'present-unclassified')
+    assert.equal(windowsSandbox.semantics, 'unreviewed')
+    assert.equal(windowsSandbox.partialGuarantee, undefined)
+    assert.equal(first.capabilities.find((value) => value.id === 'team.experimental').status, 'present-unclassified')
+    for (const id of ['plugin.native-surface', 'tools.approval-guard', 'agent.delegation-authority', 'subagent.core']) {
+      const capability = first.capabilities.find((value) => value.id === id)
+      assert.equal(capability.status, 'native')
+      assert.equal(capability.semantics, 'reviewed')
+      assert.equal(capability.confidence, 'inventory')
+      assert.match(capability.review.observedOn, /macOS ARM64/u)
+      assert.match(capability.review.limitation, /not a probe in this inspection/u)
+    }
     assert.equal(first.evidenceDigest, second.evidenceDigest)
     const changedLifecycle = await inspectDshCapabilities(fixture.entry, {
       ...inspectionOptions(fixture),
@@ -106,14 +111,14 @@ test('reports exact lane evidence without turning absent optional capabilities i
     assert.equal(changedLifecycle.ok, false)
     assert.equal(changedLifecycle.capabilities.find((value) => value.id === 'plugin.lifecycle').status, 'partial')
     assert.notEqual(first.evidenceDigest, changedLifecycle.evidenceDigest)
-    assert.match(formatCapabilityReport(first), /^PASS DSH capabilities 0\.1\.1-rc\.2 \[blocking\]/u)
+    assert.ok(formatCapabilityReport(first).startsWith('PASS DSH capabilities ' + DSH_COMPATIBILITY_TARGET + ' [blocking]'))
   } finally {
     await rm(fixture.root, { recursive: true, force: true })
   }
 })
 
 test('recognizes the declared preview lane without promoting it to blocking evidence', async () => {
-  const fixture = await fakeDsh('0.1.2-alpha.3')
+  const fixture = await fakeDsh(DSH_PREVIEW_TARGET)
   try {
     const report = await inspectDshCapabilities(fixture.entry, inspectionOptions(fixture))
     assert.equal(report.ok, true)
@@ -141,8 +146,8 @@ test('does not apply reviewed package semantics to an unrecognized DSH lane', as
 })
 
 test('fails conformance when CLI and package identity disagree', async () => {
-  const fixture = await fakeDsh('0.1.1-rc.2', {
-    packageVersion: '0.1.2-alpha.3',
+  const fixture = await fakeDsh(DSH_COMPATIBILITY_TARGET, {
+    packageVersion: DSH_PREVIEW_TARGET,
     help: 'Usage: dsh --profile <name>\n',
   })
   try {
@@ -174,10 +179,146 @@ test('keeps the capability catalogue closed and uniquely identified', () => {
   const specs = capabilitySpecs()
   assert.equal(new Set(specs.map((value) => value.id)).size, specs.length)
   assert.ok(specs.every((value) => value.packages.length > 0))
-  assert.ok(specs.every((value) => value.reviewedVersions.includes('0.1.1-rc.2')))
+  for (const id of ['subagent.acp', 'sandbox.contract', 'sandbox.local-provider',
+    'sandbox.windows-acl', 'team.experimental', 'session.snapshot-support']) {
+    assert.deepEqual(specs.find((value) => value.id === id).reviewedVersions, ['0.1.1-rc.2', '0.1.2-alpha.3'])
+  }
+  for (const id of ['tools.approval-guard', 'agent.delegation-authority']) {
+    assert.deepEqual(specs.find((value) => value.id === id).reviewedVersions, ['0.1.5-rc.2', '0.1.6-alpha.1'])
+  }
+  assert.deepEqual(specs.find((value) => value.id === 'subagent.core').reviewedVersions,
+    ['0.1.1-rc.2', '0.1.2-alpha.3', '0.1.5-rc.2', '0.1.6-alpha.1'])
   const nativeSurface = specs.find((value) => value.id === 'plugin.native-surface')
   assert.ok(nativeSurface.packages.includes('@deepseek-ai/dsh-commands'))
   assert.ok(nativeSurface.packages.includes('@deepseek-ai/dsh-tools'))
   assert.ok(!nativeSurface.packages.includes('@deepseek-ai/dsh-native-command'))
   assert.match(specs.find((value) => value.id === 'sandbox.windows-acl').partialGuarantee, /Write restriction only/u)
+})
+
+test('recognized operational lanes do not confer historical provider reviews', async () => {
+  for (const version of [DSH_COMPATIBILITY_TARGET, DSH_PREVIEW_TARGET]) {
+    const fixture = await fakeDsh(version)
+    try {
+      for (const name of new Set(capabilitySpecs().flatMap((value) => value.packages))) await fixture.addPackage(name)
+      const report = await inspectDshCapabilities(fixture.entry, inspectionOptions(fixture))
+      assert.equal(report.ok, true)
+      assert.equal(report.runtime.lane.recognized, true)
+      for (const id of ['subagent.acp', 'sandbox.contract', 'sandbox.local-provider',
+        'sandbox.windows-acl', 'team.experimental', 'session.snapshot-support']) {
+        const capability = report.capabilities.find((value) => value.id === id)
+        assert.equal(capability.status, 'present-unclassified', id)
+        assert.equal(capability.semantics, 'unreviewed', id)
+        assert.equal(capability.review, undefined, id)
+        assert.equal(capability.partialGuarantee, undefined, id)
+      }
+      for (const id of ['tools.approval-guard', 'agent.delegation-authority', 'subagent.core']) {
+        assert.equal(report.capabilities.find((value) => value.id === id).semantics, 'reviewed')
+      }
+    } finally { await rm(fixture.root, { recursive: true, force: true }) }
+  }
+})
+
+for (const [lane, dshPath, version] of [
+  ['release', process.env.DSH_DEVELOPER_RELEASE_DSH, '0.1.5-rc.2'],
+  ['preview', process.env.DSH_DEVELOPER_PREVIEW_DSH, '0.1.6-alpha.1'],
+]) {
+  test('exact ' + lane + ' native subagent registry and shared-workspace contract', {
+    skip: process.env.DSH_DEVELOPER_SUBAGENT_CONTRACT_TEST !== '1',
+  }, async () => {
+    assert.ok(dshPath, 'An explicit exact-lane DSH path is required')
+    const installed = await assertOfficialDshInvocation(await resolveDshInvocation(dshPath))
+    assert.equal(installed.value.version, version)
+    const subagent = await locateInstalledDshPackage(installed, '@deepseek-ai/dsh-subagent')
+    assert.equal(subagent.value.version, version)
+    assert.equal(subagent.value.publishConfig?.access, 'public')
+    const require = createRequire(subagent.manifestPath)
+    const [{ Context }, native] = await Promise.all([
+      import(pathToFileURL(require.resolve('@deepseek-ai/cordis')).href),
+      import(pathToFileURL(await resolveInstalledDshEntry(subagent)).href),
+    ])
+    const parent = { ctx: { get: () => undefined }, session: { header: { id: 'bounded-parent', cwd: process.cwd() } } }
+    const first = native.childSessionMeta(parent, 1, false)
+    const second = native.childSessionMeta(parent, 1, false)
+    assert.equal(first.cwd, parent.session.header.cwd)
+    assert.equal(second.cwd, first.cwd)
+    assert.equal(first.parentSession, 'bounded-parent')
+    assert.equal(first.origin, 'subagent')
+    assert.equal(first.delegationDepth, 1)
+    const ctx = new Context()
+    try {
+      await ctx.plugin(native.default)
+      const runtime = ctx.get('subagents')
+      assert.ok(runtime)
+      assert.deepEqual(runtime.list(), [])
+      let starts = 0
+      const events = []
+      ctx.on('subagent/provider-added', provider => events.push('add:' + provider.name))
+      ctx.on('subagent/provider-removed', name => events.push('remove:' + name))
+      const provider = { name: 'bounded', capabilities: {}, start: async () => { starts += 1; throw new Error('must not execute') } }
+      const dispose = runtime.registerProvider(provider)
+      assert.deepEqual(runtime.list(), ['bounded'])
+      assert.equal(runtime.getProvider('bounded'), provider)
+      assert.throws(() => runtime.registerProvider(provider), error => error.code === 'DUPLICATE_PROVIDER')
+      await assert.rejects(runtime.start('bounded', { parent, prompt: 'no model', toolFilter: [] }),
+        error => error.code === 'UNSUPPORTED_CAPABILITY')
+      assert.equal(starts, 0)
+      await dispose()
+      assert.deepEqual(runtime.list(), [])
+      await assert.rejects(runtime.start('bounded', { parent, prompt: 'no model' }), error => error.code === 'NO_PROVIDER')
+      assert.equal(starts, 0)
+      assert.deepEqual(events, ['add:bounded', 'remove:bounded'])
+      // A newly installed Team package must trigger review instead of inheriting
+      // a historical experimental classification that would satisfy cell admission.
+      assert.equal(await locateInstalledDshPackage(installed, '@deepseek-ai/dsh-experimental-agent-team'), undefined)
+    } finally { await ctx.fiber.dispose() }
+  })
+}
+
+test('historical review stays with its exact version independently of operational lane recognition', async () => {
+  const fixture = await fakeDsh('0.1.1-rc.2')
+  try {
+    await fixture.addPackage('@deepseek-ai/dsh-sandbox-windows-acl')
+    const report = await inspectDshCapabilities(fixture.entry, inspectionOptions(fixture))
+    assert.equal(report.runtime.lane.recognized, false)
+    const capability = report.capabilities.find((value) => value.id === 'sandbox.windows-acl')
+    assert.equal(capability.semantics, 'reviewed')
+    assert.equal(capability.status, 'partial')
+    assert.match(capability.partialGuarantee, /network/u)
+    assert.equal(capability.review.id, 'historical-package-contracts')
+  } finally { await rm(fixture.root, { recursive: true, force: true }) }
+})
+
+test('recorded native review requires matching runtime and complete package identities', async () => {
+  for (const mismatch of ['package', 'runtime', 'missing']) {
+    const fixture = await fakeDsh(DSH_COMPATIBILITY_TARGET,
+      mismatch === 'runtime' ? { packageVersion: '0.2.0' } : {})
+    try {
+      for (const name of capabilitySpecs().find((value) => value.id === 'tools.approval-guard').packages) {
+        if (mismatch === 'missing' && name === '@deepseek-ai/dsh-tools') continue
+        await fixture.addPackage(name, mismatch === 'package' && name === '@deepseek-ai/dsh-tools'
+          ? { version: '0.2.0' } : {})
+      }
+      const report = await inspectDshCapabilities(fixture.entry, inspectionOptions(fixture))
+      const capability = report.capabilities.find((value) => value.id === 'tools.approval-guard')
+      assert.equal(capability.semantics, 'unreviewed', mismatch)
+      assert.equal(capability.review, undefined, mismatch)
+      assert.equal(capability.status, mismatch === 'missing' ? 'partial' : 'present-unclassified')
+    } finally { await rm(fixture.root, { recursive: true, force: true }) }
+  }
+})
+
+test('review metadata cannot be mutated through returned catalogues or reports', async () => {
+  const fixture = await fakeDsh()
+  try {
+    const spec = capabilitySpecs().find((value) => value.id === 'tools.approval-guard')
+    for (const name of spec.packages) await fixture.addPackage(name)
+    spec.reviews[0].scope = 'caller changed scope'
+    spec.reviews[0].versions.push('9.9.9')
+    const first = await inspectDshCapabilities(fixture.entry, inspectionOptions(fixture))
+    first.capabilities.find((value) => value.id === spec.id).review.scope = 'caller changed scope'
+    const second = await inspectDshCapabilities(fixture.entry, inspectionOptions(fixture))
+    assert.equal(first.evidenceDigest, second.evidenceDigest)
+    assert.notEqual(second.capabilities.find((value) => value.id === spec.id).review.scope, 'caller changed scope')
+    assert.ok(!capabilitySpecs().find((value) => value.id === spec.id).reviewedVersions.includes('9.9.9'))
+  } finally { await rm(fixture.root, { recursive: true, force: true }) }
 })

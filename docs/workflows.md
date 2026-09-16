@@ -39,7 +39,7 @@ Start with the route that matches what you have:
 | An installed profile | `attest-profile` | Canonical receipt for the exact static bytes you tested |
 | Codex or Claude Code hooks | `hook-doctor` | Static compatibility before any hook command runs |
 
-`hook-doctor` binds a config to reviewed bytes without import, execution, expansion, or activation claims. Release `0.1.1-rc.2` has no bridge; exact `0.1.2-alpha.3` is partial.
+`hook-doctor` binds a config to reviewed bytes without import, execution, expansion, or activation claims. It supports exact reviewed bytes for `0.1.5-rc.2` and `0.1.6-alpha.1`, with partial dialect compatibility. Current `SessionStart` delivery is detached; alpha awaits `agent/created`. Both lack transcript paths. Historical byte contracts remain available; changed bytes require a new review.
 
 Attest an existing physical profile without booting it or loading packages:
 
@@ -47,7 +47,7 @@ Attest an existing physical profile without booting it or loading packages:
 node bin/dsh-developer.js attest-profile --profile C:\Users\you\.dsh\profiles\web --dsh D:\path\to\dsh.cmd --json
 ```
 
-The receipt binds the DSH executable to the exact static profile bytes you tested. Two scans catch links, escapes, mutation, unresolved state, and secrets without booting packages. Release `0.1.1-rc.2` blocks; preview `0.1.2-alpha.3` advises.
+The receipt binds the DSH executable to the exact static profile bytes you tested. Two scans catch links, escapes, mutation, unresolved state, and secrets without booting packages. The current blocking runtime is `0.1.5-rc.2`; `0.1.6-alpha.1` is advisory. A static receipt does not prove runtime behavior or provider isolation.
 
 Inspect an ordinary repository from DSH Web:
 
@@ -55,7 +55,7 @@ Inspect an ordinary repository from DSH Web:
 /dsh-developer-doctor {"source":"C:/path/to/plugin","skipRuntime":true}
 ```
 
-Then use the [development workflow](development.md) to test the intended runtime with `verify --profile <name>` and rendered Web behavior with `dev`, including the documented configuration via `--patch`. Doctor's default runtime audit and preflight require the reviewed lanes. On other exact versions, including 0.1.5-rc.2, use static Doctor and this ordinary verification route. Keep certified gates for product and promoted release checks; a newer installation alone is not an ordinary plugin defect.
+Then use the [development workflow](development.md) to test the intended runtime with `verify --profile <name>` and rendered Web behavior with `dev`, including the documented configuration via `--patch`. Doctor's default runtime audit and preflight use the reviewed lanes: `0.1.5-rc.2` blocking and `0.1.6-alpha.1` advisory. On other exact versions, use static Doctor and this ordinary verification route. Product and promoted release checks retain their exact-runtime gates; a newer installation alone is not an ordinary plugin defect.
 
 Doctor checks package and bundle contracts, boot-required packages marked optional, Host/Client injection mixups, browser-service collisions, raw plugin-owned Web routes outside the upstream connection service, and invalid Web artifacts. Connection registration alone does not prove authentication: its APIs and protections differ across DSH versions, so verify the exact runtime and configuration. Product/promoted bundle checks also cover reproducibility and the admitted clean-profile lifecycle. The repository stays read-only during inspection; static findings do not prove behavior.
 
@@ -74,7 +74,7 @@ dsh --profile headless --dump-config
 
 ## Keep shipping as DSH moves
 
-For the reviewed 0.1.1-rc.2 to 0.1.2-alpha.3 lanes, run impact analysis before upgrade edits:
+For the current reviewed `0.1.5-rc.2` and `0.1.6-alpha.1` lanes, run impact analysis before upgrade edits:
 
 ```powershell
 node bin/dsh-developer.js impact --source C:\path\to\plugin --release-dsh D:\release\dsh.cmd --preview-dsh D:\preview\dsh.cmd
@@ -84,7 +84,7 @@ It follows the packages and Cordis services your plugin actually touches, then c
 
 For other targets, inspect both exact installations or checkouts with `knowledge` and follow the affected source and consumers before editing. Then use static Doctor and `verify`/`dev` on each intended runtime. That ordinary route does not extend the reviewed audit lanes.
 
-For exact source corridor `0.1.1-rc.2` to `0.1.2-alpha.3`, get file-and-line actions from the advisory ledger:
+The migration ledger is a separate bounded historical contract for the exact source corridor `0.1.1-rc.2` to `0.1.2-alpha.3`. It supplies advisory file-and-line actions for that corridor only; it is not the current upgrade recommendation:
 
 ```powershell
 node bin/dsh-developer.js migration --source C:\path\to\plugin --from-dsh 0.1.1-rc.2 --to-dsh 0.1.2-alpha.3
@@ -147,9 +147,9 @@ Shell-capable agents can use the same `ui --session <name> --action <operation>`
 
 ## Isolation built for autonomous development
 
-Read-only analysis never executes target code. Certified runtime audits execute only this product and byte-identical promoted output; credentials stay out of their child environments and evidence. Ordinary trusted development uses the host execution policy described above.
+Read-only analysis never executes target code. Restricted runtime audits execute only this product and byte-identical promoted output; credentials stay out of their child environments and evidence. Ordinary trusted development uses the host execution policy described above.
 
-Isolated Build/Apply requires a running reviewed DSH lane (0.1.1-rc.2 or advisory 0.1.2-alpha.3) and the admitted host provider (WSL2 + Bubblewrap on Windows, Apple container on supported Macs): disposable, offline, credential-free, bounded, serialized, sealed, and verifiably cleaned. DSH 0.1.5-rc.2 has no isolated admission; see [Mac runtime setup](macos.md#enable-isolated-build-and-apply). Selecting another `--dsh` for a CLI audit does not change the running agent's runtime.
+Isolated Build/Apply requires a running reviewed DSH lane (`0.1.5-rc.2`, or advisory `0.1.6-alpha.1`) plus separate successful host-provider admission: WSL2 + Bubblewrap on Windows, Apple container on supported Macs. The provider must establish disposable, offline, credential-free, bounded execution, sealed transfer and cleanup. Headless/Web, compatibility, delegation and approval passes do not establish provider admission. Separate real Apple integration on rc.2 passed 4/4 checks, covering native admission, VM Build/Apply, promotion and sparse/churn cleanup. That observation does not establish alpha isolation or admission on another host. See [Mac provider setup](macos.md#enable-isolated-build-and-apply). Selecting another `--dsh` for a CLI audit does not change the running agent's runtime.
 
 In a top-level DSH Agent, isolated Build is native and path-free. The controller derives source from the live root Agent, binds the commands and safety policy into an expiring digest, and asks DSH for audited one-time approval:
 
@@ -186,7 +186,8 @@ This repository is a native Codex plugin too. Add the existing folder to a perso
 ## Compatibility
 
 - Ordinary development: selected exact runtimes, including DSH 0.1.5-rc.2; see [observed results](verification.md).
-- Reviewed audit/isolated lanes: DSH 0.1.1-rc.2 (blocking release) and 0.1.2-alpha.3 (advisory preview).
+- Reviewed runtime audit lanes: DSH 0.1.5-rc.2 (blocking) and 0.1.6-alpha.1 (advisory). Headless/Web preflight and native verification, product compatibility, delegation and approval checks passed on both exact runtimes.
+- Isolated providers require separate local admission and execution evidence; runtime audit passes do not supply it.
 - Node.js: `^22.18.0 || >=24.11.0`.
 - Native development: Windows, macOS and Linux. See [platform support](platforms.md) for tested boundaries and the separate Windows/macOS isolated Build requirements.
 

@@ -19,7 +19,7 @@ function draft(name = 'promoted-plugin') {
     description: 'A promoted plugin used to verify the transactional release path.',
     goal: 'Produce one deterministic result.',
     instructions: 'Follow the accepted goal and keep the response concise.',
-    compatibilityTarget: '0.1.1-rc.2',
+    compatibilityTarget: '0.1.5-rc.2',
     decisions: [],
     unresolvedRisks: [],
     tools: [],
@@ -30,7 +30,7 @@ function draft(name = 'promoted-plugin') {
 function fakeRuntime() {
   return {
     checkDshVersion: async () => ({
-      version: '0.1.1-rc.2',
+      version: '0.1.5-rc.2',
       invocation: { displayPath: 'fake-dsh', command: 'fake', prefixArgs: [] },
     }),
     smokeDshInstall: async () => ({ installed: true, discovered: true, uninstalled: true }),

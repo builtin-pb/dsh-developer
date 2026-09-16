@@ -6,19 +6,18 @@ beside the current session title. The text changes through DSH's supplied
 explicit label instead of appearing idle. The decorative marker is hidden from
 assistive technology; the text is a polite, atomic status region.
 
-Supported runtimes: **DSH 0.1.5-rc.1 and 0.1.5-rc.2**, with their Web profiles, and Node
+Current development target: **DSH 0.1.5-rc.2**, with its Web profile, and Node
 **22.18+ within 22.x, or 24.11+**. The exact installed declarations and client
-implementation define this example's contract. Compilation uses `0.1.5-rc.1`
-declarations; the packed client has been exercised in both installed runtimes.
+implementation define this example's contract. Compilation and native registry
+tests use `0.1.5-rc.2` packages. The example's own version remains `0.1.0`.
 
 ## Build and test
 
 From this repository:
 
 ```sh
-cd examples/session-status
-npm ci --ignore-scripts
-npm test
+npm --prefix examples/session-status ci --ignore-scripts
+node bin/dsh-developer.js run --source examples/session-status --script test
 ```
 
 If the host policy restricts npm’s default cache, pass `--cache /writable/cache`
@@ -32,17 +31,24 @@ before declaration. React server rendering checks successive supplied session
 snapshots and accessible text. These tests do not exercise browser subscriptions,
 transport reconnection, visual layout, or screen-reader announcements.
 
-The DSH development dependencies include the exact `0.1.5-rc.1` type peer closure
-(including installed optional peers and transitive DSH dependencies), with Cordis
-`4.0.2`. Pinning only the UI
-packages allows npm to choose incompatible prerelease peers and can cause
+The DSH development dependencies pin the `0.1.5-rc.2` peer closures reported by
+`knowledge` for the renderer, session adapter, conversation, and session
+controller packages, with Cordis `4.0.2`. The controller accounts for most of
+the flat peer list, including installed optional peers. Ordinary transitive
+DSH dependencies stay pinned to the same runtime. The separately published
+`dsh-client-ui-slots` and `dsh-client-store` packages are also pinned at rc.2:
+the Client declarations import their types, but they are absent from the
+selected CLI installation and its runtime peer maps. Their published versions
+and Cordis peer requirements were checked before installation.
+
+Pinning only the UI packages allows npm to choose incompatible prerelease peers and can cause
 `ERESOLVE`. Keep the pins and lockfile together; update them against a selected
 runtime as a unit. `skipLibCheck` skips checking upstream declaration bodies;
 our source is still checked in strict mode against their exported types.
 
 ## Run in DSH Web
 
-From the repository root, select one of the supported executables:
+From the repository root, select the DSH `0.1.5-rc.2` executable:
 
 ```sh
 node bin/dsh-developer.js knowledge --dsh /path/to/dsh --topic ui
@@ -111,7 +117,14 @@ entries, source, build configuration, tests, native patch, README, and MIT
 license. It excludes development dependencies and cache contents. Nothing in
 this workflow publishes to a registry.
 
-Verified on macOS ARM64 with Node 24.19.0 and DSH `0.1.5-rc.1`: clean dependency
+For this rc.2 dependency refresh, verification is limited to clean installation
+with scripts disabled, strict source compilation, rebuilding the Host and
+Client entries, and the four native registry/factory/state-rendering tests on
+macOS ARM64 with Node 24.19.0. No rendered browser or model was used; these
+checks do not renew the browser observations below.
+
+Earlier verification, before this dependency refresh, used DSH `0.1.5-rc.1`
+on the same platform: clean dependency
 installation, strict compilation, registration/state tests, and source and
 packed-archive Web loading. In the rendered browser, real DSH sessions with a
 local keyless test adapter exercised running → idle, selection between two
@@ -121,7 +134,7 @@ provider credential was also shown as a native turn failure while the indicator
 correctly returned to idle. These observations do not establish screen-reader
 announcements, every theme/viewport, other DSH versions, or model quality.
 
-The same packed client also passed rendered running/idle, selection between two
+That earlier packed client also passed rendered running/idle, selection between two
 sessions, cancellation and reload checks on `0.1.5-rc.2`, using a local keyless
 adapter supplied with `dev --patch`. No client warnings or errors were observed
 in that instance. Its source checkout was not needed to load the archive.

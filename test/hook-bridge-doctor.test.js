@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
 import { formatHookBridgeReport, inspectHookBridge } from '../lib/hook-bridge-doctor.js'
-import { inspectHookBridgeInternal } from '../lib/hook-bridge-doctor-internal.js'
+import { inspectHookBridgeInternal, REVIEWED_HOOK_BRIDGE_LANES } from '../lib/hook-bridge-doctor-internal.js'
 import { resolveInstalledDshEntry } from '../lib/dsh-installation.js'
 import { appendFirstNextAction, withNextActions } from '../lib/recovery-actions.js'
 
@@ -24,11 +24,12 @@ async function putJson(path, value) {
   return put(path, JSON.stringify(value, null, 2) + '\n')
 }
 
-async function makeLane(t, { dialect = 'codex', release = false } = {}) {
+async function makeLane(t, { dialect = 'codex', release = false, modern } = {}) {
   const root = await mkdtemp(join(await realpath(tmpdir()), 'sample-dsh-hook-doctor-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   const dshRoot = join(root, 'node_modules', '@deepseek-ai', 'dsh')
-  const dshVersion = release ? '9.1.1-test-release' : '9.1.2-test-preview'
+  const laneId = release ? 'release' : modern ?? 'preview'
+  const dshVersion = release ? '9.1.1-test-release' : modern ? '9.1.5-test-' + modern : '9.1.2-test-preview'
   const bridgeName = dialect === 'codex'
     ? '@deepseek-ai/dsh-hooks-codex'
     : '@deepseek-ai/dsh-hooks-claude-code'
@@ -42,10 +43,11 @@ async function makeLane(t, { dialect = 'codex', release = false } = {}) {
   const dshManifestDigest = await putJson(join(dshRoot, 'package.json'), dshManifest)
   const dshEntryDigest = await put(join(dshRoot, 'lib', 'bin.js'), 'throw new Error("DSH bytes must never execute")\n')
   const reviewed = {
-    [release ? 'release' : 'preview']: {
+    [laneId]: {
       version: dshVersion,
       dsh: { manifest: dshManifestDigest, entry: dshEntryDigest },
       bridgeStatus: release ? 'reviewed-absent' : 'reviewed-partial',
+      ...(modern ? { eventSemantics: REVIEWED_HOOK_BRIDGE_LANES[modern].eventSemantics } : {}),
     },
   }
   if (!release) {
@@ -59,7 +61,7 @@ async function makeLane(t, { dialect = 'codex', release = false } = {}) {
     }
     const bridgeManifestDigest = await putJson(join(bridgeRoot, 'package.json'), bridgeManifest)
     const bridgeEntryDigest = await put(join(bridgeRoot, 'lib', 'index.js'), 'throw new Error("bridge bytes must never execute")\n')
-    const bridgeInvariantDigest = await put(join(bridgeRoot, 'lib', 'invariant.js'), 'throw new Error("bridge invariant must never execute")\n')
+    const bridgeInvariantDigest = modern ? null : await put(join(bridgeRoot, 'lib', 'invariant.js'), 'throw new Error("bridge invariant must never execute")\n')
     const protocolRoot = join(dshRoot, 'node_modules', '@deepseek-ai', 'dsh-hook-protocol')
     const protocolVersion = '9.1.2-test-protocol'
     const protocolManifest = {
@@ -71,7 +73,7 @@ async function makeLane(t, { dialect = 'codex', release = false } = {}) {
     const protocolManifestDigest = await putJson(join(protocolRoot, 'package.json'), protocolManifest)
     const protocolEntryDigest = await put(join(protocolRoot, 'lib', 'index.js'), 'throw new Error("protocol bytes must never execute")\n')
     const protocolInvariantDigest = await put(join(protocolRoot, 'lib', 'invariant.js'), 'throw new Error("protocol invariant must never execute")\n')
-    reviewed.preview.bridges = {
+    reviewed[laneId].bridges = {
       [dialect]: {
         name: bridgeName,
         version: bridgeVersion,
@@ -80,7 +82,7 @@ async function makeLane(t, { dialect = 'codex', release = false } = {}) {
         invariant: bridgeInvariantDigest,
       },
     }
-    reviewed.preview.protocol = {
+    reviewed[laneId].protocol = {
       name: '@deepseek-ai/dsh-hook-protocol',
       version: protocolVersion,
       manifest: protocolManifestDigest,
@@ -110,6 +112,124 @@ async function makeLane(t, { dialect = 'codex', release = false } = {}) {
 function commandHooks(command = 'echo inspected-only') {
   return [{ hooks: [{ type: 'command', command, timeout: 5 }] }]
 }
+
+test('keeps historical contracts and distinguishes current and alpha lifecycle semantics', async (t) => {
+  assert.equal(REVIEWED_HOOK_BRIDGE_LANES.release.version, '0.1.1-rc.2')
+  assert.equal(REVIEWED_HOOK_BRIDGE_LANES.preview.version, '0.1.2-alpha.3')
+  assert.equal(REVIEWED_HOOK_BRIDGE_LANES.current.version, '0.1.5-rc.2')
+  assert.equal(REVIEWED_HOOK_BRIDGE_LANES.alpha.version, '0.1.6-alpha.1')
+  for (const dialect of ['codex', 'claude-code']) {
+    for (const modern of [undefined, 'current', 'alpha']) {
+      await t.test(`${dialect} ${modern ?? 'historical'}`, async () => {
+        const lane = await makeLane(t, { dialect, modern })
+        const names = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop']
+        if (dialect === 'claude-code') names.push('SubagentStart', 'SubagentStop')
+        const config = { hooks: Object.fromEntries(names.map((name) => [name, commandHooks()])) }
+        const report = await lane.inspect(config)
+        assert.equal(report.ok, true, JSON.stringify(report))
+        assert.equal(report.lane.id, modern ?? 'preview')
+        assert.equal(report.lane.activation, 'not-inspected')
+        assert.equal(report.lane.status, 'reviewed-partial')
+        assert.equal(report.config.totals.effectiveRunnable, names.length)
+        assert.match(report.lane.protocol.invariantDigest, /^sha256:/u)
+        const start = report.config.events.find((event) => event.event === 'SessionStart')
+        assert.equal(start.delivery, modern === 'alpha' ? 'awaited-agent-created' : modern ? 'detached-session-start' : undefined)
+        assert.equal(start.limitations.includes('detached'), modern !== 'alpha')
+        assert.equal(start.limitations.includes('may-miss-first-request'), dialect === 'codex' && modern !== 'alpha')
+        assert.equal(start.limitations.includes('json-context-only'), dialect === 'claude-code')
+        for (const event of report.config.events) {
+          assert.equal(event.limitations.includes('transcript-path-unavailable'), modern !== undefined)
+        }
+        if (dialect === 'claude-code') {
+          assert.ok(report.config.events.find((event) => event.event === 'SubagentStart').limitations.includes('detached'))
+        }
+        if (modern) assert.equal(report.lane.bridge.invariantDigest, null)
+        else assert.match(report.lane.bridge.invariantDigest, /^sha256:/u)
+        // Malformed groups must not accidentally fall back to historical semantics.
+        const malformed = await lane.inspect({ hooks: { SessionStart: {} } })
+        assert.equal(malformed.ok, false)
+        assert.deepEqual(malformed.config.events[0].limitations, start.limitations)
+        assert.equal(malformed.config.events[0].delivery, start.delivery)
+      })
+    }
+  }
+})
+
+test('modern lanes retain whole-config regex rejection and dialect-specific async parsing', async (t) => {
+  for (const modern of ['current', 'alpha']) {
+    for (const dialect of ['codex', 'claude-code']) {
+      await t.test(`${modern} ${dialect}`, async () => {
+        const lane = await makeLane(t, { dialect, modern })
+        const report = await lane.inspect({ hooks: {
+          PreToolUse: [{ matcher: '[', hooks: [{ command: 'never-execute', async: true }] }],
+          PostToolUse: commandHooks(),
+        } })
+        assert.equal(report.ok, false)
+        assert.equal(report.config.registration, dialect === 'codex' ? 'classified' : 'none-invalid-matcher')
+        assert.equal(report.config.totals.runtimeRunnable, dialect === 'codex' ? 1 : 2)
+        assert.equal(report.config.totals.effectiveRunnable, dialect === 'codex' ? 1 : 0)
+        const invalid = await lane.inspect({ hooks: {
+          SessionStart: [{ matcher: '[', hooks: [{ command: 'never-execute' }] }],
+          PostToolUse: commandHooks(),
+        } })
+        assert.equal(invalid.config.registration, 'none-invalid-matcher')
+        assert.equal(invalid.config.totals.effectiveRunnable, 0)
+      })
+    }
+  }
+})
+
+test('modern contracts fail closed on changed DSH, bridge, protocol, and invariant inventory', async (t) => {
+  const cases = [
+    ['package.json', 'HOOK_LANE_UNREVIEWED'],
+    ['lib/bin.js', 'HOOK_LANE_UNREVIEWED'],
+    ['node_modules/@deepseek-ai/dsh-hooks-codex/package.json', 'HOOK_BRIDGE_UNREVIEWED'],
+    ['node_modules/@deepseek-ai/dsh-hooks-codex/lib/index.js', 'HOOK_BRIDGE_UNREVIEWED'],
+    ['node_modules/@deepseek-ai/dsh-hooks-codex/lib/invariant.js', 'HOOK_BRIDGE_UNREVIEWED'],
+    ['node_modules/@deepseek-ai/dsh-hook-protocol/package.json', 'HOOK_PROTOCOL_UNREVIEWED'],
+    ['node_modules/@deepseek-ai/dsh-hook-protocol/lib/index.js', 'HOOK_PROTOCOL_UNREVIEWED'],
+    ['node_modules/@deepseek-ai/dsh-hook-protocol/lib/invariant.js', 'HOOK_PROTOCOL_UNREVIEWED'],
+  ]
+  for (const [path, expected] of cases) {
+    await t.test(path, async () => {
+      const lane = await makeLane(t, { modern: 'current' })
+      const target = join(lane.dshRoot, path)
+      const original = await readFile(target, 'utf8').catch(() => '')
+      await put(target, original + '\n')
+      const report = await lane.inspect(undefined, { source: join(lane.root, 'not-read.json') })
+      assert.equal(report.ok, false)
+      assert.equal(report.source.status, 'not-read')
+      assert.equal(report.checks[0].evidence.code, expected)
+    })
+  }
+  for (const modern of [undefined, 'alpha']) {
+    await t.test(`required invariant missing: ${modern ?? 'historical'}`, async () => {
+      const lane = await makeLane(t, { modern })
+      const packageName = modern ? 'dsh-hook-protocol' : 'dsh-hooks-codex'
+      await rm(join(lane.dshRoot, 'node_modules/@deepseek-ai', packageName, 'lib/invariant.js'))
+      const report = await lane.inspect(undefined, { source: join(lane.root, 'not-read.json') })
+      assert.equal(report.source.status, 'not-read')
+      assert.equal(report.checks[0].evidence.code, 'HOOK_PACKAGE_INCOMPLETE')
+    })
+  }
+})
+
+test('reseals reviewed bridge invariant absence after protocol resolution', async (t) => {
+  const lane = await makeLane(t, { modern: 'alpha' })
+  let resolutions = 0
+  const report = await lane.inspect(undefined, {
+    source: join(lane.root, 'not-read.json'),
+    dependencies: {
+      async resolveInstalledDshEntry(installed) {
+        const entry = await resolveInstalledDshEntry(installed)
+        if (++resolutions === 2) await put(join(dirname(lane.bridgeEntry), 'invariant.js'), 'unreviewed companion\n')
+        return entry
+      },
+    },
+  })
+  assert.equal(report.source.status, 'not-read')
+  assert.equal(report.checks[0].evidence.code, 'HOOK_BRIDGE_UNREVIEWED')
+})
 
 test('classifies the exact reviewed Codex subset without executing DSH, bridge, or hook commands', async (t) => {
   const lane = await makeLane(t)

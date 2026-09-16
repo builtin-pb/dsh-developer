@@ -19,13 +19,13 @@ Already have a plugin? Start there. You don't need to regenerate it or adopt a n
 
 ## Install
 
-Add it to DSH Web with one command:
+Install the published `v0.1.1` tag into DSH Web:
 
 ```sh
 dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.1' --ignore-scripts
 ```
 
-Open or restart DSH Web (`dsh web`). [Need DSH first?](docs/install.md) · [Using Codex?](docs/workflows.md#use-it-from-codex)
+Open or restart DSH Web (`dsh web`). For development from source, use a [checkout installation](docs/contributing.md). [Need DSH first?](docs/install.md) · [Using Codex?](docs/workflows.md#use-it-from-codex)
 
 ## Just tell it what you want
 
@@ -46,6 +46,6 @@ The agent picks up the workflow from your request. Describe the goal, answer any
 - [Choose a platform](docs/platforms.md) — Windows, Mac and Linux routes, requirements and tested boundaries.
 - [Contribute](docs/contributing.md) — start with `npm test`, then check your changes against DSH.
 
-Native development targets Windows, macOS and Linux. Tool and Web workflows have been exercised locally on macOS and Linux ARM64 with **DSH 0.1.5-rc.2**. Certified release audits remain pinned to **0.1.1-rc.2**; see [observed results](docs/verification.md) and the [platform guide](docs/platforms.md) for tested boundaries.
+The current checkout targets **DSH 0.1.5-rc.2** for blocking checks and **0.1.6-alpha.1** for advisory checks. Headless/Web preflight and native verification, product compatibility, delegation and approval checks passed on these exact runtimes. Native development targets Windows, macOS and Linux; these results do not establish every host or isolated provider. Apple isolation on rc.2 also passed four real integration checks; each host still requires provider admission. See [observed results](docs/verification.md) and the [platform guide](docs/platforms.md).
 
 Designed and implemented with [MetaFlow](https://github.com/builtin-pb/metaflow). [MIT licensed](LICENSE).

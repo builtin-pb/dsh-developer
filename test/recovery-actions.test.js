@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { fileURLToPath } from 'node:url'
 import { DSH_COMPATIBILITY_TARGET, DSH_PREVIEW_TARGET } from '../lib/constants.js'
 import { asDiagnostic, DshDeveloperError } from '../lib/errors.js'
 import { createNativeToolDefinition } from '../lib/native-tool-internal.js'
@@ -13,7 +14,7 @@ import {
 } from '../lib/recovery-actions.js'
 import { inspectUiCapabilities } from '../lib/ui-capabilities.js'
 import { UI_SETUP_INSTRUCTION } from '../lib/ui-configuration.js'
-import { inspectSourceMigration } from '../lib/source-migration.js'
+import { inspectSourceMigration, SOURCE_MIGRATION_LEDGER_V1 } from '../lib/source-migration.js'
 
 const DIGEST = 'sha256:' + 'a'.repeat(64)
 const SECRET = 'malicious-secret-token-123456'
@@ -717,10 +718,16 @@ test('unsupported migration corridor fails before source access and emits a safe
   assert.doesNotMatch(JSON.stringify(diagnostic.nextActions), new RegExp(SECRET, 'u'))
   assert.deepEqual(diagnostic.nextActions[0].recovery.argumentTemplate, [
     { name: 'source', source: 'original-request', field: 'source' },
-    { name: 'fromDsh', source: 'literal', value: DSH_COMPATIBILITY_TARGET },
-    { name: 'toDsh', source: 'literal', value: DSH_PREVIEW_TARGET },
+    { name: 'fromDsh', source: 'literal', value: SOURCE_MIGRATION_LEDGER_V1.corridor.fromDsh },
+    { name: 'toDsh', source: 'literal', value: SOURCE_MIGRATION_LEDGER_V1.corridor.toDsh },
     { name: 'json', source: 'literal', value: true },
   ])
+  const options = Object.fromEntries(diagnostic.nextActions[0].recovery.argumentTemplate
+    .filter((argument) => ['fromDsh', 'toDsh'].includes(argument.name))
+    .map((argument) => [argument.name, argument.value]))
+  const report = await inspectSourceMigration(fileURLToPath(new URL('./fixtures/source-migration/clean/', import.meta.url)), options)
+  assert.equal(report.ok, true, 'Following recovery must reach the historical migration inspection')
+  assert.deepEqual({ fromDsh: report.corridor.fromDsh, toDsh: report.corridor.toDsh }, options)
 })
 
 test('human rendering appends no more than the first relevant action', () => {

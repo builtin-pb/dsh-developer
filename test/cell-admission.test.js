@@ -16,7 +16,7 @@ async function writeJson(path, value) {
   await writeFile(path, JSON.stringify(value, null, 2) + '\n', 'utf8')
 }
 
-async function fakeDsh(version = '0.1.1-rc.2') {
+async function fakeDsh(version = '0.1.5-rc.2') {
   const root = await mkdtemp(join(tmpdir(), 'dsh-developer-cell-admission-'))
   const dshRoot = join(root, 'node_modules', '@deepseek-ai', 'dsh')
   const entry = join(dshRoot, 'lib', 'bin.js')
@@ -123,7 +123,7 @@ test('admits only the bounded isolated-cell gap from exact installed behavior', 
     assert.equal(first.checks.find((value) => value.id === 'upstream.public-gap').status, 'PASS')
     assert.equal(first.evidenceDigest, second.evidenceDigest)
     const text = formatCellAdmissionReport(first)
-    assert.match(text, /^PASS isolated agent cell admission 0\.1\.1-rc\.2 \[blocking\] — Incubate/u)
+    assert.match(text, /^PASS isolated agent cell admission 0\.1\.5-rc\.2 \[blocking\] — Incubate/u)
     assert.match(text, /Admitted guarantee:/u)
     assert.match(text, /Explicitly excluded: roster, mailbox, task board/u)
     assert.match(text, /Trusted input: the user-selected/u)

@@ -2,6 +2,56 @@
 
 These are local and CI observations from 10–16 September 2026. Dated sections distinguish the released version from subsequent checkout work. They describe what was exercised, not a claim that dsh-developer already completes every development task reliably. The [development guide](development.md) explains how to use the capabilities; the [strategy](development-strategy.md) retains the broader goal and unfinished milestones.
 
+## Current runtime baseline — 16 September, unreleased
+
+The blocking audit target is DSH **0.1.5-rc.2**; **0.1.6-alpha.1** is advisory.
+The registry check on 16 September resolved `latest` to 0.1.5-rc.1, `next` to
+0.1.5-rc.2 and `alpha` to 0.1.6-alpha.1. CI resolves all three channels for
+ordinary native development, while product audits use explicit versions.
+Moving a registry tag does not automatically extend reviewed contracts.
+
+On macOS ARM64/Node 24.19.0, both audit targets passed headless and Web
+preflight, actual native knowledge-tool verification, compatibility lifecycle,
+delegation, and static attestation of fresh headless/Web profiles. The native
+approval and guard suite passed six cases across the two targets.
+
+Client module tables and service owners were checked against both installed
+frontends and 113 native client bundles. The 139 unit/corpus checks passed;
+111 bundles passed the audit. Both document-preview bundles remain explicitly
+refused because their PDF implementation contains a guarded Node `url` import;
+the static audit does not prove that branch unreachable.
+
+Both typed examples use the current target's complete development peer closure.
+Clean installs and nine example tests passed; package-check also passed eight
+native cases from source and eight from its packed archive. Existing rendered
+Client observations below remain distinct from these build and native checks.
+
+The full native development suite passed 21 tests on the blocking target.
+Real Apple-provider integration passed four checks after the capability review
+was separated from lane selection. Complete tool-registry Build/Apply journeys
+then passed on both targets: denied and cancelled approvals ran no workload,
+successful Apply cleaned its artifacts, and a subsequent concurrent edit was
+preserved with backup/recovery state instead of being overwritten. These runs
+found and repaired undefined Windows-specific fields in Mac tool results and
+absolute workspace paths triggering credential detection in recovery journals.
+New journals bind the source by path digest; legacy recovery markers still block
+new plans. The credential detector and concurrent-write protections are unchanged.
+
+Hook Bridge Doctor now includes independently pinned current and alpha bytes.
+Its 45 focused tests and 42 CLI assertions passed (28 current/alpha cases and
+14 historical installation-drift refusals). No hook commands ran. Both targets
+have partial dialect compatibility and unavailable transcript paths; alpha's
+SessionStart mapping awaits `agent/created`, while the current mapping remains
+detached. This is static classification, not activation proof.
+
+Full validation through `dsh-developer run` passed 772 tests with 33 optional
+tests skipped. The final product compatibility check passed both exact lanes.
+
+The earlier [diagnostics integration run](https://github.com/builtin-pb/dsh-developer/actions/runs/35141578368)
+passed all 18 jobs, including all nine native development jobs. The sections
+below retain dated observations; their older runtime versions are historical
+evidence, not current installation recommendations.
+
 ## Web workspace selection — 16 September, unreleased
 
 `dev --workspace` previews source packages and packed archives against a separate

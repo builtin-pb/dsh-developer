@@ -1,10 +1,29 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { PRODUCT_VERSION } from '../lib/constants.js'
+import { DSH_COMPATIBILITY_TARGET, DSH_PREVIEW_TARGET, PRODUCT_VERSION } from '../lib/constants.js'
 
 const SLOGAN = 'The single plugin you need for DSH'
 const METAFLOW = '[MetaFlow](https://github.com/builtin-pb/metaflow)'
+
+test('keeps current installation guidance and typed examples aligned with the audit baseline', async () => {
+  for (const file of ['README.md', 'README.zh-CN.md', 'docs/install.md', 'skills/dsh-developer/SKILL.md']) {
+    const text = await readFile(new URL('../' + file, import.meta.url), 'utf8')
+    assert.ok(text.includes(DSH_COMPATIBILITY_TARGET), file + ' must identify the blocking runtime')
+    assert.ok(text.includes(DSH_PREVIEW_TARGET), file + ' must identify the advisory runtime')
+  }
+  for (const name of ['package-check', 'session-status']) {
+    const root = new URL('../examples/' + name + '/', import.meta.url)
+    const manifest = JSON.parse(await readFile(new URL('package.json', root), 'utf8'))
+    const lock = JSON.parse(await readFile(new URL('package-lock.json', root), 'utf8'))
+    const cohort = Object.entries(manifest.devDependencies).filter(([name]) => name.startsWith('@deepseek-ai/dsh-'))
+    assert.ok(cohort.length > 0)
+    for (const [dependency, version] of cohort) {
+      assert.equal(version, DSH_COMPATIBILITY_TARGET, name + ' development dependency ' + dependency)
+      assert.equal(lock.packages['node_modules/' + dependency].version, version)
+    }
+  }
+})
 
 test('keeps both human-facing READMEs strong, concise, linked, and package-visible', async () => {
   const [english, chinese, manifestText, englishGuide, chineseGuide] = await Promise.all([

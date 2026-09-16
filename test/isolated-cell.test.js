@@ -11,6 +11,22 @@ import { fingerprintFileMap } from '../lib/files.js'
 import { openIsolatedCellInternal } from '../lib/isolated-cell-internal.js'
 import { openIsolatedCell } from '../lib/isolated-cell.js'
 
+test('provider evidence stays lossless JSON when platform-specific fields are absent', async () => {
+  for (const provider of [
+    { id: 'apple-container', distro: 'fixture-image' },
+    { id: 'wsl2-bubblewrap', distro: 'fixture', kernel: 'fixture', bwrapVersion: 'fixture' },
+  ]) {
+    const cell = await openIsolatedCellInternal('fixture', {}, {
+      scanOrdinaryTree: async () => ({ root: 'fixture', entries: [], fingerprint: 'fixture' }),
+      createWslBubblewrapCell: async () => ({ provider, async dispose() {} }),
+    })
+    try {
+      assert.deepEqual(cell.provider, provider)
+      assert.deepEqual(cell.provider, JSON.parse(JSON.stringify(cell.provider)))
+    } finally { await cell.dispose() }
+  }
+})
+
 test('admitted opening retains its process lease when unpublished provider cleanup fails', async () => {
   // Isolate the deliberately poisoned process lease from all other tests.
   const script = `

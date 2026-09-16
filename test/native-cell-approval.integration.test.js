@@ -8,8 +8,8 @@ import { inspectLiveAgentWorkspace } from '../lib/native-cell-workflow.js'
 import { createNativeToolDefinition } from '../lib/native-tool-internal.js'
 
 const lanes = [
-  ['release', process.env.DSH_DEVELOPER_RELEASE_TOOLS_ROOT, '0.1.1-rc.2'],
-  ['preview', process.env.DSH_DEVELOPER_PREVIEW_TOOLS_ROOT, '0.1.2-alpha.3'],
+  ['release', process.env.DSH_DEVELOPER_RELEASE_TOOLS_ROOT, '0.1.5-rc.2'],
+  ['preview', process.env.DSH_DEVELOPER_PREVIEW_TOOLS_ROOT, '0.1.6-alpha.1'],
 ]
 
 async function importFrom(requireFromLane, name) {

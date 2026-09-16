@@ -21,7 +21,7 @@ function exportValue() {
     description: 'A fixture for deterministic Doctor checks.',
     goal: 'Exercise the release catalogue.',
     instructions: 'Return one deterministic result.',
-    compatibilityTarget: '0.1.1-rc.2',
+    compatibilityTarget: '0.1.5-rc.2',
     decisions: [],
     unresolvedRisks: [],
     tools: [],
@@ -41,7 +41,7 @@ test('static Doctor never invokes generated plugin code or lifecycle runners', a
   const runners = {
     checkDshVersion: async () => {
       calls.push('runtime')
-      return { version: '0.1.1-rc.2', invocation: {} }
+      return { version: '0.1.5-rc.2', invocation: {} }
     },
     runGeneratedNodeTests: async () => { calls.push('generated') },
     smokeDshInstall: async () => { calls.push('lifecycle') },
@@ -281,7 +281,7 @@ test('blocks eager imports from optional packages without rejecting a gated dyna
   try {
     const packagePath = join(root, 'package.json')
     const packageValue = JSON.parse(await readFile(packagePath, 'utf8'))
-    packageValue.optionalDependencies = { '@deepseek-ai/dsh-util-time': '0.1.1-rc.2' }
+    packageValue.optionalDependencies = { '@deepseek-ai/dsh-util-time': '0.1.5-rc.2' }
     await writeFile(packagePath, JSON.stringify(packageValue, null, 2) + '\n', 'utf8')
     await writeFile(join(root, 'index.js'), [
       'import {',
@@ -297,7 +297,7 @@ test('blocks eager imports from optional packages without rejecting a gated dyna
     assert.equal(failed.evidence.code, 'OPTIONAL_EAGER_IMPORT')
     assert.deepEqual(failed.evidence.collisions, [{
       package: '@deepseek-ai/dsh-util-time',
-      range: '0.1.1-rc.2',
+      range: '0.1.5-rc.2',
       paths: ['index.js'],
     }])
     assert.match(failed.recovery, /Move every boot-required package to dependencies/u)
@@ -717,17 +717,17 @@ test('blocks DSH Client package identifiers in Host inject with targeted recover
   }
 })
 
-test('keeps release-valid Web bundles nonblocking when only the preview module table drifts', async () => {
+test('rejects the retired client-runtime seed module on the current release', async () => {
   const root = await generatedFixture()
   try {
     await addClientBundle(root, 'return require("@deepseek-ai/dsh-client-runtime/client")')
 
     const report = await doctorPlugin(root, { runtime: 'skip' })
     const check = report.checks.find((candidate) => candidate.id === 'web.client-bundle')
-    assert.equal(check.status, 'WARN')
-    assert.equal(check.blocking, false)
-    assert.equal(check.evidence.lanes.release.ok, true)
-    assert.deepEqual(check.evidence.lanes.preview.missing, ['@deepseek-ai/dsh-client-runtime/client'])
+    assert.equal(check.status, 'FAIL')
+    assert.equal(check.blocking, true)
+    assert.equal(check.evidence.code, 'CLIENT_BUNDLE_EXTERNAL_DRIFT')
+    assert.deepEqual(check.evidence.requests, ['@deepseek-ai/dsh-client-runtime/client'])
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -805,8 +805,8 @@ test('reviews raw plugin-owned Web routes without blocking intentional public in
     assert.equal(rawReport.ok, true, JSON.stringify(rawReport.checks, null, 2))
     assert.equal(rawCheck.evidence.rawRoutes[0].routePath, '/ping')
     assert.equal(rawCheck.evidence.repositoryCodeExecuted, false)
-    assert.equal(rawCheck.evidence.lanes.release.target, '0.1.1-rc.2')
-    assert.equal(rawCheck.evidence.lanes.preview.target, '0.1.2-alpha.3')
+    assert.equal(rawCheck.evidence.lanes.release.target, '0.1.5-rc.2')
+    assert.equal(rawCheck.evidence.lanes.preview.target, '0.1.6-alpha.1')
     assert.match(rawCheck.message, /not claiming every raw route is unsafe/u)
     assert.match(rawCheck.recovery, /intentionally public/u)
     assert.match(rawCheck.recovery, /upstream connection service/u)

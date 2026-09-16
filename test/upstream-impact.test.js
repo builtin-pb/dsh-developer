@@ -1293,39 +1293,39 @@ test('maps a declared service to exact package owners and emits stable scoped im
   try {
     await mkdir(source)
     await sourceFixture(source, {
-      peerDependencies: { '@deepseek-ai/dsh-skill': '^0.1.1-rc.2 || ^0.1.2-alpha.3' },
-      devDependencies: { '@deepseek-ai/dsh-skill': '^0.1.1-rc.2 || ^0.1.2-alpha.3' },
+      peerDependencies: { '@deepseek-ai/dsh-skill': '^0.1.5-rc.2 || ^0.1.6-alpha.1' },
+      devDependencies: { '@deepseek-ai/dsh-skill': '^0.1.5-rc.2 || ^0.1.6-alpha.1' },
     })
     const releaseDsh = await installedPackage(
       join(root, 'release-dsh'),
       '@deepseek-ai/dsh',
-      '0.1.1-rc.2',
+      '0.1.5-rc.2',
       'export interface Dsh {}\n',
     )
     const previewDsh = await installedPackage(
       join(root, 'preview-dsh'),
       '@deepseek-ai/dsh',
-      '0.1.2-alpha.3',
+      '0.1.6-alpha.1',
       'export interface Dsh {}\n',
     )
     const releaseSkill = await installedPackage(
       join(root, 'release-skill'),
       '@deepseek-ai/dsh-skill',
-      '0.1.1-rc.2',
+      '0.1.5-rc.2',
       "declare module '@deepseek-ai/cordis' { interface Context { skills: object } }\n",
     )
     const previewSkill = await installedPackage(
       join(root, 'preview-skill'),
       '@deepseek-ai/dsh-skill',
-      '0.1.2-alpha.3',
+      '0.1.6-alpha.1',
       "declare module '@deepseek-ai/cordis' { interface Context { skills: { register(value: unknown): void } } }\n",
     )
     const inventories = {
-      '0.1.1-rc.2': new Map([
+      '0.1.5-rc.2': new Map([
         ['@deepseek-ai/dsh', releaseDsh],
         ['@deepseek-ai/dsh-skill', releaseSkill],
       ]),
-      '0.1.2-alpha.3': new Map([
+      '0.1.6-alpha.1': new Map([
         ['@deepseek-ai/dsh', previewDsh],
         ['@deepseek-ai/dsh-skill', previewSkill],
       ]),
@@ -1421,8 +1421,8 @@ test('maps a declared service to exact package owners and emits stable scoped im
     assert.match(formatUpstreamImpactReport(stale), /\^0\.1\.0-rc\.8 \[release:miss, preview:miss\]/u)
 
     await sourceFixture(source, {
-      peerDependencies: { '@deepseek-ai/dsh-skill': '^0.1.2-alpha.2' },
-      devDependencies: { '@deepseek-ai/dsh-skill': '^0.1.2-alpha.2' },
+      peerDependencies: { '@deepseek-ai/dsh-skill': '^0.1.6-alpha.0' },
+      devDependencies: { '@deepseek-ai/dsh-skill': '^0.1.6-alpha.0' },
     })
     const upgraded = await inspectUpstreamImpactInternal(source, {
       releaseDsh: 'release',

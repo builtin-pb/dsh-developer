@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { resolve } from 'node:path'
+import { DSH_COMPATIBILITY_TARGET } from '../lib/constants.js'
 import { formatCellAdmissionReport, inspectIsolatedCellAdmission } from '../lib/cell-admission.js'
 import { formatCapabilityReport, inspectDshCapabilities } from '../lib/capabilities.js'
 import { formatCompatibilityMatrix, inspectCompatibilityMatrix } from '../lib/compatibility.js'
@@ -56,7 +57,7 @@ const USAGE = [
   '  dsh-developer ui --session <name> --action <operation> [operation options] [--json]',
   '  ui --action open accepts --url <loopback-url> or --development-server <home-returned-by-dev>; keep dev running.',
   '',
-  'Promotion only creates a new, absent destination and requires public DSH 0.1.1-rc.2.',
+  'Promotion only creates a new, absent destination and requires public DSH ' + DSH_COMPATIBILITY_TARGET + '.',
 ].join('\n')
 
 function required(options, key) {

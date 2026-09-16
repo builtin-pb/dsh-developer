@@ -25,12 +25,12 @@ supplied. Package-manager protocols such as `workspace:*` are not semver ranges.
 
 ## Develop and test
 
-From this directory, using Node 22.18+ or 24.11+:
+From the repository root, using Node 22.18+ within 22.x, or 24.11+:
 
 ```sh
-npm ci --ignore-scripts
-npm run build
-npm test
+npm --prefix examples/package-check ci --ignore-scripts
+node bin/dsh-developer.js run --source examples/package-check --script test
+cd examples/package-check
 npm pack
 ```
 
@@ -40,10 +40,16 @@ It imports the real Cordis `Context` and DSH `ToolDefinition` types; no local
 substitutes or private files are needed. DSH packages are development-only.
 The compiled plugin's sole runtime dependency is `semver`.
 
-This example deliberately compiles against the older reviewed `0.1.1-rc.2`
-type baseline. For a new plugin, use `knowledge` on your intended DSH runtime
-and pin its reported peer closure; copying these development versions does
-not select the runtime that will load your plugin.
+This example compiles against DSH `0.1.5-rc.2`. Its exact development pins come
+from `knowledge --dsh /path/to/dsh --topic tool --package @deepseek-ai/dsh-tools`
+on that installed runtime, including the complete DSH peer closure and Cordis
+`4.0.2`. The lockfile also fixes ordinary transitive dependencies. Keep these
+pins and the lockfile together; a peer map does not discover every type-only
+import or prove installation and runtime compatibility. For another runtime,
+inspect its own map, install, build, and verify again.
+
+The `0.1.1-rc.2` values in sample arguments and tests are semver inputs, not the
+type baseline. The example's own package version remains `0.1.0`.
 
 Tests cover range boundaries, prereleases, invalid input, canonical results,
 and Cordis registration/disposal. To run the registry test against an existing
@@ -67,9 +73,21 @@ Restart that profile to load the plugin. `cordis.patch.yml` resolves the package
 compiled entry through its package name. The plugin requires only the native
 `tools` service and can also be installed in a Web profile.
 
-For the ordinary-project verifier, select this directory as the project, run
-`build` and `test`, and pass `tool-cases.json` to the tool-case runner. The file is
-an array of `{tool, arguments, expected, isError?}`. Compare `result.isError` with
+To check all eight native cases against the compiled package and its packed
+archive, run from the repository root after building and packing:
+
+```sh
+node bin/dsh-developer.js doctor --source examples/package-check --dsh /path/to/dsh --skip-runtime
+node bin/dsh-developer.js verify --source examples/package-check --cases examples/package-check/tool-cases.json --dsh /path/to/dsh --online
+node bin/dsh-developer.js verify --source examples/package-check/dsh-package-check-0.1.0.tgz --cases examples/package-check/tool-cases.json --dsh /path/to/dsh --online
+```
+
+Select the executable for DSH `0.1.5-rc.2`. Verification installs into a disposable
+profile with lifecycle scripts disabled; `--online` permits fetching the
+`semver` runtime dependency. It requires no model credentials.
+
+The case file is an array of `{tool, arguments, expected, isError?}`.
+The verifier compares `result.isError` with
 `isError ?? false` and `result.value ?? null` with `expected` using structural
 equality. Error cases use `expected: null` because JSON cannot encode DSH's absent
 failure value; the registry test also checks that failure values are absent.

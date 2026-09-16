@@ -56,7 +56,7 @@ test('Mac promotion proves generated tests and the real installed DSH lifecycle'
   const draft = withCreatorFingerprint({ format: 'dsh-creator-export', schemaVersion: 1,
     name: 'apple-trial-plugin', packageName: 'apple-trial-plugin', author: 'DSH contributors',
     description: 'A local macOS lifecycle fixture.', goal: 'Return a useful development note.',
-    instructions: 'Return one concise development note.', compatibilityTarget: '0.1.1-rc.2',
+    instructions: 'Return one concise development note.', compatibilityTarget: '0.1.5-rc.2',
     decisions: [], unresolvedRisks: [], tools: [], resources: [] })
   try {
     await writeFile(source, JSON.stringify(draft))

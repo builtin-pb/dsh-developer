@@ -14,7 +14,7 @@ await build({
   format: 'esm',
 });
 
-// DSH 0.1.5-rc.1 loads lazy CommonJS factories. React comes from its seed table.
+// DSH 0.1.5-rc.2 loads lazy CommonJS factories. React comes from its seed table.
 await build({
   ...common,
   entryPoints: ['src/client.tsx'],

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { cp, lstat, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, cp, lstat, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { watch } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -26,9 +26,10 @@ const [{ Context }, { default: SystemPrompt }, { default: ToolRuntime }, { Agent
 ])
 assert.equal(requireFromLane(join(toolsRoot, 'package.json')).version, expectedVersion)
 
-const sourceParent = await mkdtemp(join(tmpdir(), 'dsh-developer-native-journey-source-'))
+const temporaryRoot = await realpath(tmpdir())
+const sourceParent = await mkdtemp(join(temporaryRoot, 'dsh-developer-native-journey-source-'))
 const source = join(sourceParent, 'ordinary-dsh-plugin')
-const realProfile = await mkdtemp(join(tmpdir(), 'dsh-developer-native-journey-profile-'))
+const realProfile = await mkdtemp(join(temporaryRoot, 'dsh-developer-native-journey-profile-'))
 await cp(fileURLToPath(new URL('./ordinary-dsh-plugin/', import.meta.url)), source, { recursive: true })
 process.env.DSH_HOME = realProfile
 process.argv[1] = resolve(dshPath)
@@ -37,6 +38,7 @@ const ctx = new Context()
 let detachAgent
 let firstDigest
 let retainedRoot
+let expectedRecovery
 let callSequence = 0
 const approvals = []
 let approvalMode = 'allowed-once'
@@ -206,7 +208,7 @@ try {
 
   const second = await assertSuccessful(await execute(agent, {
     operation: 'cell-plan',
-    outcome: 'Force a post-write verification failure and prove byte-identical rollback',
+    outcome: 'Preserve a concurrent source edit and retain recovery after failed verification',
     commands: [{ command: 'printf rollback > rollback.txt', timeoutMs: 60_000 }],
   }), 'cell-plan')
   const secondRun = await assertSuccessful(await execute(agent, {
@@ -214,7 +216,8 @@ try {
     planDigest: second.planDigest,
   }), 'cell-run')
   assert.equal(secondRun.ok, true)
-  const beforeRollback = await doctorSource(source, { runtime: 'skip' })
+  retainedRoot = secondRun.staging.root
+  const originalPackage = await readFile(join(source, 'package.json'), 'utf8')
   let tampered = false
   const sourceWatcher = watch(source, { persistent: false }, (_event, filename) => {
     if (tampered || filename?.toString() !== 'rollback.txt') return
@@ -229,16 +232,22 @@ try {
   assert.equal(tampered, true)
   assert.equal(rolledBack.ok, false)
   assert.equal(rolledBack.rollback.required, true)
-  assert.equal(rolledBack.rollback.verified, true)
-  assert.equal(rolledBack.cleanup.transactionCleaned, true)
-  const afterRollback = await doctorSource(source, { runtime: 'skip' })
-  assert.equal(afterRollback.fingerprint, beforeRollback.fingerprint)
+  assert.equal(rolledBack.rollback.verified, false)
+  assert.equal(rolledBack.failure.code, 'CELL_APPLY_ROLLBACK_FAILED')
+  assert.equal(rolledBack.cleanup.capacityReleased, false)
+  assert.equal(await readFile(join(source, 'package.json'), 'utf8'), '{ invalid rollback probe')
+  const transactionRoot = rolledBack.cleanup.retainedRoot
+  assert.equal(await readFile(join(transactionRoot, 'backup', 'package.json'), 'utf8'), originalPackage)
   await assert.rejects(lstat(join(source, 'rollback.txt')), (cause) => cause.code === 'ENOENT')
-  const secondDiscard = await assertSuccessful(await execute(agent, {
+  const secondDiscard = await execute(agent, {
     operation: 'cell-discard',
     planDigest: second.planDigest,
-  }), 'cell-discard')
-  assert.equal(secondDiscard.cleanup.capacityReleased, true)
+  })
+  assert.equal(secondDiscard.value.ok, false)
+  assert.equal(secondDiscard.value.report.diagnostic.code, 'CELL_APPLY_RECOVERY_REQUIRED')
+  assert.equal((await lstat(transactionRoot)).isDirectory(), true)
+  assert.equal((await lstat(retainedRoot)).isDirectory(), true)
+  expectedRecovery = { transactionRoot, stageRoot: retainedRoot }
 
   const profileAfter = await doctorSource(realProfile, { runtime: 'skip' })
   assert.equal(profileAfter.fingerprint, profileBefore.fingerprint)
@@ -254,7 +263,8 @@ try {
     remainingProcesses: run.commands[0].cleanup.remaining,
     cleanupVerified: true,
     applyVerified: true,
-    rollbackVerified: true,
+    concurrentEditPreserved: true,
+    recoveryRetained: true,
     secondPlan: true,
   }) + '\n')
 } finally {
@@ -262,10 +272,20 @@ try {
   try {
     await ctx.fiber.dispose()
   } catch (cause) {
-    if (retainedRoot !== undefined) {
+    if (expectedRecovery === undefined && retainedRoot !== undefined) {
       process.stderr.write('BLOCKER retained controller root: ' + retainedRoot + '\n')
     }
-    throw cause
+    if (expectedRecovery === undefined) throw cause
+  }
+  if (expectedRecovery !== undefined) {
+    // These are known, disposable test artifacts. Product cleanup must retain
+    // both recovery trees and the concurrent edit; only the test removes them.
+    assert.equal((await lstat(expectedRecovery.transactionRoot)).isDirectory(), true)
+    assert.equal((await lstat(expectedRecovery.stageRoot)).isDirectory(), true)
+    assert.equal(await readFile(join(source, 'package.json'), 'utf8'), '{ invalid rollback probe')
+    await chmod(expectedRecovery.stageRoot, 0o700)
+    await rm(expectedRecovery.stageRoot, { recursive: true, force: true })
+    retainedRoot = undefined
   }
   if (retainedRoot !== undefined) {
     const retained = await lstat(retainedRoot).then(() => true, (cause) => {

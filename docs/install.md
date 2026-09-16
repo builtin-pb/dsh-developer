@@ -30,7 +30,7 @@ If DSH reports that pnpm is missing, run the first command above and reopen your
 
 ## Optional development tools
 
-Ordinary development uses the host execution policy and does not need an isolated build environment. The recommended DSH 0.1.5-rc.2 supports that route; certified audits and isolated Build/Apply require the separate reviewed lanes, 0.1.1-rc.2 and advisory 0.1.2-alpha.3. For isolation, follow the [platform guide](platforms.md) and [Mac runtime setup](macos.md#enable-isolated-build-and-apply). Browser verification has its own [setup](../skills/dsh-developer/references/agent-native-ui.md).
+Ordinary development uses the host execution policy and does not need an isolated build environment. The current checkout uses DSH `0.1.5-rc.2` for blocking runtime checks and `0.1.6-alpha.1` for advisory checks. Passing runtime checks does not admit an isolated provider: Build/Apply additionally requires successful local admission against the running agent and its host provider. On macOS, rc.2 separately passed four real Apple-provider integration checks; that result still depends on the documented provider requirements. Follow the [platform guide](platforms.md) and [Mac provider setup](macos.md#enable-isolated-build-and-apply). Browser verification has its own [setup](../skills/dsh-developer/references/agent-native-ui.md).
 
 Inside a DSH agent's shell, invoke the installed CLI as `node "$DSH_DEVELOPER_BIN" <operation>` on POSIX or `node "$env:DSH_DEVELOPER_BIN" <operation>` in PowerShell. DSH supplies that absolute entry and defaults CLI checks to its running installation. Profile installation does not add a global `dsh-developer` command. Examples using `node bin/dsh-developer.js` require this repository's checkout as the working directory.
 
@@ -38,12 +38,14 @@ To modify dsh-developer itself, use the checkout-based workflow in [Contributing
 
 ## Verification
 
-The release review exercised both a public Git-tag installation (`v0.1.0`)
+Historical tagged-release evidence: the release review exercised both a public Git-tag installation (`v0.1.0`)
 and the `v0.1.1` archive in disposable profiles on macOS ARM64 with Node
 24.19.0, pnpm 11.7.0 and DSH 0.1.5-rc.2. Installed native tools reported the
 selected runtime and resolved declarations from the actual consuming package.
 Browser opening was explicitly disabled; no model request or personal profile
 was used. Tagged-installation evidence accompanies the [GitHub release](https://github.com/builtin-pb/dsh-developer/releases/tag/v0.1.1).
+
+The current checkout separately passed headless/Web preflight and native verification, product compatibility, delegation and approval checks on `0.1.5-rc.2` and `0.1.6-alpha.1`. Those results apply to the tested source, not automatically to the older Git tag or rendered browser behavior. Separate rc.2 Apple-provider evidence covers native admission, VM Build/Apply, promotion, and sparse/churn cleanup; see the [Mac guide](macos.md#enable-isolated-build-and-apply).
 
 See [verification results](verification.md) for native runtime and platform
 checks, rendered Web observations and the distinction between deterministic

@@ -52,7 +52,7 @@ async function fixture(version) {
     dependencies: { 'fixture-plugin': '^1.2.3' },
     dsh: { profile: {
       bundles: ['@deepseek-ai/dsh-base', 'fixture-plugin'],
-      ...(version === DSH_PREVIEW_TARGET ? { patchReload: 'startup' } : {}),
+      patchReload: 'startup',
     } },
   }
   await put(join(profile, 'package.json'), JSON.stringify(manifest, null, 2) + '\n')
@@ -104,6 +104,29 @@ for (const [version, lane, claim] of [
   [DSH_COMPATIBILITY_TARGET, 'release', 'blocking'],
   [DSH_PREVIEW_TARGET, 'preview', 'advisory'],
 ]) {
+  test('checks current profile reload and layout fields on ' + version, async () => {
+    await withFixture(version, async ({ dsh, profile }) => {
+      const path = join(profile, 'package.json')
+      const manifest = JSON.parse(await readFile(path, 'utf8'))
+      await mkdir(join(profile, '.dsh-module-fallback'))
+      for (const patchReload of [undefined, 'live', 'startup']) {
+        manifest.dsh.profile.patchReload = patchReload
+        await put(path, JSON.stringify(manifest))
+        assert.equal((await inspectProfileAttestation(profile, { dshPath: dsh })).ok, true)
+      }
+      manifest.dsh.profile.patchReload = 'invalid'
+      await put(path, JSON.stringify(manifest))
+      await assert.rejects(inspectProfileAttestation(profile, { dshPath: dsh }), { code: 'PROFILE_MANIFEST_INVALID' })
+      manifest.dsh.profile.patchReload = 'startup'
+      manifest.dsh.profile.unknown = true
+      await put(path, JSON.stringify(manifest))
+      await assert.rejects(inspectProfileAttestation(profile, { dshPath: dsh }), { code: 'PROFILE_LAYOUT_UNSUPPORTED' })
+      delete manifest.dsh.profile.unknown
+      await put(path, JSON.stringify(manifest))
+      await mkdir(join(profile, 'unexpected-state'))
+      await assert.rejects(inspectProfileAttestation(profile, { dshPath: dsh }), { code: 'PROFILE_LAYOUT_UNSUPPORTED' })
+    })
+  })
   test('attests original ' + version + ' profile layout without executing package code', async () => {
     await withFixture(version, async ({ dsh, profile }) => {
       const report = await inspectProfileAttestation(profile, { dshPath: dsh })

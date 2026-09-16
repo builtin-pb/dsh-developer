@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { chmod, link, lstat, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
@@ -17,6 +18,7 @@ import {
 } from '../lib/native-cell-workflow.js'
 
 const SOURCE_FINGERPRINT = 'sha256:' + '1'.repeat(64)
+const sourcePathDigest = source => 'sha256:' + createHash('sha256').update(JSON.stringify(resolve(source))).digest('hex')
 const DOCTOR_DIGEST_INPUT = [{ id: 'source', status: 'PASS', blocking: true, message: 'stable' }]
 
 function agent(id = 'agent-one') {
@@ -106,16 +108,16 @@ function fixture(options = {}) {
       ok: true,
       evidenceDigest: 'sha256:' + '3'.repeat(64),
       runtime: {
-        version: '0.1.1-rc.2',
+        version: '0.1.5-rc.2',
         lane: { id: 'release', claim: 'blocking', recognized: true },
-        package: { name: '@deepseek-ai/dsh', version: '0.1.1-rc.2', access: 'public' },
+        package: { name: '@deepseek-ai/dsh', version: '0.1.5-rc.2', access: 'public' },
       },
     })),
     inspectAdmission: options.inspectAdmission ?? (async () => ({
       admitted: true,
       disposition: 'Incubate',
       evidenceDigest: 'sha256:' + '4'.repeat(64),
-      runtime: { version: '0.1.1-rc.2' },
+      runtime: { version: '0.1.5-rc.2' },
     })),
     openCell: options.openCell ?? (async () => {
       state.openCalls += 1
@@ -244,7 +246,7 @@ test('binds a plan to exact commands, fixed policy, source fingerprint, lane, an
   assert.equal(plan.commands[1].timeoutMs, 60_000)
   assert.equal(plan.source.authority, 'live-root-agent-session.header.cwd')
   assert.equal(plan.source.fingerprint, SOURCE_FINGERPRINT)
-  assert.equal(plan.runtime.version, '0.1.1-rc.2')
+  assert.equal(plan.runtime.version, '0.1.5-rc.2')
   assert.equal(plan.effects.executionAuthority, 'none-plan-is-not-approval')
   assert.equal(f.state.openCalls, 0)
   await f.controller.discard({ planDigest: plan.planDigest }, { agent: f.owner })
@@ -1280,7 +1282,7 @@ test('preserves same-identity concurrent edits and retains recovery instead of r
 })
 
 test('does not mistake a high-entropy workspace suffix for a credential but blocks explicit token paths', async () => {
-  const safeParent = await mkdtemp(join(await realpath(tmpdir()), 'sample-dsh-cell-approval-path-'))
+  const safeParent = await mkdtemp(join(await realpath(tmpdir()), 'dsh-apply-'))
   const safe = await makeStagedWorkflow({
     source: join(safeParent, ['dsh', 'developer', 'native', 'journey', 'source', 'X8SJG3'].join('-')),
   })
@@ -1289,7 +1291,12 @@ test('does not mistake a high-entropy workspace suffix for a credential but bloc
       operation: 'cell-apply', callId: 'apply-high-entropy-path',
     })
     assert.equal(approval.decision.kind, 'ask')
-    await safe.value.controller.discard({ planDigest: safe.plan.planDigest }, { agent: safe.value.owner })
+    assert.equal(approval.guard(), undefined)
+    const applied = await safe.value.controller.apply({ planDigest: safe.plan.planDigest }, {
+      agent: safe.value.owner, executionToken: approval.token, callId: approval.callId, signal: approval.exec.signal,
+    })
+    assert.equal(applied.ok, true, JSON.stringify(applied))
+    assert.equal(applied.cleanup.capacityReleased, true)
   } finally {
     await rm(safeParent, { recursive: true, force: true })
   }
@@ -1393,7 +1400,9 @@ test('serializes pre-approved Apply calls and tombstones every later replay', as
     const prepared = JSON.parse(await readFile(join(transactionRoot, 'state-prepared.json'), 'utf8'))
     assert.equal(prepared.kind, 'dsh-developer-cell-apply-recovery')
     assert.equal(prepared.state, 'prepared')
-    assert.equal(prepared.source, workflow.source)
+    assert.equal(prepared.version, 2)
+    assert.equal(prepared.source, undefined)
+    assert.equal(prepared.sourcePathDigest, sourcePathDigest(workflow.source))
     assert.equal(prepared.sourceFingerprint, workflow.run.source.fingerprintBefore)
     assert.equal(prepared.stageFingerprint, workflow.run.staging.fingerprint)
     releaseBarrier()
@@ -1641,15 +1650,23 @@ test('never claims rollback after a source hardlink race changes physical identi
   }
 })
 
-test('blocks a fresh controller while a crash-recovery transaction remains beside source', async () => {
+for (const version of [1, 2]) test('blocks a fresh controller for recovery journal v' + version, async () => {
   const parent = await mkdtemp(join(await realpath(tmpdir()), 'sample-dsh-cell-orphan-recovery-'))
   const source = join(parent, 'source')
   const orphan = join(parent, '.dsh-developer-cell-apply-crash-evidence')
   await mkdir(source)
   await mkdir(orphan)
   await writeFile(join(orphan, 'state-committing.json'), JSON.stringify({
-    kind: 'dsh-developer-cell-apply-recovery', version: 1, state: 'committing', source,
+    kind: 'dsh-developer-cell-apply-recovery', version, state: 'committing',
+    ...(version === 1 ? { source } : { sourcePathDigest: sourcePathDigest(source) }),
   }) + '\n', 'utf8')
+  if (version === 2) {
+    // A malformed newer marker must not mask valid earlier recovery evidence.
+    await writeFile(join(orphan, 'state-committed.json'), JSON.stringify({
+      kind: 'dsh-developer-cell-apply-recovery', version: 2, state: 'committed',
+      sourcePathDigest: [sourcePathDigest(source)],
+    }) + '\n', 'utf8')
+  }
   const owner = agent('orphan-recovery-owner')
   const f = fixture({
     owner,

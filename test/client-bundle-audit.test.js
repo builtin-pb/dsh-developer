@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
+import { DSH_COMPATIBILITY_TARGET, DSH_PREVIEW_TARGET } from '../lib/constants.js'
 import {
   CLIENT_BUNDLE_PLATFORM_MODULES,
   CLIENT_BUNDLE_PREVIEW_PLATFORM_MODULES,
@@ -28,36 +29,29 @@ test('accepts the public lazy-CJS handoff and exact declared module requests', (
   assert.equal(result.registrationId, 'client-fixture')
   assert.deepEqual(result.dynamicRequests, ['feature/client'])
   assert.deepEqual(result.lanes, {
-    release: { target: '0.1.1-rc.2', ok: true, missing: [] },
-    preview: { target: '0.1.2-alpha.3', ok: true, missing: [] },
+    release: { target: DSH_COMPATIBILITY_TARGET, ok: true, missing: [] },
+    preview: { target: DSH_PREVIEW_TARGET, ok: true, missing: [] },
   })
   assert.equal(result.repositoryCodeExecuted, false)
   assert.ok(CLIENT_BUNDLE_PLATFORM_MODULES.includes('react'))
   assert.ok(CLIENT_BUNDLE_PREVIEW_PLATFORM_MODULES.includes('@deepseek-ai/dsh-client-store'))
 })
 
-test('reports release-only platform requests as advisory preview drift', () => {
-  const result = inspectClientBundle(
-    new Map([['lib/client.js', bundle('return require("@deepseek-ai/dsh-client-runtime/client")')]]),
-    manifest(),
-  )
-  assert.equal(result.lanes.release.ok, true)
-  assert.equal(result.lanes.preview.ok, false)
-  assert.deepEqual(result.lanes.preview.missing, ['@deepseek-ai/dsh-client-runtime/client'])
+test('accepts current store and dockkit seeds on both exact lanes', () => {
+  for (const request of ['@deepseek-ai/dsh-client-store', '@deepseek-ai/dsh-client-ui-dockkit']) {
+    const result = inspectClientBundle(new Map([['lib/client.js', bundle('return require(' + JSON.stringify(request) + ')')]]), manifest())
+    assert.equal(result.lanes.release.ok, true)
+    assert.equal(result.lanes.preview.ok, true)
+  }
 })
 
-test('blocks preview-only platform requests for the supported release', () => {
-  assert.throws(
-    () => inspectClientBundle(
-      new Map([['lib/client.js', bundle('return require("@deepseek-ai/dsh-client-store")')]]),
-      manifest(),
-    ),
-    (error) => error.code === 'CLIENT_BUNDLE_EXTERNAL_DRIFT'
-      && error.details.target === '0.1.1-rc.2'
-      && error.details.requests[0] === '@deepseek-ai/dsh-client-store'
-      && error.details.previewTarget === '0.1.2-alpha.3'
-      && error.details.previewRequests.length === 0,
-  )
+test('rejects the removed aggregate runtime on both current lanes', () => {
+  assert.throws(() => inspectClientBundle(
+    new Map([['lib/client.js', bundle('return require("@deepseek-ai/dsh-client-runtime/client")')]]), manifest(),
+  ), error => error.code === 'CLIENT_BUNDLE_EXTERNAL_DRIFT'
+    && error.details.target === DSH_COMPATIBILITY_TARGET
+    && error.details.requests[0] === '@deepseek-ai/dsh-client-runtime/client'
+    && error.details.previewRequests[0] === '@deepseek-ai/dsh-client-runtime/client')
 })
 
 test('rejects Node builtins even when a manifest tries to declare them', () => {
@@ -221,18 +215,18 @@ test('reports direct replacement of a DSH-owned client service without executing
   assert.deepEqual(result.coreServiceCollisions, [{
     service: 'chatFileMentions',
     lanes: [
-      { target: '0.1.1-rc.2', owner: '@deepseek-ai/dsh-client-ui-deliverables' },
-      { target: '0.1.2-alpha.3', owner: '@deepseek-ai/dsh-client-ui-deliverables' },
+      { target: DSH_COMPATIBILITY_TARGET, owner: '@deepseek-ai/dsh-client-ui-deliverables' },
+      { target: DSH_PREVIEW_TARGET, owner: '@deepseek-ai/dsh-client-ui-deliverables' },
     ],
   }])
   assert.equal(result.repositoryCodeExecuted, false)
 })
 
-test('recognizes official ownership across release and preview service moves', () => {
+test('recognizes the current session owner on both lanes', () => {
   const owner = manifest()
-  owner.name = '@deepseek-ai/dsh-client-runtime'
+  owner.name = '@deepseek-ai/dsh-api-session-controller'
   const result = inspectClientBundle(
-    new Map([['lib/client.js', 'window.__ModuleLoader__.load({ id: "@deepseek-ai/dsh-client-runtime", factory: (require) => { ctx.reflect.provide("sessions", {}); return {} } })\n']]),
+    new Map([['lib/client.js', 'window.__ModuleLoader__.load({ id: "@deepseek-ai/dsh-api-session-controller", factory: (require) => { ctx.reflect.provide("sessions", {}); return {} } })\n']]),
     owner,
   )
   assert.deepEqual(result.providedServices, ['sessions'])
@@ -317,4 +311,30 @@ test('rejects unsafe, dynamic, and duplicate object-method factory registrations
     (error) => error.code === 'CLIENT_BUNDLE_REGISTRATION_INVALID'
       && error.details.observed.length === 0,
   )
+})
+
+test('does not mistake an ordinary require method declaration for a loader call', () => {
+  for (const body of ['class State { require() { return {}; } read() { return this.require(); } }',
+    'const state = { require() { return {}; } }; state.require();']) {
+    const result = inspectClientBundle(new Map([['lib/client.js', bundle(body)]]), manifest())
+    assert.deepEqual(result.requests, [])
+  }
+  for (const body of ['require();', 'require()\n{}', 'require()\r\n{}', 'require()\u2028{}']) {
+    assert.throws(() => inspectClientBundle(new Map([['lib/client.js', bundle(body)]]), manifest()),
+      error => error.code === 'CLIENT_BUNDLE_DYNAMIC_REQUEST')
+  }
+})
+
+test('preserves collisions for moved and newly inventoried native services', () => {
+  for (const service of ['sessions', 'workspaces', 'slots', 'uiSession', 'uiWorkspace', 'resources',
+    'fileUpload', 'documentPreviews', 'sidebarRight', 'sidebarRightTabs', 'webTerminals']) {
+    const result = inspectClientBundle(new Map([['lib/client.js', bundle('ctx.provide(' + JSON.stringify(service) + ', {});')]]), manifest())
+    assert.equal(result.coreServiceCollisions.length, 1, service)
+    assert.deepEqual(result.coreServiceCollisions[0].lanes.map(lane => lane.target),
+      service === 'webTerminals' ? [DSH_PREVIEW_TARGET] : [DSH_COMPATIBILITY_TARGET, DSH_PREVIEW_TARGET])
+  }
+  const result = inspectClientBundle(new Map([['lib/client.js',
+    'window.__ModuleLoader__.load({ id: "@deepseek-ai/dsh-client-runtime", factory: () => { ctx.provide("sessions", {}); } })']]),
+  { ...manifest(), name: '@deepseek-ai/dsh-client-runtime' })
+  assert.equal(result.coreServiceCollisions.length, 1)
 })

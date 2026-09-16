@@ -1,9 +1,10 @@
 # Develop on macOS
 
 Use Node.js `^22.18.0 || >=24.11.0`, pnpm 11.7.0 and DSH 0.1.5-rc.2 for
-ordinary development. Certified audits and isolated Build/Apply require a
-separate reviewed DSH installation: 0.1.1-rc.2 or advisory 0.1.2-alpha.3.
-DSH 0.1.5-rc.2 has no isolated Build admission.
+ordinary development and blocking runtime checks; DSH 0.1.6-alpha.1 is the
+advisory lane. Isolated Build/Apply additionally requires Apple-provider setup
+and successful local admission against the running agent. Real rc.2 Apple
+integration passed 4/4 checks; this does not establish alpha isolation.
 
 ## Install DSH and this plugin
 
@@ -54,15 +55,15 @@ configuration; use a conventional workspace path when creating such fixtures.
 
 ## Enable isolated Build and Apply
 
-First install a separate reviewed runtime and launch DSH Web through that entry, using the profile where this plugin is installed:
+Use the current checkout installation for the updated runtime contracts (see [Test changes against DSH](#test-changes-against-dsh)). Confirm the running DSH is rc.2. If you need a separate exact installation, launch it through its own entry using the profile where that checkout is installed:
 
 ```sh
-npm install --prefix "$HOME/.local/share/dsh-reviewed" --ignore-scripts @deepseek-ai/dsh@0.1.1-rc.2
+npm install --prefix "$HOME/.local/share/dsh-reviewed" --ignore-scripts @deepseek-ai/dsh@0.1.5-rc.2
 "$HOME/.local/share/dsh-reviewed/node_modules/.bin/dsh" --version
 "$HOME/.local/share/dsh-reviewed/node_modules/.bin/dsh" web
 ```
 
-Stop an existing Web server before launching this one. The version must be exactly 0.1.1-rc.2; selecting `--dsh` for a CLI check does not change the runtime of an already running agent. The advisory 0.1.2-alpha.3 lane is also reviewed, but supplies no release certification.
+Stop an existing Web server before launching this one. The blocking version is exactly 0.1.5-rc.2; selecting `--dsh` for a CLI check does not change the runtime of an already running agent. The advisory 0.1.6-alpha.1 runtime lane does not by itself establish provider admission.
 
 Install the signed [Apple container 1.4.1 release](https://github.com/apple/container/releases/tag/1.4.1) using its official installer. It requires Apple silicon and macOS 26 or later. Then start the service and pull the reviewed image:
 
@@ -88,7 +89,7 @@ For a manual installation under `~/.local`, start the service with the **physica
 ~/.local/share/apple-container-1.4.1/bin/container system start --install-root ~/.local/share/apple-container-1.4.1 --enable-kernel-install
 ```
 
-Restart the reviewed DSH entry after setup. In a top-level agent, request an isolated Build; review its command plan, then separately approve Apply to copy verified changes back. The original checkout remains untouched during execution. A failed admission exposes its blocker and runs no workload.
+Restart the reviewed DSH entry after setup. After successful local admission, in a top-level agent request an isolated Build; review its command plan, then separately approve Apply to copy verified changes back. The original checkout remains untouched during execution. A failed admission exposes its blocker and runs no workload.
 
 The VM is intentionally bounded: small text workspaces, no host mounts, no credentials and no network. It is suitable for focused plugin edits and tests with the bundled tools. A complete DSH checkout with dependency trees needs the native upstream workflow below. See the [provider comparison](platforms.md) and [execution contract](../skills/dsh-developer/references/execution-lab.md).
 
@@ -98,7 +99,7 @@ From a dsh-developer checkout, run the real local integration suite after changi
 DSH_DEVELOPER_APPLE_LAB_TEST=1 node --test test/apple-container.integration.test.js
 ```
 
-This creates disposable VMs and temporary plugin fixtures. It exercises real admission, Build/Apply, sparse-export rejection and generated-plugin promotion; the controller test supplies fixture approval tokens, while the native registry has separate tests.
+This creates disposable VMs and temporary plugin fixtures. On DSH `0.1.5-rc.2`, all four real Apple integration checks passed: actual native admission, VM Build/Apply, generated-plugin promotion, sparse-export rejection and churn cleanup. Controller cases use fixture approval tokens; native approval checks are separate. These observations require Apple silicon, macOS 26+, Apple container 1.4.1 and the pinned image above. They do not admit another machine or prove the alpha provider path.
 
 ## Test changes against DSH
 
@@ -111,7 +112,7 @@ npm ci --ignore-scripts
 dsh plugin --profile web add . --ignore-scripts
 ```
 
-Restart DSH after editing host JavaScript. From the checkout, run the checks below, replacing `/absolute/path/to/reviewed/dsh` with the separate 0.1.1-rc.2 entry for blocking runtime audits (for example, the entry installed above):
+Restart DSH after editing host JavaScript. From the checkout, run the checks below, replacing `/absolute/path/to/reviewed/dsh` with the exact 0.1.5-rc.2 entry for blocking runtime audits (for example, the entry installed above):
 
 ```sh
 npm run validate
@@ -122,10 +123,10 @@ npm pack --dry-run
 ```
 
 Doctor exercises a disposable profile to prove installation, registration,
-discovery and uninstall for this product. CI runs deterministic checks and
-exact release/preview evidence on both Windows and macOS. Release failures
-block; preview behavior remains advisory. The initial local macOS verification
-used Apple Silicon, Node.js 24.19.0, pnpm 11.7.0 and DSH 0.1.1-rc.2.
+discovery and uninstall for this product. Current headless/Web preflight and
+native verification, product compatibility, delegation and approval checks
+passed on rc.2 and alpha.1. Release failures block; preview behavior remains
+advisory. See [verification](verification.md) for revision-specific local and CI results.
 
 ## Develop DSH itself
 
