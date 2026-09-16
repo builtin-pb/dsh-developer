@@ -44,7 +44,7 @@ node bin/dsh-developer.js verify --source examples/package-check --cases example
 node bin/dsh-developer.js run --source ./my-plugin --script test -- --test-name-pattern "reload behavior"
 ```
 
-The script must itself accept those flags; a compound script such as `build && test` follows its package manager's usual forwarding rules.
+The script must itself accept those flags; a compound script such as `build && test` follows its package manager's usual forwarding rules. The `run` CLI exits with the package-manager process's actual status, including nonzero statuses other than 1. This lets calling scripts distinguish their project's own failure modes; cancellation still exits 130, and launcher or inspection errors exit 1.
 
 `verify` installs the source directory or a `.tgz` archive into a fresh DSH profile with installation scripts disabled. It invokes the real global tool registry and compares canonical values. A case is `{ "tool": "name", "arguments": {}, "expected": value }`; expected failures use `"isError": true`. Absent values compare as JSON `null`. Use optional `resultPath` (a JSON Pointer such as `/items/0/status`) to compare a stable part of a dynamic result. A missing selected field fails, even when the expected value is null. Successful registration alone cannot pass. Wrong results, failed execution, missing tools or missing receipts fail verification. Invocation waits for the official CLI entry to finish startup, including native readiness where available. This also covers older launchers without `appReady`: a tool registering early cannot conceal a later startup failure.
 

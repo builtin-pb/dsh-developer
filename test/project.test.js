@@ -213,17 +213,18 @@ test('runs the selected real script in its package and preserves a failing exit 
   await assert.rejects(runProjectScript(root, '--help'), { code: 'PROJECT_TASK_UNAVAILABLE' })
 })
 
-test('forwards script argv through the real npm CLI without shell interpolation', async t => {
+test('forwards script argv and exit status through the real npm CLI without shell interpolation', async t => {
   const root = await fixture(t, { name: 'script-arguments', scripts: { inspect: 'node arguments.cjs' } })
   await writeFile(join(root, 'arguments.cjs'), 'require("node:fs").writeFileSync("arguments.json", JSON.stringify(process.argv.slice(2))); process.exit(Number(process.argv.at(-1)))')
   const args = ['--help', '--source', 'other project', '', '路径 with spaces', '--', 'literal; $(text)', '7']
   const cli = fileURLToPath(new URL('../bin/dsh-developer.js', import.meta.url))
   const result = await runBounded(process.execPath, [cli, 'run', '--source', root, '--script', 'inspect', '--json', '--', ...args], {
-    acceptedExitCodes: [1], timeoutMs: 10_000,
+    acceptedExitCodes: [7], timeoutMs: 10_000,
   })
   assert.deepEqual(JSON.parse(await readFile(join(root, 'arguments.json'), 'utf8')), args)
   const report = JSON.parse(result.stdout)
   assert.equal(report.exitCode, 7)
+  assert.equal(result.exitCode, 7)
   assert.equal(report.ok, false)
   for (const args of [null, false, 'one string', [null], ['invalid\0argument']]) {
     await assert.rejects(runProjectScript(root, 'inspect', { args }), { code: 'PROJECT_ARGUMENTS_INVALID' })

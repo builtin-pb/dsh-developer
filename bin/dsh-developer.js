@@ -146,7 +146,8 @@ async function main(argv) {
       })
       output(report, formatDevelopmentReport)
     }
-    if (!report.ok) process.exitCode = 1
+    if (command === 'run') process.exitCode = report.exitCode
+    else if (!report.ok) process.exitCode = 1
     return
   }
 
