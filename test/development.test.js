@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import test from 'node:test'
 import { formatDevelopmentReport, runDevelopmentServer, validateToolCases, verifyDevelopmentPlugin } from '../lib/development.js'
-import { selectCaseValue } from '../lib/development-probe.js'
+import { observeToolCase, selectCaseValue } from '../lib/development-probe.js'
 import { parseCliArguments, assertCliCommandOptions } from '../lib/cli-options.js'
 import { deriveNextActions } from '../lib/recovery-actions.js'
 import { parseNativeToolInput } from '../lib/native-tool-internal.js'
@@ -246,6 +246,53 @@ test('verification requires behavior assertions rather than registration alone',
     assert.throws(() => validateToolCases([{ ...cases[0], maxResultBytes }]), { code: 'DEVELOPMENT_CASES_INVALID' })
   }
   assert.doesNotThrow(() => validateToolCases([{ ...cases[0], maxResultBytes: 4096 }]))
+  assert.doesNotThrow(() => validateToolCases([{ ...cases[0], name: '空结果 / empty results' }]))
+  for (const name of ['', '   ', null, 42, 'line\nbreak', 'a'.repeat(129)]) {
+    assert.throws(() => validateToolCases([{ ...cases[0], name }]), { code: 'DEVELOPMENT_CASES_INVALID' })
+  }
+})
+
+test('verification explains independent assertion failures without changing their verdict', () => {
+  const result = { isError: false, value: { status: null }, content: [{ type: 'text', text: 'ready' }] }
+  const base = { name: 'status assertion', tool: 'status', arguments: {}, expected: null, resultPath: '/status' }
+  const success = observeToolCase(base, result, 0)
+  assert.equal(success.passed, true)
+  assert.equal(success.index, 1)
+  assert.equal(success.name, base.name)
+  assert.deepEqual(success.failures, [])
+  const missing = observeToolCase({ ...base, resultPath: '/absent' }, result, 1)
+  assert.equal(missing.passed, false)
+  assert.deepEqual(missing.failures, ['missing-result-path'])
+  assert.equal(Object.hasOwn(missing, 'value'), false)
+  const wrong = observeToolCase({ ...base, expected: 'ready', isError: true, maxResultBytes: 1 }, result, 2)
+  assert.equal(wrong.passed, false)
+  assert.deepEqual(wrong.failures, ['expected-error', 'value-mismatch', 'result-budget-exceeded'])
+  assert.equal(wrong.expected, 'ready')
+  assert.equal(wrong.value, null)
+  const error = observeToolCase(base, { ...result, isError: true }, 3)
+  assert.deepEqual(error.failures, ['unexpected-error'])
+  const text = formatDevelopmentReport({ ok: false, cases: [missing, wrong, error] })
+  assert.match(text, /FAIL #2 status "status assertion"/u)
+  assert.match(text, /resultPath is missing/u)
+  assert.match(text, /resultPath: "\/absent"/u)
+  assert.match(text, /Tool succeeded; expected an error/u)
+  assert.match(text, /expected: "ready"/u)
+  assert.match(text, /Tool returned an error; expected success/u)
+})
+
+test('named failure receipts retain verdicts and fit the receipt budget with maximal fields', () => {
+  const value = '\u0000'.repeat(170) // JSON escaping, not JS string length, consumes the budget.
+  const item = { name: '\ud800'.repeat(128), tool: 't'.repeat(128), arguments: {},
+    resultPath: '/' + 'p'.repeat(511), expected: 'e'.repeat(1022), isError: true, maxResultBytes: 1 }
+  assert.doesNotThrow(() => validateToolCases([item]))
+  const result = { isError: false, value: { [item.resultPath.slice(1)]: value },
+    content: [{ type: 'text', text: 'c'.repeat(2000) }] }
+  const cases = Array.from({ length: 32 }, (_, index) => observeToolCase(item, result, index))
+  assert(cases.every(row => !row.passed && row.expected === item.expected && row.contentOmitted && row.resultPathOmitted))
+  assert(Buffer.byteLength(JSON.stringify({ ok: false, cases })) < 128 * 1024)
+  const largeExpected = observeToolCase({ ...item, expected: 'x'.repeat(2000) }, result, 0)
+  assert.equal(largeExpected.expectedOmitted, true)
+  assert.match(formatDevelopmentReport({ ok: false, cases: [largeExpected] }), /expected: omitted from report; compared in full/u)
 })
 
 test('compares selected canonical fields without treating a missing path as null', () => {

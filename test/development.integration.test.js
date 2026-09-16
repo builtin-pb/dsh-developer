@@ -338,12 +338,15 @@ test('measures complete native results and retains bounded receipts for large ou
     const value = '界😀'.repeat(5000)
     await writeFile(patchPath, '- id: overlay-fixture\n  config:\n    structured: true\n    value: ' + JSON.stringify(value) + '\n')
     const expected = { status: 'ready', details: value }
-    const entry = { tool: 'overlay_value', arguments: {}, expected }
+    const entry = { name: 'structured output', tool: 'overlay_value', arguments: {}, expected }
     await writeFile(fixtureCases, JSON.stringify([entry]))
     const options = { dshPath, casesPath: fixtureCases, patchPath, online: true }
     const unlimited = await verifyDevelopmentPlugin(archive, options)
     assert.equal(unlimited.ok, true, JSON.stringify(unlimited))
     const observed = unlimited.cases[0]
+    assert.equal(observed.name, 'structured output')
+    assert.equal(observed.index, 1)
+    assert.deepEqual(observed.failures, [])
     assert.equal(observed.valueBytes, Buffer.byteLength(JSON.stringify(expected)))
     assert.equal(observed.contentBytes, Buffer.byteLength(JSON.stringify([{ type: 'text', text: JSON.stringify(expected) }])))
     assert.equal(observed.resultBytes, observed.valueBytes + observed.contentBytes)
@@ -357,12 +360,15 @@ test('measures complete native results and retains bounded receipts for large ou
     assert.equal(limited.cases[0].outputLimitExceeded, true)
     assert.equal(limited.cases[0].value, 'ready')
     assert.equal(limited.cases[0].resultBytes, observed.resultBytes)
+    assert.deepEqual(limited.cases[0].failures, ['result-budget-exceeded'])
 
     await writeFile(fixtureCases, JSON.stringify(Array.from({ length: 32 }, () => ({ ...entry, expected: 'wrong' }))))
     const many = await verifyDevelopmentPlugin(archive, options)
     assert.equal(many.ok, false)
     assert.equal(many.cases.length, 32)
     assert(many.cases.every(item => item.passed === false && item.valueOmitted && item.contentOmitted))
+    assert(many.cases.every((item, index) => item.index === index + 1 && item.expected === 'wrong'
+      && item.failures.length === 1 && item.failures[0] === 'value-mismatch'))
     assert(Buffer.byteLength(JSON.stringify(many)) < 128 * 1024)
   } finally { await rm(temporary, { recursive: true, force: true }) }
 })
