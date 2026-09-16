@@ -4,7 +4,7 @@ import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import test from 'node:test'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { runDevelopmentServer, verifyDevelopmentPlugin } from '../lib/development.js'
 import { resolvePackageManager } from '../lib/project.js'
 import { runBounded, secretFreeEnvironment } from '../lib/runtime.js'
@@ -215,6 +215,23 @@ test('DSH launcher startup must finish before verification; current Web also wai
     // Older Web launchers expose no appReady service. Verification above uses
     // completed CLI evaluation; Web startup has a separate native readiness path.
     if (knowledge.installed?.version === '0.1.1-rc.2') return
+    // Failure reporting cannot wait for unrelated rollback. This sibling takes
+    // longer to dispose than dev's readiness deadline; the original activation
+    // error must reach the parent before cleanup is forcibly bounded there.
+    const slowCleanup = join(temporary, 'slow-cleanup.mjs')
+    const cleanupMarker = join(temporary, 'slow-cleanup-mounted.json')
+    await writeFile(slowCleanup, `
+import { writeFile } from 'node:fs/promises'
+export const name = 'slow-startup-cleanup'
+export async function apply(ctx) {
+  ctx.effect(() => async () => {
+    await new Promise(resolve => setTimeout(resolve, 45_000))
+  }, 'slow sibling cleanup')
+  await writeFile(${JSON.stringify(cleanupMarker)}, JSON.stringify({ mounted: true }))
+}
+`)
+    await writeFile(patchPath, patch + '    failStartup: true\n- insert:\n    - id: slow-startup-cleanup\n      name: '
+      + JSON.stringify(pathToFileURL(slowCleanup).href) + '\n')
     let announced = false
     await assert.rejects(runDevelopmentServer(archive, { dshPath, patchPath, online: true, signal: controller.signal,
       onReady() { announced = true; controller.abort() },
@@ -225,6 +242,7 @@ test('DSH launcher startup must finish before verification; current Web also wai
       return true
     })
     assert.equal(announced, false)
+    assert.deepEqual(JSON.parse(await readFile(cleanupMarker, 'utf8')), { mounted: true })
   } finally { controller.abort(); await rm(temporary, { recursive: true, force: true }) }
 })
 

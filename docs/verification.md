@@ -45,6 +45,18 @@ independent reproduction of invisible first-command results was added to the
 including affected-version evidence and the keyless `/goal` workaround.
 An upstream repair has not been verified.
 
+Subsequent CI on this change exposed the known startup timeout in both current
+and alpha macOS lanes. Tracing found that our observer never activated when a
+plugin failed before Web dependencies were ready. A controlled 45-second sibling
+disposer reproduced the same empty-diagnostic timeout. The revised observer
+starts with Loader, captures failed enabled entries by their native fiber UID,
+and retains the failure through rollback; Web readiness still has its separate
+dependency and complete-composition checks. The controlled candidate returned
+the original failure at about three seconds and passed healthy Web startup.
+Native regression coverage now includes that slow sibling cleanup. This repairs
+our diagnostic loss, without claiming to identify the upstream operation that
+delayed macOS CI or to bound a failing plugin's own cleanup.
+
 ## v0.1.1 developer rollout review — 15 September
 
 A fresh install of the public v0.1.0 Git tag booted on DSH 0.1.5-rc.2 and invoked
