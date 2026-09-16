@@ -2,6 +2,37 @@
 
 These are local and CI observations from 10–16 September 2026. Dated sections distinguish the released version from subsequent checkout work. They describe what was exercised, not a claim that dsh-developer already completes every development task reliably. The [development guide](development.md) explains how to use the capabilities; the [strategy](development-strategy.md) retains the broader goal and unfinished milestones.
 
+## Agent verification and failure diagnostics — 16 September, unreleased
+
+Native verification now identifies named cases and distinct assertion failures,
+and retains completed results when a later invocation is interrupted. Real DSH
+tests covered timeout, cancellation and abrupt exit; an incomplete batch never
+became successful. Script execution also preserves the package-manager process's
+exit status through the CLI. These changes passed all 18 cross-platform jobs at
+commit `2168e9b`.
+
+The optional `verify --workspace` route creates one real Agent, mounts the
+profile's default preset when present, uses Agent-scoped registry dispatch, and
+awaits disposal. On macOS ARM64/Node 24.19.0, focused native tests passed on DSH
+0.1.1-rc.2, 0.1.5-rc.2 and 0.1.6-alpha.1. They exercised workspace-relative reads,
+shared batch state, unchanged native approval policy, rejection of an approval
+request outside an open turn, and disposal/unregistration. Self-hosted project
+inspection selected the Agent workspace and rejected an escape. The complete
+current-runtime native suite passed all 17 tests, including cancellation during
+an Agent-scoped invocation. Unit checks separately cover failed preset mounting,
+teardown failure and interruption. These observations do not establish model
+turns, interactive approval behavior or arbitrary tools' lack of network calls.
+
+Session diagnostics now preserve recognized failed shell process observations
+independently of the recent-call window. A synthetic corpus follows the four
+public Bash/PowerShell renderers in DSH 0.1.5-rc.2 and covers result correlation,
+pruning, output limits and credential protection. It does not interpret arbitrary
+JSON `exitCode` fields or claim that rendered text authenticates its producer.
+
+A fresh Chrome Computer Use attempt was blocked by Chrome before the local app
+loaded. The test tab was closed and the disposable server removed; this batch
+adds no rendered-Web acceptance claim.
+
 ## Package-aware source navigation — 16 September, unreleased
 
 The v0.1.1 CLI rejected a source-file selection inside the current DSH checkout's

@@ -353,7 +353,7 @@ test('verification checkpoints retain completed cases when a later invocation re
 
 test('partial or mismatched verification receipts cannot establish a complete verdict', () => {
   const cases = [{ tool: 'first', arguments: {}, expected: 'done' }, { tool: 'next', name: 'next case', arguments: {}, expected: true }]
-  const partial = { ok: false, complete: false, caseCount: 2,
+  const partial = { ok: false, complete: false, phase: 'cases', caseCount: 2,
     cases: [{ index: 1, tool: 'first', passed: true }], activeCase: { index: 2, tool: 'next', name: 'next case' } }
   assert.equal(validVerificationReceipt(partial, cases), true)
   for (const changed of [
@@ -361,13 +361,36 @@ test('partial or mismatched verification receipts cannot establish a complete ve
     { cases: [{ index: 1, tool: 'other', passed: true }] },
     { cases: [{ index: 2, tool: 'first', passed: true }] },
   ]) assert.equal(validVerificationReceipt({ ...partial, ...changed }, cases), false)
-  const complete = { ...partial, complete: true, ok: true, activeCase: null,
+  const complete = { ...partial, complete: true, phase: 'complete', ok: true, activeCase: null,
     cases: [...partial.cases, { index: 2, tool: 'next', name: 'next case', passed: true }] }
   assert.equal(validVerificationReceipt(complete, cases), true)
   assert.equal(validVerificationReceipt({ ...complete, error: 'afterward failure' }, cases), false)
   assert.equal(validVerificationReceipt({ ...complete, ok: false }, cases), false)
+  assert.equal(validVerificationReceipt(complete, cases, '/workspace'), false)
+  const scoped = { ...complete, agent: { id: 'real-agent', preset: 'standard' } }
+  assert.equal(validVerificationReceipt(scoped, cases, '/workspace'), true)
+  assert.equal(validVerificationReceipt(scoped, cases), false)
+  const disposing = { ...scoped, complete: false, ok: false, phase: 'agent-dispose' }
+  assert.equal(validVerificationReceipt(disposing, cases, '/workspace'), true)
+  assert.equal(validVerificationReceipt({ ...disposing, ok: true }, cases, '/workspace'), false)
   assert.match(formatDevelopmentReport(partial), /INCOMPLETE: 1 of 2 cases returned results/u)
   assert.match(formatDevelopmentReport(partial), /Interrupted during #2 next "next case"/u)
+})
+
+test('Agent verification requires an existing directory before any runtime preparation', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-agent-workspace-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const file = join(root, 'file')
+  await writeFile(file, '')
+  for (const workspacePath of ['', ' ', null, false, file, join(root, 'absent'), 'invalid\0path']) {
+    await assert.rejects(verifyDevelopmentPlugin(root, { workspacePath }), { code: 'DEVELOPMENT_WORKSPACE_INVALID' })
+  }
+  const parsed = parseCliArguments(['verify', '--workspace', root])
+  assert.doesNotThrow(() => assertCliCommandOptions(parsed.command, parsed.options))
+  for (const command of ['project', 'dev', 'run', 'doctor']) {
+    assert.throws(() => assertCliCommandOptions(command, parsed.options), /does not accept/u)
+  }
+  assert.throws(() => parseNativeToolInput({ operation: 'project', workspace: root }), /not valid/u)
 })
 
 test('compares selected canonical fields without treating a missing path as null', () => {
@@ -406,7 +429,7 @@ test('dev CLI prints final shutdown reports and preserves incomplete-drain warni
   t.after(() => rm(root, { recursive: true, force: true }))
   const cli = fileURLToPath(new URL('../bin/dsh-developer.js', import.meta.url))
   const development = new URL('../lib/development.js', import.meta.url).href
-  const ready = { ok: true, url: 'http://127.0.0.1:4173/', profile: 'web' }
+  const ready = { ok: true, url: 'http://127.0.0.1:4173/', profile: 'web', workspace: { id: 'workspace', path: '/example' } }
   const reason = 'Inherited pipes did not close after the termination attempt; readers were closed. Descendants may still be running.'
   for (const incomplete of [false, true]) {
     const report = { ok: true, stopped: true, cleanup: 'disposable profile removed',
@@ -438,6 +461,7 @@ test('dev CLI prints final shutdown reports and preserves incomplete-drain warni
       } else {
         assert.match(stdout, /http:\/\/127\.0\.0\.1:4173\//u)
         assert.match(stdout, /Development server stopped\./u)
+        assert.doesNotMatch(stdout, /Verification workspace|\[object Object\]/u)
         assert.ok(stdout.endsWith(report.cleanup + '\n'))
         if (incomplete) assert.ok(stdout.includes('WARNING: ' + reason))
         else assert.doesNotMatch(stdout, /WARNING:/u)

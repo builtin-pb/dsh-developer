@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -39,10 +39,38 @@ async function createOverlayFixture(temporary) {
     + '      name: dsh-development-overlay-fixture\n      config:\n        value: installed default\n')
   await writeFile(join(source, 'index.js'), `
 import { readFile, writeFile } from 'node:fs/promises'
+import { writeFileSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 export const name = 'overlay-fixture'
 export const inject = ['tools']
 export async function apply(ctx, config) {
+  if (config.agentChecks) {
+    const calls = new Map()
+    ctx.on('agent/disposed', ({ agent }) => writeFileSync(config.agentDisposedMarker,
+      JSON.stringify({ id: agent.id, registered: Boolean(ctx.get('agents').get(agent.id)) })))
+    ctx.tools.register({
+      name: 'agent_state', description: 'Observe the real verification Agent.',
+      parameters: { type: 'object', properties: {}, additionalProperties: false },
+      output: { schema: { type: 'object' }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
+      isConcurrencySafe: () => false, execute: async (_args, exec) => {
+        if (!exec.agent) throw new Error('fixture requires a real Agent')
+        const agent = exec.agent
+        calls.set(agent.id, (calls.get(agent.id) ?? 0) + 1)
+        return { selectedWorkspace: agent.session.header.cwd === config.agentWorkspace, registered: Boolean(ctx.get('agents').get(agent.id)),
+          policy: ctx.get('approval').effectivePolicy(agent.session), batchCalls: calls.get(agent.id) }
+      },
+    })
+    ctx.tools.register({
+      name: 'require_approval', description: 'Observe native approval without a model turn.',
+      parameters: { type: 'object', properties: {}, additionalProperties: false },
+      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+      isConcurrencySafe: () => false, execute: async (_args, exec) => {
+        await ctx.get('approval').request({ agent: exec.agent, signal: exec.signal,
+          description: 'Fixture approval request', kind: 'tool', details: {} })
+        return 'approval must not be manufactured'
+      },
+    })
+  }
   if (config.exitCodeOnShutdown !== undefined) {
     ctx.effect(() => () => process.exit(config.exitCodeOnShutdown), 'fixture abnormal shutdown')
   }
@@ -133,6 +161,7 @@ test('retains earlier native results and identifies an invocation interrupted by
       const controller = new AbortController()
       const running = verifyDevelopmentPlugin(archive, { dshPath, casesPath: fixtureCases, patchPath, online: true,
         timeoutMs: mode === 'timeout' ? 15_000 : 30_000, signal: controller.signal,
+        ...(mode === 'cancel' ? { workspacePath: temporary } : {}),
       }).then(report => ({ report }), error => ({ error }))
       try {
         if (mode === 'cancel') {
@@ -150,6 +179,7 @@ test('retains earlier native results and identifies an invocation interrupted by
         assert.equal(report.ok, false)
         assert.equal(report.complete, false)
         assert.equal(report.caseCount, 3)
+        if (mode === 'cancel') assert.equal(report.agent.workspace, await realpath(temporary))
         assert.equal(report.cases.length, 1)
         assert.equal(report.cases[0].passed, true)
         assert.equal(report.cases[0].value, 'ready')
@@ -159,6 +189,59 @@ test('retains earlier native results and identifies an invocation interrupted by
         await assert.rejects(stat(observed.home), { code: 'ENOENT' })
       } finally { controller.abort(); await running }
     }
+  } finally { await rm(temporary, { recursive: true, force: true }) }
+})
+
+test('verifies workspace-relative and Agent-scoped tools with native policy and awaited disposal', { timeout: 90_000 }, async () => {
+  const temporary = await realpath(await mkdtemp(join(tmpdir(), 'dsh-agent-cases-')))
+  try {
+    const { archive } = await createOverlayFixture(temporary)
+    const workspace = join(temporary, '工作 space')
+    await mkdir(workspace)
+    await writeFile(join(workspace, 'marker.txt'), 'selected workspace\n')
+    const disposed = join(temporary, 'agent-disposed.json')
+    const patchPath = join(temporary, 'agent.patch.yml'), fixtureCases = join(temporary, 'cases.json')
+    await writeFile(patchPath, '- id: overlay-fixture\n  config:\n    agentChecks: true\n    agentDisposedMarker: ' + JSON.stringify(disposed)
+      + '\n    agentWorkspace: ' + JSON.stringify(workspace) + '\n')
+    const state = batchCalls => ({ selectedWorkspace: true, registered: true, policy: 'ask', batchCalls })
+    await writeFile(fixtureCases, JSON.stringify([
+      { name: 'relative file in selected workspace', tool: 'read', arguments: { file_path: 'marker.txt' }, resultPath: '/lines/0/text', expected: 'selected workspace' },
+      { name: 'fresh Agent', tool: 'agent_state', arguments: {}, expected: state(1) },
+      { name: 'no synthetic approval', tool: 'require_approval', arguments: {}, isError: true },
+      { name: 'same Agent and unchanged policy', tool: 'agent_state', arguments: {}, expected: state(2) },
+    ]))
+    for (const profile of ['developer-test', 'web']) {
+      await rm(disposed, { force: true })
+      const report = await verifyDevelopmentPlugin(archive, { dshPath, profile, casesPath: fixtureCases, patchPath,
+        workspacePath: workspace, online: true })
+      assert.equal(report.ok, true, JSON.stringify(report))
+      assert.equal(report.complete, true)
+      assert.equal(report.phase, 'complete')
+      assert.equal(report.workspace, workspace)
+      assert.equal(report.agent.workspace, workspace)
+      if (profile === 'web') assert.equal(report.agent.preset, 'standard')
+      assert.equal(report.cases[2].isError, true)
+      assert.match(JSON.stringify(report.cases[2].content), /turn/i)
+      assert.deepEqual(JSON.parse(await readFile(disposed, 'utf8')), { id: report.agent.id, registered: false })
+      assert.equal(await readFile(join(workspace, 'marker.txt'), 'utf8'), 'selected workspace\n')
+    }
+  } finally { await rm(temporary, { recursive: true, force: true }) }
+})
+
+test('self-hosted project verification resolves the real Agent workspace and rejects escape', { timeout: 60_000 }, async () => {
+  const temporary = await realpath(await mkdtemp(join(tmpdir(), 'dsh-selfhost-agent-')))
+  try {
+    await writeFile(join(temporary, 'package.json'), JSON.stringify({ name: 'selected-workspace', version: '1.0.0' }))
+    const fixtureCases = join(temporary, 'cases.json')
+    await writeFile(fixtureCases, JSON.stringify([
+      { name: 'selected project', tool: 'dsh_developer', arguments: { operation: 'project' },
+        resultPath: '/report/project/name', expected: 'selected-workspace' },
+      { name: 'workspace escape', tool: 'dsh_developer', arguments: { operation: 'project', source: '..' }, isError: true },
+    ]))
+    const report = await verifyDevelopmentPlugin(fileURLToPath(new URL('../', import.meta.url)),
+      { dshPath, casesPath: fixtureCases, workspacePath: temporary })
+    assert.equal(report.ok, true, JSON.stringify(report))
+    assert.match(JSON.stringify(report.cases[1].content), /inside.*workspace/i)
   } finally { await rm(temporary, { recursive: true, force: true }) }
 })
 

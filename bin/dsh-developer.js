@@ -35,7 +35,7 @@ const USAGE = [
   '    Knowledge topics: ' + KNOWLEDGE_TOPICS.join(', ') + '.',
   '  dsh-developer session --source <session.jsonl[.zstd]> [--limit <0..100>] [--json]',
   '  dsh-developer run --source <project> --script <name> [--timeout-ms <ms>] [--json] [-- <script args...>]',
-  '  dsh-developer verify --source <plugin-or-tgz> --cases <json> [--patch <path>] [--dsh <path>] [--profile <name>] [--online] [--json]',
+  '  dsh-developer verify --source <plugin-or-tgz> --cases <json> [--workspace <directory>] [--patch <path>] [--dsh <path>] [--profile <name>] [--online] [--json]',
   '  dsh-developer dev --source <plugin-or-tgz> [--patch <path>] [--dsh <path>] [--port <number>] [--online] [--json]',
   '  run, verify and dev execute trusted project code under the calling host policy.',
   '  --patch selects one trusted Cordis overlay after the installed bundle/profile and before the development probe.',
@@ -136,6 +136,7 @@ async function main(argv) {
     } else if (command === 'verify') {
       report = await verifyDevelopmentPlugin(required(options, 'source'), {
         casesPath: required(options, 'cases'), patchPath: options.patch, dshPath: options.dsh, profile: options.profile,
+        workspacePath: options.workspace,
         online: options.online, timeoutMs, signal: controller.signal,
       })
       output(report, formatDevelopmentReport)
