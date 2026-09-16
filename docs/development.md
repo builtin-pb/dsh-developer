@@ -2,6 +2,8 @@
 
 Start with the existing workspace. dsh-developer can inspect ordinary projects with dependencies, locate DSH declarations at an exact installation or source checkout, run project scripts, verify native tools in a disposable profile, and own a temporary Web server.
 
+The development skill closes a task by reviewing the result against your intent and the whole run, including retries and workarounds. It briefly reports meaningful friction or what went smoothly. For an actionable dsh-developer problem, it prepares a sanitized issue draft and asks before posting to this repository; it does not send feedback automatically.
+
 Inside a DSH agent's shell, run the installed CLI with `node "$DSH_DEVELOPER_BIN" <operation>` on POSIX or `node "$env:DSH_DEVELOPER_BIN" <operation>` in PowerShell. Profile installation does not create a global CLI command. The examples below use `node bin/dsh-developer.js` from this repository's checkout. In DSH, the native `dsh_developer` tool exposes read-only `project`, `knowledge` and `session` operations; execution uses the host’s normal shell and approval policy.
 
 ## Find the right code

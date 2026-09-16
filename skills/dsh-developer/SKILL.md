@@ -29,16 +29,18 @@ Use `dsh_developer` in DSH. Else use `DSH_DEVELOPER_BIN` or resolve `../../bin/d
 
 ## Execution and proof
 
-Trusted `run`, `verify` and `dev` use host execution policy. Edit authority, metadata and model fields do not grant execution trust. A disposable profile separates configuration; it is not a sandbox.
+Trusted `run`, `verify` and `dev` follow host policy. Edit permission and metadata do not grant execution trust; disposable profiles isolate configuration only.
 
 DeepSeek runs untrusted source only in the admitted host provider (WSL2/Bubblewrap on Windows; Apple container on supported Macs). Codex/GPT untrusted execution requires proven credential/network/write/process/cleanup isolation. Otherwise use static inspection.
 
 Run relevant behavior tests and project checks; fully validate this product after integration. Ordinary plugins use static Doctor (`skipRuntime: true`, CLI `--skip-runtime`) plus `verify` on the target profile. Product/promoted bundles use `compatibility` and release gates; upstream uses its own checks. Repair failures and rerun that gate and all downstream gates affected by the change. Preserve valid evidence for unchanged code; never weaken safety to obtain a pass.
 
-Runtime lanes: 0.1.5-rc.2 blocking, 0.1.6-alpha.1 advisory; provider admission remains separate. Keep registry knowledge, examples, contracts and CI current together. Historical migration stays bounded; hook contracts pin exact bytes. Other targets use exact-source ordinary development.
+Runtime lanes: 0.1.5-rc.2 blocking, 0.1.6-alpha.1 advisory; providers need separate admission. Keep runtimes, examples, contracts and CI aligned. Historical migration and exact hook pins stay bounded. Other targets use exact-source development.
 
 ## Finish
 
-Publishing, registry/provider/GitHub changes, existing user profiles and wider targets need their own authority. Disposable development profiles belong to the authorized test workflow. Preserve ambiguous staging; schedule nothing after cancellation.
+Publishing, registry/provider/GitHub changes, personal profiles and wider targets need authority. Disposable profiles are in scope. Preserve ambiguous staging; schedule nothing after cancellation.
+
+At completion, review the whole run against the user's intent: retries, setup friction, workarounds and verification gaps. Fix in-scope problems. Report material friction or a smooth result with evidence. For actionable product friction, [draft feedback](references/feedback.md) and ask before submitting.
 
 Return the answer or findings with evidence, assumptions and material limits. For Build, return the tested outcome—or an exact blocker and recovery.

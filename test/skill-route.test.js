@@ -35,6 +35,7 @@ test('keeps every LF and CRLF routed skill set below the repository budget with 
     'native-cell': ['references/native-cell.md', 'references/safety.md'],
     development: ['references/development.md'],
     session: ['references/session-diagnostics.md'],
+    feedback: ['references/feedback.md'],
     creator: ['references/creator-export.md', 'references/safety.md'],
     audit: ['references/safety.md'],
     core: ['references/core-incubation.md', 'references/safety.md'],
