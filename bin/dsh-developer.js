@@ -311,6 +311,8 @@ main(argv).catch((error) => {
   })
   process.stderr.write(argv.includes('--json')
     ? JSON.stringify(boundary, null, 2) + '\n'
-    : appendFirstNextAction(diagnostic.code + ': ' + diagnostic.message, boundary) + '\n')
+    : (diagnostic.verification?.kind === 'dsh-development-verification'
+      ? formatDevelopmentReport(diagnostic.verification) + '\n' : '')
+      + appendFirstNextAction(diagnostic.code + ': ' + diagnostic.message, boundary) + '\n')
   process.exitCode = error instanceof DshDeveloperError && error.code === 'CANCELLED' ? 130 : 1
 })

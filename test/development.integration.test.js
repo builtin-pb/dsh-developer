@@ -47,6 +47,7 @@ export async function apply(ctx, config) {
     ctx.effect(() => () => process.exit(config.exitCodeOnShutdown), 'fixture abnormal shutdown')
   }
   let started = false
+  let calls = 0
   let browserState
   if (config.browserObservationPath) {
     // Import through the running loader to intercept the same module it mounts.
@@ -75,6 +76,14 @@ export async function apply(ctx, config) {
     output: { schema: { type: config.structured || browserState ? 'object' : 'string' },
       render: (_args, value) => [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value) }] },
     isConcurrencySafe: () => true, execute: async () => {
+      calls += 1
+      if (config.interruptOnCall === calls) {
+        await writeFile(config.interruptMarker, JSON.stringify({ home: process.env.DSH_HOME, pid: process.pid }))
+        if (config.interruptMode === 'exit') process.exit(23)
+        const timer = setInterval(() => {}, 1000)
+        ctx.effect(() => () => clearInterval(timer), 'stop hanging fixture')
+        await new Promise(() => {})
+      }
       if (browserState) return browserState()
       if (config.workerMarker) {
         const worker = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000); process.send('ready')"],
@@ -107,6 +116,51 @@ export async function apply(ctx, config) {
     '--pack-destination', temporary, '--cache', join(temporary, 'cache')], { cwd: source, timeoutMs: 30_000 })
   return { source, archive: join(temporary, JSON.parse(packed.stdout)[0].filename) }
 }
+
+test('retains earlier native results and identifies an invocation interrupted by timeout, cancellation or exit', { timeout: 120_000 }, async () => {
+  const temporary = await mkdtemp(join(tmpdir(), 'dsh-interrupted-cases-'))
+  try {
+    const { archive } = await createOverlayFixture(temporary)
+    const fixtureCases = join(temporary, 'cases.json'), patchPath = join(temporary, 'interrupt.patch.yml')
+    const marker = join(temporary, 'interrupted.json')
+    await writeFile(fixtureCases, JSON.stringify(['first result', 'interrupted result', 'never invoked'].map(name => ({
+      name, tool: 'overlay_value', arguments: {}, expected: 'ready',
+    }))))
+    for (const mode of ['timeout', 'cancel', 'exit']) {
+      await rm(marker, { force: true })
+      await writeFile(patchPath, '- id: overlay-fixture\n  config:\n    value: ready\n    interruptOnCall: 2\n'
+        + '    interruptMode: ' + mode + '\n    interruptMarker: ' + JSON.stringify(marker) + '\n')
+      const controller = new AbortController()
+      const running = verifyDevelopmentPlugin(archive, { dshPath, casesPath: fixtureCases, patchPath, online: true,
+        timeoutMs: mode === 'timeout' ? 15_000 : 30_000, signal: controller.signal,
+      }).then(report => ({ report }), error => ({ error }))
+      try {
+        if (mode === 'cancel') {
+          const deadline = Date.now() + 30_000
+          while (Date.now() < deadline && !await stat(marker).catch(() => undefined)) {
+            await new Promise(resolve => setTimeout(resolve, 25))
+          }
+          assert(await stat(marker).catch(() => undefined), 'the second invocation must begin before cancellation')
+          controller.abort()
+        }
+        const outcome = await running
+        if (mode === 'cancel') assert.equal(outcome.error?.code, 'CANCELLED')
+        else assert.equal(outcome.error, undefined)
+        const report = outcome.report ?? outcome.error.details.verification
+        assert.equal(report.ok, false)
+        assert.equal(report.complete, false)
+        assert.equal(report.caseCount, 3)
+        assert.equal(report.cases.length, 1)
+        assert.equal(report.cases[0].passed, true)
+        assert.equal(report.cases[0].value, 'ready')
+        assert.deepEqual(report.activeCase, { index: 2, tool: 'overlay_value', name: 'interrupted result' })
+        assert.equal(report.diagnostic.code, { timeout: 'COMMAND_TIMEOUT', cancel: 'CANCELLED', exit: 'COMMAND_EXITED' }[mode])
+        const observed = JSON.parse(await readFile(marker, 'utf8'))
+        await assert.rejects(stat(observed.home), { code: 'ENOENT' })
+      } finally { controller.abort(); await running }
+    }
+  } finally { await rm(temporary, { recursive: true, force: true }) }
+})
 
 test('verification reaps native tool workers before removing its disposable profile', {
   skip: process.platform === 'win32', timeout: 60_000,

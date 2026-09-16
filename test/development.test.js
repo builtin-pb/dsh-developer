@@ -7,8 +7,8 @@ import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import test from 'node:test'
-import { formatDevelopmentReport, runDevelopmentServer, validateToolCases, verifyDevelopmentPlugin } from '../lib/development.js'
-import { observeToolCase, selectCaseValue } from '../lib/development-probe.js'
+import { formatDevelopmentReport, runDevelopmentServer, validateToolCases, validVerificationReceipt, verifyDevelopmentPlugin } from '../lib/development.js'
+import { apply as verifyTools, observeToolCase, selectCaseValue } from '../lib/development-probe.js'
 import { parseCliArguments, assertCliCommandOptions } from '../lib/cli-options.js'
 import { deriveNextActions } from '../lib/recovery-actions.js'
 import { parseNativeToolInput } from '../lib/native-tool-internal.js'
@@ -293,6 +293,81 @@ test('named failure receipts retain verdicts and fit the receipt budget with max
   const largeExpected = observeToolCase({ ...item, expected: 'x'.repeat(2000) }, result, 0)
   assert.equal(largeExpected.expectedOmitted, true)
   assert.match(formatDevelopmentReport({ ok: false, cases: [largeExpected] }), /expected: omitted from report; compared in full/u)
+})
+
+test('verification checkpoints retain completed cases when a later invocation rejects', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-case-checkpoint-'))
+  const spec = [{ tool: 'first', arguments: {}, expected: 'done' },
+    { name: 'rejected invocation', tool: 'second', arguments: {}, expected: 'done' },
+    { tool: 'third', arguments: {}, expected: 'done' }]
+  const environment = { DSH_DEVELOPER_CASES: join(root, 'cases.json'),
+    DSH_DEVELOPER_CASE_RESULT: join(root, 'result.json'), DSH_DEVELOPER_BOOT_COMPLETE: join(root, 'boot') }
+  const previous = Object.fromEntries(Object.keys(environment).map(key => [key, process.env[key]]))
+  Object.assign(process.env, environment)
+  const disposers = []
+  t.after(async () => {
+    disposers.forEach(dispose => dispose())
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+    await rm(root, { recursive: true, force: true })
+  })
+  await writeFile(environment.DSH_DEVELOPER_CASES, JSON.stringify(spec))
+  await writeFile(environment.DSH_DEVELOPER_BOOT_COMPLETE, '')
+  let exit, executions = 0
+  const exited = new Promise(resolve => { exit = resolve })
+  verifyTools({
+    effect: effect => disposers.push(effect()), appExit: exit,
+    loader: { await: async () => {}, entries: () => [] },
+    tools: { get: () => ({}), execute: async () => {
+      const checkpoint = JSON.parse(await readFile(environment.DSH_DEVELOPER_CASE_RESULT, 'utf8'))
+      assert.equal(validVerificationReceipt(checkpoint, spec), true)
+      assert.equal(checkpoint.complete, false)
+      assert.equal(checkpoint.activeCase.index, ++executions)
+      if (executions === 2) {
+        assert.equal(checkpoint.cases.length, 1)
+        assert.equal(checkpoint.cases[0].passed, true)
+        throw new Error('fixture executor rejected')
+      }
+      return { isError: false, value: 'done', content: [] }
+    } },
+  })
+  let timer
+  try {
+    assert.equal(await Promise.race([exited, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('verification did not settle')), 5000)
+    })]), 1)
+  } finally { clearTimeout(timer) }
+  const report = JSON.parse(await readFile(environment.DSH_DEVELOPER_CASE_RESULT, 'utf8'))
+  assert.equal(validVerificationReceipt(report, spec), true)
+  assert.equal(report.ok, false)
+  assert.equal(report.complete, false)
+  assert.equal(report.cases.length, 1)
+  assert.equal(report.cases[0].value, 'done')
+  assert.equal(report.activeCase.index, 2)
+  assert.equal(report.error, 'fixture executor rejected')
+  assert.equal(executions, 2)
+  await assert.rejects(stat(environment.DSH_DEVELOPER_CASE_RESULT + '.pending'), { code: 'ENOENT' })
+})
+
+test('partial or mismatched verification receipts cannot establish a complete verdict', () => {
+  const cases = [{ tool: 'first', arguments: {}, expected: 'done' }, { tool: 'next', name: 'next case', arguments: {}, expected: true }]
+  const partial = { ok: false, complete: false, caseCount: 2,
+    cases: [{ index: 1, tool: 'first', passed: true }], activeCase: { index: 2, tool: 'next', name: 'next case' } }
+  assert.equal(validVerificationReceipt(partial, cases), true)
+  for (const changed of [
+    { ok: true }, { complete: true }, { caseCount: 1 }, { activeCase: { index: 1, tool: 'first' } },
+    { cases: [{ index: 1, tool: 'other', passed: true }] },
+    { cases: [{ index: 2, tool: 'first', passed: true }] },
+  ]) assert.equal(validVerificationReceipt({ ...partial, ...changed }, cases), false)
+  const complete = { ...partial, complete: true, ok: true, activeCase: null,
+    cases: [...partial.cases, { index: 2, tool: 'next', name: 'next case', passed: true }] }
+  assert.equal(validVerificationReceipt(complete, cases), true)
+  assert.equal(validVerificationReceipt({ ...complete, error: 'afterward failure' }, cases), false)
+  assert.equal(validVerificationReceipt({ ...complete, ok: false }, cases), false)
+  assert.match(formatDevelopmentReport(partial), /INCOMPLETE: 1 of 2 cases returned results/u)
+  assert.match(formatDevelopmentReport(partial), /Interrupted during #2 next "next case"/u)
 })
 
 test('compares selected canonical fields without treating a missing path as null', () => {
