@@ -1,5 +1,7 @@
 # dsh-developer
 
+<img src="docs/assets/logo.png" alt="Blue whale holding an amber wrench" width="200">
+
 **English** · [简体中文](README.zh-CN.md)
 
 > **The single plugin you need for DSH**

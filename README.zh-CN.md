@@ -1,5 +1,7 @@
 # dsh-developer
 
+<img src="docs/assets/logo.png" alt="蓝鲸握着琥珀色扳手" width="200">
+
 [English](README.md) · **简体中文**
 
 > **The single plugin you need for DSH**
