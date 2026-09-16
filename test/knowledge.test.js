@@ -649,6 +649,8 @@ test('source selection respects workspace and nested-repository boundaries and r
   await write(join(pkg, 'src/index.ts'), 'export const safe = true\n')
   const inside = await inspectDshKnowledge({ upstreamRoot: 'packages/selection/src/index.ts', sourceRoot: f.upstream })
   assert.equal(inside.upstream.root, f.upstream)
+  await assert.rejects(inspectDshKnowledge({ upstreamRoot: join(pkg, 'src/index.ts'), sourceRoot: join(pkg, 'src/index.ts') }),
+    error => error.code === 'KNOWLEDGE_UPSTREAM_INVALID' && error.details.reason === 'outside-workspace')
   await assert.rejects(inspectDshKnowledge({ upstreamRoot: pkg, sourceRoot: pkg }),
     error => error.code === 'KNOWLEDGE_UPSTREAM_INVALID' && error.details.reason === 'checkout-not-found')
   await assert.rejects(inspectDshKnowledge({ upstreamRoot: f.upstream, sourceRoot: pkg }),

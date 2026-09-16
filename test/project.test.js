@@ -47,6 +47,8 @@ test('selects a nested package and the containing workspace toolchain', async t 
 test('does not leave the Agent workspace through parent traversal or a project symlink', async t => {
   const root = await fixture(t, { name: 'workspace' })
   const other = await fixture(t, { name: 'outside' })
+  const file = join(root, 'package.json')
+  await assert.rejects(inspectProject(file, { sourceRoot: file }), { code: 'PROJECT_OUTSIDE_WORKSPACE' })
   await assert.rejects(inspectProject(other, { sourceRoot: root }), { code: 'PROJECT_OUTSIDE_WORKSPACE' })
   await symlink(other, join(root, 'linked'), process.platform === 'win32' ? 'junction' : 'dir')
   await assert.rejects(inspectProject('linked', { sourceRoot: root }), { code: 'PROJECT_OUTSIDE_WORKSPACE' })
