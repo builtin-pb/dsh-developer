@@ -31,7 +31,7 @@ const USAGE = [
   '',
   'Usage:',
   '  dsh-developer project [--source <directory-or-file>] [--json]',
-  '  dsh-developer knowledge [--dsh <path>] [--upstream <checkout>] [--topic <topic>] [--package <name>] [--consumer-root <package-directory>] [--json]',
+  '  dsh-developer knowledge [--dsh <path>] [--upstream <checkout-or-source>] [--topic <topic>] [--package <name>] [--consumer-root <package-directory>] [--json]',
   '    Knowledge topics: ' + KNOWLEDGE_TOPICS.join(', ') + '.',
   '  dsh-developer session --source <session.jsonl[.zstd]> [--limit <0..100>] [--json]',
   '  dsh-developer run --source <project> --script <name> [--timeout-ms <ms>] [--json] [-- <script args...>]',

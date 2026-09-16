@@ -577,6 +577,127 @@ test('rejects package specs, subpaths and invalid names before local target disc
   }
 })
 
+test('selects an unmapped source package from its directory or file and prioritizes that file', async t => {
+  const f = await fixture(t)
+  const name = '@deepseek-ai/dsh-client-ui-layout'
+  const pkg = await f.upstreamPackage(name, 'packages/client/ui-layout')
+  for (const file of ['index.ts', 'a.ts', 'b.ts', 'z-layout.ts']) {
+    await write(join(pkg, 'src', file), 'export const layout = ' + JSON.stringify(file) + '\n')
+  }
+  const selectedFile = join(pkg, 'src', 'z-layout.ts')
+  await write(join(pkg, 'tests', 'layout.test.ts'), "test('switching sessions closes the details pane', () => {})\n")
+  await write(join(pkg, 'tests', 'a.test.ts'), "test('unrelated alphabetically earlier test', () => {})\n")
+  await write(join(pkg, 'tests', 'z-layout.client.spec.ts'), "test('selected layout behavior', () => {})\n")
+  // Installed metadata must not override an explicit source selection.
+  await f.installedPackage(name, { repository: { directory: 'old/layout' } })
+  for (const upstreamRoot of [pkg, join(pkg, 'src'), selectedFile, join(pkg, 'package.json')]) {
+    const report = await inspectDshKnowledge({ upstreamRoot, topic: 'ui' })
+    assert.equal(report.packageName, name)
+    assert.equal(report.upstream.root, f.upstream)
+    assert.equal(report.upstream.requested, upstreamRoot)
+    assert.equal(report.upstream.commit, COMMIT)
+    assert.deepEqual(report.upstream.packages.map(item => item.root), [pkg])
+    assert(report.evidence.some(item => item.kind === 'test'))
+    assert.equal(report.installed, null)
+    if (upstreamRoot === selectedFile) {
+      const sources = report.evidence.filter(item => item.kind === 'source')
+      assert.equal(sources[0].path, selectedFile)
+      assert.equal(sources.length, report.limits.sourcesPerPackage)
+      const tests = report.evidence.filter(item => item.kind === 'test')
+      assert.equal(tests[0].path, join(pkg, 'tests', 'z-layout.client.spec.ts'))
+      assert.equal(tests.length, report.limits.testsPerPackage)
+      assert(report.missing.some(item => item.reason === 'source-excerpt-limit'))
+      assert(report.missing.some(item => item.reason === 'test-excerpt-limit'))
+    }
+  }
+  const combined = await inspectDshKnowledge({ dshPath: f.entry, upstreamRoot: selectedFile, topic: 'ui' })
+  assert.equal(combined.development.rootPackage, name)
+  assert.equal(combined.upstream.packages[0].root, pkg)
+  assert.equal(combined.packageVersionMismatches[0].name, name)
+  const matching = await inspectDshKnowledge({ upstreamRoot: selectedFile, packageName: name })
+  assert.equal(matching.upstream.packages[0].root, pkg)
+  const selectedTest = join(pkg, 'tests', 'z-selected.test.ts')
+  await write(selectedTest, "test('explicit selected regression', () => {})\n")
+  await write(join(pkg, 'tests', 'a.test.ts'), "test('another test', () => {})\n")
+  const testReport = await inspectDshKnowledge({ upstreamRoot: selectedTest })
+  const tests = testReport.evidence.filter(item => item.kind === 'test')
+  assert.equal(tests[0].path, selectedTest)
+  assert.equal(tests.length, testReport.limits.testsPerPackage)
+  await assert.rejects(inspectDshKnowledge({ upstreamRoot: pkg, packageName: '@deepseek-ai/dsh-tools' }),
+    { code: 'KNOWLEDGE_PACKAGE_CONFLICT' })
+  await assert.rejects(access(f.marker), { code: 'ENOENT' })
+})
+
+test('charges source-selection manifests once to the evidence budget and bounds ancestor search', async t => {
+  const f = await fixture(t)
+  const pkg = await f.upstreamPackage('@deepseek-ai/dsh-budget', 'packages/budget')
+  const source = join(pkg, 'src/index.ts')
+  await write(source, 'export const bounded = true\n')
+  const report = await inspectDshKnowledge({ upstreamRoot: source })
+  const files = [join(f.upstream, 'package.json'), join(pkg, 'package.json'), join(f.upstream, '.git/HEAD'), source]
+  const bytes = await Promise.all(files.map(path => readFile(path)))
+  assert.equal(report.usage.readBytes, bytes.reduce((total, buffer) => total + buffer.length, 0))
+  const deep = join(pkg, ...Array(report.limits.ancestorDirectories).fill('d'))
+  await mkdir(deep, { recursive: true })
+  await assert.rejects(inspectDshKnowledge({ upstreamRoot: deep }),
+    error => error.code === 'KNOWLEDGE_UPSTREAM_INVALID' && error.details.reason === 'ancestor-search-limit')
+})
+
+test('source selection respects workspace and nested-repository boundaries and rejects unsafe nearest metadata', async t => {
+  const f = await fixture(t)
+  const pkg = await f.upstreamPackage('@deepseek-ai/dsh-selection', 'packages/selection')
+  await write(join(pkg, 'src/index.ts'), 'export const safe = true\n')
+  const inside = await inspectDshKnowledge({ upstreamRoot: 'packages/selection/src/index.ts', sourceRoot: f.upstream })
+  assert.equal(inside.upstream.root, f.upstream)
+  await assert.rejects(inspectDshKnowledge({ upstreamRoot: pkg, sourceRoot: pkg }),
+    error => error.code === 'KNOWLEDGE_UPSTREAM_INVALID' && error.details.reason === 'checkout-not-found')
+  await assert.rejects(inspectDshKnowledge({ upstreamRoot: f.upstream, sourceRoot: pkg }),
+    error => error.code === 'KNOWLEDGE_UPSTREAM_INVALID' && error.details.reason === 'outside-workspace')
+  await write(join(pkg, '.git'), 'gitdir: /outside\n')
+  await assert.rejects(inspectDshKnowledge({ upstreamRoot: join(pkg, 'src/index.ts') }), { code: 'KNOWLEDGE_UPSTREAM_INVALID' })
+  await rm(join(pkg, '.git'))
+  await write(join(pkg, 'package.json'), '{')
+  await assert.rejects(inspectDshKnowledge({ upstreamRoot: pkg }),
+    error => error.code === 'KNOWLEDGE_UPSTREAM_INVALID' && error.details.reason === 'invalid-manifest')
+  await write(join(pkg, 'package.json'), { name: ['@deepseek-ai/dsh-selection'] })
+  await assert.rejects(inspectDshKnowledge({ upstreamRoot: pkg }), { code: 'KNOWLEDGE_UPSTREAM_INVALID' })
+  const hidden = await f.upstreamPackage('@deepseek-ai/dsh-selection', 'node_modules/hidden')
+  await write(join(hidden, 'src/index.ts'), SECRET)
+  await assert.rejects(inspectDshKnowledge({ upstreamRoot: hidden }), { code: 'KNOWLEDGE_UPSTREAM_INVALID' })
+  const link = join(pkg, 'outside')
+  await symlink(f.upstream, link, process.platform === 'win32' ? 'junction' : 'dir')
+  await assert.rejects(inspectDshKnowledge({ upstreamRoot: link, sourceRoot: pkg }),
+    error => error.code === 'KNOWLEDGE_UPSTREAM_INVALID' && error.details.reason === 'outside-workspace')
+})
+
+test('CLI and native knowledge preserve a source-file selection inside the Agent workspace', async t => {
+  const f = await fixture(t)
+  const pkg = await f.upstreamPackage('@deepseek-ai/dsh-navigation', 'packages/navigation')
+  const source = join(pkg, 'src/index.ts')
+  await write(source, 'export function navigateNativeSource() {}\n')
+  const cli = fileURLToPath(new URL('../bin/dsh-developer.js', import.meta.url))
+  const result = await runBounded(process.execPath, [cli, 'knowledge', '--upstream', source, '--topic', 'core', '--json'])
+  const report = JSON.parse(result.stdout)
+  assert.equal(report.upstream.root, f.upstream)
+  assert.equal(report.packageName, '@deepseek-ai/dsh-navigation')
+  assert(report.evidence.some(item => item.path === source))
+  const previousEntry = process.argv[1]
+  process.argv[1] = f.entry
+  t.after(() => { process.argv[1] = previousEntry })
+  let definition
+  registerNativeToolWithDependencies({
+    tools: { register(value) { definition = value }, guard() {}, schemas() { return [] } },
+    agents: { *roots() {} }, authoritySources: {}, onToolsPreExecute() {}, onToolsResult() {}, effect() {},
+  })
+  const invocation = { agent: { session: { header: { cwd: f.upstream } } }, signal: new AbortController().signal }
+  const native = await definition.execute({ operation: 'knowledge', source: relative(f.upstream, source), topic: 'core' }, invocation)
+  assert.equal(native.report.upstream.root, f.upstream)
+  assert.equal(native.report.packageName, report.packageName)
+  assert(native.report.evidence.some(item => item.path === source))
+  await assert.rejects(definition.execute({ operation: 'knowledge', source: f.upstream },
+    { ...invocation, agent: { session: { header: { cwd: pkg } } } }), { code: 'KNOWLEDGE_UPSTREAM_INVALID' })
+})
+
 test('confines custom repository directories and verifies source package identity', async t => {
   const f = await fixture(t)
   const name = '@deepseek-ai/dsh-owner-test'

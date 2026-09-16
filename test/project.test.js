@@ -64,6 +64,26 @@ test('distinguishes an upstream checkout and reports conflicting package manager
   assert.match(report.notices.join('\n'), /lockfiles disagree/u)
 })
 
+test('keeps a DSH package selected while identifying its containing checkout', async t => {
+  const root = await fixture(t, { name: '@deepseek-ai/dsh-root', version: '0.1.6-alpha.1', packageManager: 'pnpm@11.7.0' })
+  const nested = join(root, 'packages', 'client', 'ui-layout')
+  await mkdir(join(nested, 'src'), { recursive: true })
+  await writeFile(join(nested, 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh-client-ui-layout', scripts: { test: 'vitest run' } }))
+  const file = join(nested, 'src', 'index.ts')
+  await writeFile(file, 'export {}')
+  const report = await inspectProject(file)
+  assert.equal(report.project.root, nested)
+  assert.equal(report.project.kind, 'package')
+  assert.equal(report.upstream.root, root)
+  assert.equal(report.upstream.version, '0.1.6-alpha.1')
+  assert.equal(report.upstream.manifest, join(root, 'package.json'))
+  assert.equal(report.tasks[0].cwd, nested)
+  assert.equal(report.packageManager.root, root)
+  assert.match(formatProjectReport(report), /DSH checkout:/u)
+  const confined = await inspectProject(file, { sourceRoot: nested })
+  assert.equal(confined.upstream, null, 'a package workspace must not inspect its parent checkout')
+})
+
 test('cancellation and malformed metadata do not trigger project code', async t => {
   const root = await fixture(t)
   await assert.rejects(inspectProject(root, { signal: AbortSignal.abort() }), { code: 'CANCELLED' })

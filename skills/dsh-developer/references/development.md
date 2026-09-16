@@ -2,9 +2,9 @@
 
 ## Locate the implementation
 
-Use `project`; follow workspace instructions and resolve toolchain conflicts. Install dependencies there. Adapt `examples/package-check` (native tools) or `examples/session-status` (Client slots) as needed.
+Use `project`; follow workspace instructions, resolve toolchain conflicts and install dependencies. Examples: `examples/package-check` (tools), `examples/session-status` (Client slots).
 
-Use `knowledge` for the relevant topic and exact runtime or upstream checkout. Follow excerpts to complete declarations, imports, consumers and tests; resolve missing evidence and version mismatches. Pin DSH peers from its dependency map. Follow other imports with `packageName` and `consumerRoot` set to the originating physical package root (CLI `--package`, `--consumer-root`); nested versions can differ. The map covers peers, not every import.
+Use `knowledge` for the topic and exact runtime. `source` (CLI `--upstream`) selects a checkout, package or file; its checkout must be inside the Agent workspace. Follow excerpts to declarations, imports, consumers and tests; resolve omissions and version mismatches. Pin DSH peers from its map. Follow imports with `packageName` and `consumerRoot` set to the originating physical package root (CLI `--package`, `--consumer-root`); nested versions can differ. The map covers peers, not every import.
 
 ## Build useful behavior
 
@@ -26,6 +26,6 @@ In DSH POSIX shells use `node "$DSH_DEVELOPER_BIN"`:
 
 Verify the built archive and its documented configuration with `--patch <file>` on `verify`/`dev`. Exercise important failures through the actual entry point; check retained state and caller-visible results against independent expectations. Registration or helper tests alone are insufficient.
 
-For upstream work, locate owners and callers, follow checkout instructions and run its relevant Host/Client builds and tests at a recorded revision. Plugin Doctor is not an upstream gate.
+For upstream work, follow checkout instructions and run the owning Host/Client builds and tests at a recorded revision. Plugin Doctor is not an upstream gate.
 
-Use this same workflow to develop dsh-developer itself.
+Develop dsh-developer through this workflow.

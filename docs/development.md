@@ -10,12 +10,17 @@ Inside a DSH agent's shell, run the installed CLI with `node "$DSH_DEVELOPER_BIN
 node bin/dsh-developer.js project --source ./my-plugin
 node bin/dsh-developer.js knowledge --dsh /path/to/dsh --topic tool
 node bin/dsh-developer.js knowledge --upstream /path/to/deepseek-harness --topic core
+node bin/dsh-developer.js knowledge --upstream /path/to/deepseek-harness/packages/client/ui-layout/src/client/stores.ts --topic ui
 node bin/dsh-developer.js knowledge --dsh /path/to/dsh --topic ui --package @deepseek-ai/dsh-api-session-controller
 ```
 
-`project` identifies the nearest package, ancestor package-manager declaration and lockfiles, scripts, and instruction files. It does not import the project or traverse `node_modules`. Select a subpackage when working in a monorepo. Conflicting toolchain metadata needs resolution before running scripts. Read the project’s instructions before editing.
+`project` identifies the nearest package, containing DSH checkout, ancestor package-manager declaration and lockfiles, scripts, and instruction files. It does not import the project or traverse `node_modules`. Select a subpackage or source file when working in a monorepo; scripts still run in that package. Conflicting toolchain metadata needs resolution before running scripts. Read the project’s instructions before editing.
 
 `knowledge` returns local version and package identities, source/declaration excerpts, file hashes, and explicit omissions. Topics cover tools, lifecycle, configuration, packaging, UI, core, and testing. Its default is `tool`. The excerpt is a starting point: follow imports and read the relevant implementation, consumer and tests with ordinary file tools. A checkout’s HEAD does not establish that its working files are clean, and equal version strings do not prove equal source. Missing packaged documentation does not mean an API is absent.
+
+`--upstream` (native `source`) accepts a checkout, package directory or file. Selecting a subpackage uses its own manifest and source directory, including packages outside the topic hints. A selected source or test file under the package’s ordinary code directories takes priority within the existing excerpt limits. Checkout-root selection retains topic-based navigation. A conflicting `--package` is rejected; select the checkout root to navigate to another package. Discovery stops at a repository marker or the native Agent workspace boundary, so open the containing checkout as the workspace when developing DSH. It does not search every package, traverse source symlinks during discovery, or inspect configuration, fixtures or dependencies as source.
+
+Same-name tests, including DSH's `.client.spec` and `.host.spec` variants, are prioritized for a selected file. Names are navigation hints, not coverage evidence. Omitted source/test excerpts appear in `missing`; inspect the complete owning tests before editing. Many DSH subpackages declare only build/watch scripts: inspect the reported checkout root for repository test commands, then follow its instructions to select the relevant suite.
 
 The native tool reads its running DSH installation and exposes its entry path. DSH also supplies `DSH_DEVELOPER_DSH` to its shell so CLI verification defaults to that same installation; explicit `--dsh` takes precedence. Use CLI `knowledge --dsh` when targeting another installation, or provide both `--dsh` and `--upstream` to see their mismatch explicitly.
 

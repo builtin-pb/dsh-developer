@@ -1,6 +1,49 @@
 # Development verification
 
-These are local and CI observations from 10–15 September 2026. Dated sections distinguish the released version from subsequent checkout work. They describe what was exercised, not a claim that dsh-developer already completes every development task reliably. The [development guide](development.md) explains how to use the capabilities; the [strategy](development-strategy.md) retains the broader goal and unfinished milestones.
+These are local and CI observations from 10–16 September 2026. Dated sections distinguish the released version from subsequent checkout work. They describe what was exercised, not a claim that dsh-developer already completes every development task reliably. The [development guide](development.md) explains how to use the capabilities; the [strategy](development-strategy.md) retains the broader goal and unfinished milestones.
+
+## Package-aware source navigation — 16 September, unreleased
+
+The v0.1.1 CLI rejected a source-file selection inside the current DSH checkout's
+`ui-layout` package. The revised lookup retains both the selected package and
+its checkout, including owners outside the curated topic list. Selecting
+`src/client/stores.ts` at upstream revision
+`0d1f50007f9bca3f52b06e1c3074fa14d5fb0720` returned that file, package identity,
+nearby tests and the checkout revision. Root-based topic lookup is unchanged.
+Regression tests cover CLI/native parity, conflicting package selections,
+workspace and nested-repository boundaries, malformed nearest metadata,
+source/test excerpt limits and shared manifest-read accounting.
+
+A fresh actor used this workflow on the real upstream column-geometry helper
+and its existing tests. In a private copy, changing `<` to `<=` seeded an
+exact-fit regression: two original tests failed. Adding the neighboring
+979/980/981px cases produced three failures; repairing the comparator passed
+all 19 tests through `dsh-developer run`. This used official Vitest 4.1.8 with
+an explicit minimal configuration, not upstream's full GUI/build/typecheck
+gates. The released CLI rejected the same file lookup and could not locate
+this owner from a root lookup without installed package metadata.
+
+The exercise exposed two navigation omissions: matching tests fell behind the
+two-test excerpt cap, and omitted excerpts were not recorded. The lookup now
+prioritizes same-name tests and reports source/test excerpt limits. Repeating
+the `columns.ts` lookup returned `columns.client.spec.ts` first and recorded
+both omissions. Repository-level script selection and toolchain setup still
+require the checkout's own instructions. This is one controlled repair exercise,
+not a model comparison or a general autonomous-development success rate.
+
+Actual Chrome Computer Use on DSH 0.1.5-rc.2 exercised a local test command that
+invoked the native tool with a real Agent. Source-file and matching-package
+lookups passed; conflicting packages and workspace escapes returned the
+expected errors. All four results rendered in the Web conversation. The test
+used a disposable authenticated profile, no model call, and one tab that was
+closed afterward; the owning runner removed its profile. The temporary probe
+is not a shipped command.
+
+DSH disables GitHub Issues and directs bug reports to Discussions. Our
+independent reproduction of invisible first-command results was added to the
+[existing upstream report](https://github.com/deepseek-ai/deepseek-harness/discussions/6157#discussioncomment-18463219),
+including affected-version evidence and the keyless `/goal` workaround.
+An upstream repair has not been verified.
 
 ## v0.1.1 developer rollout review — 15 September
 
