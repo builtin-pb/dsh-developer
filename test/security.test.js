@@ -48,6 +48,24 @@ test('distinguishes lockfile integrity evidence from credentials', () => {
   assert.ok(findSecrets('{"token":' + JSON.stringify(npmToken) + '}').includes('npm-token'))
 })
 
+test('distinguishes DeepSeek package names from standalone credential prefixes', () => {
+  const name = '@deepseek-ai/dsh-deepseek-llm-api-extensions'
+  for (const text of [name, name + '@0.1.5-rc.2', JSON.stringify({ [name]: '^0.1.5-rc.2' })]) {
+    assert.deepEqual(findSecrets(text), [])
+    assert.equal(redactSensitiveOutput(text), text)
+  }
+  for (const prefix of ['deepseek-', 'dsk-', 'deepseek_', 'DSK_']) {
+    const key = prefix + ['1234567890', 'abcdefghijklmnop'].join('')
+    for (const text of [key, '"' + key + '"', name + ' ' + key, name + '?token=' + key]) {
+      assert.ok(findSecrets(text).includes('deepseek-key'))
+      assert.match(redactSensitiveOutput(text), /redacted/u)
+    }
+  }
+  const key = ['sk', '1234567890abcdefghijklmnop'].join('-')
+  assert.ok(findSecrets(name + ' ' + key).includes('openai-key'))
+  assert.ok(findSecrets('api_key=' + name).includes('credential-assignment'))
+})
+
 test('keeps diagnostic context while redacting credentials and multiline private keys', () => {
   const token = ['sk', '1234567890abcdefghijklmnop'].join('-')
   const begin = ['-----BEGIN', 'PRIVATE KEY-----'].join(' ')
