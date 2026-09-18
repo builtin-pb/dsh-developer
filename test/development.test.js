@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { generateKeyPairSync } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { tmpdir } from 'node:os'
@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import test from 'node:test'
-import { developmentPathArgument, formatDevelopmentReport, runDevelopmentServer, validateToolCases, validReloadObservation, validVerificationReceipt, verifyDevelopmentPlugin } from '../lib/development.js'
+import { developmentInstallerNeedsQuotes, developmentPathArgument, formatDevelopmentReport, runDevelopmentServer, validateToolCases, validReloadObservation, validVerificationReceipt, verifyDevelopmentPlugin } from '../lib/development.js'
 import { apply as verifyTools, observeToolCase, selectCaseValue } from '../lib/development-probe.js'
 import { parseCliArguments, assertCliCommandOptions } from '../lib/cli-options.js'
 import { deriveNextActions } from '../lib/recovery-actions.js'
@@ -523,15 +523,107 @@ test('native hot reload is opt-in, dev-only and rejects archives before installi
     { code: 'DEVELOPMENT_WATCH_SOURCE_INVALID' })
 })
 
-test('Windows native plugin arguments retain path boundaries without expanding variables', () => {
-  for (const path of ['C:\\work space\\plugin # & source', 'C:\\临时 目录\\pnpm-store', 'D:\\plain\\plugin.tgz']) {
-    assert.equal(developmentPathArgument(path, 'win32'), '"' + path + '"')
-    assert.equal(developmentPathArgument(path, 'linux'), path)
+test('installer quoting follows the selected forwarder and reaches both source and store arguments', async t => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-installer-argv-')))
+  const temporaryHomes = join(root, 'temporary # & (profiles) 雪')
+  const temporaryKey = process.platform === 'win32' ? 'TEMP' : 'TMPDIR'
+  const previous = process.env[temporaryKey]
+  t.after(async () => {
+    if (previous === undefined) delete process.env[temporaryKey]
+    else process.env[temporaryKey] = previous
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+  })
+  const source = join(root, 'plugin # & (source) 雪'), installation = join(root, 'runtime')
+  await mkdir(join(root, '.git'))
+  await mkdir(source)
+  await mkdir(installation)
+  await mkdir(temporaryHomes)
+  process.env[temporaryKey] = temporaryHomes
+  await writeFile(join(source, 'package.json'), JSON.stringify({ name: 'fixture', dsh: { bundle: { patch: './patch.yml' } } }))
+  const manifest = { name: '@deepseek-ai/dsh', version: '1.0.0',
+    publishConfig: { access: 'public' }, bin: { dsh: './bin.cjs' } }
+  await writeFile(join(installation, 'package.json'), JSON.stringify(manifest))
+  // Published legacy and current call shapes. Keep both chunks installed and
+  // the same version: only the selected CLI import determines argument handling.
+  await writeFile(join(installation, 'plugin-old.js'), `
+    import { spawnSync } from 'node:child_process';
+    export function runPlugin(profile, args) {
+      return spawnSync('pnpm', args.map(argument => anchorPathSpec(argument, process.cwd())), {
+        cwd: profile, stdio: 'inherit', shell: process.platform === 'win32'
+      });
+    }
+  `)
+  await writeFile(join(installation, 'plugin-new.js'), `
+    import { runPluginCommand } from '@deepseek-ai/dsh-plugin-manager/operations';
+    export async function runPlugin(profile, args) {
+      return runPluginCommand({ profile, cwd: process.cwd() }, args, { execution: 'cli' });
+    }
+  `)
+  const dshPath = join(installation, 'bin.cjs'), observedPath = join(root, 'observed.json')
+  for (const [chunk, needsQuotes] of [['old', true], ['new', false]]) {
+    await writeFile(dshPath, `
+      if (false) import('./plugin-${chunk}.js');
+      require('node:fs').writeFileSync(${JSON.stringify(observedPath)}, JSON.stringify({
+        args: process.argv.slice(2), home: process.env.DSH_HOME
+      }));
+      process.exitCode = 7;
+    `)
+    const installed = { root: installation, value: manifest }
+    assert.equal(await developmentInstallerNeedsQuotes(installed, 'win32'), needsQuotes)
+    assert.equal(await developmentInstallerNeedsQuotes(installed, 'linux'), false)
+    assert.equal(await developmentInstallerNeedsQuotes(installed, 'darwin'), false)
+    // Stop at installation: this observes the public dev call without booting
+    // DSH, invoking pnpm, contacting a registry or opening a browser.
+    await assert.rejects(runDevelopmentServer(source, { dshPath }), { code: 'COMMAND_EXITED' })
+    const observed = JSON.parse(await readFile(observedPath, 'utf8'))
+    const quote = path => process.platform === 'win32' && needsQuotes ? '"' + path + '"' : path
+    assert.deepEqual(observed.args, ['plugin', '--profile', 'web', 'add', quote(source), '--ignore-scripts',
+      '--store-dir', quote(join(observed.home, 'pnpm-store')), '--offline'])
+    assert.equal(observed.home.startsWith(temporaryHomes), true)
+    await assert.rejects(stat(observed.home), { code: 'ENOENT' })
+  }
+  // An inline forwarder works too; a missing selected chunk is a read failure,
+  // not permission to guess at the argument transport.
+  await writeFile(dshPath, await readFile(join(installation, 'plugin-old.js')))
+  assert.equal(await developmentInstallerNeedsQuotes({ root: installation, value: manifest }, 'win32'), true)
+  await writeFile(dshPath, 'import("./plugin-missing.js")')
+  await assert.rejects(developmentInstallerNeedsQuotes({ root: installation, value: manifest }, 'win32'), { code: 'ENOENT' })
+})
+
+test('Windows installer paths use legacy shell quotes or direct argv without changing their values', async () => {
+  const paths = ['C:\\work space\\plugin # & (source)^', 'C:\\临时 目录\\pnpm-store', 'D:\\plain\\plugin.tgz']
+  for (const path of paths) {
+    assert.equal(developmentPathArgument(path, 'win32', true), '"' + path + '"')
+    assert.equal(developmentPathArgument(path, 'win32', false), path)
+    for (const platform of ['linux', 'darwin']) {
+      assert.equal(developmentPathArgument(path, platform, true), path)
+      assert.equal(developmentPathArgument(path, platform, false), path)
+    }
   }
   for (const path of ['C:\\%USERNAME%\\plugin', 'C:\\!NAME!\\plugin', 'C:\\bad"name', 'C:\\line\nbreak']) {
-    assert.throws(() => developmentPathArgument(path, 'win32'), { code: 'DEVELOPMENT_PATH_UNSUPPORTED' })
+    assert.throws(() => developmentPathArgument(path, 'win32', true), { code: 'DEVELOPMENT_PATH_UNSUPPORTED' })
   }
+  const direct = [...paths, 'C:\\%USERNAME%\\plugin', 'C:\\!NAME!\\plugin']
+  const { stdout } = await promisify(execFile)(process.execPath,
+    ['-e', 'process.stdout.write(JSON.stringify(process.argv.slice(1)))', '--',
+      ...direct.map(path => developmentPathArgument(path, 'win32', false))], { windowsHide: true })
+  assert.deepEqual(JSON.parse(stdout), direct)
 })
+
+test('legacy Windows shell forwarding delivers spaces and punctuation as single arguments',
+  { skip: process.platform !== 'win32' }, async t => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-installer-shell-'))
+    t.after(() => rm(root, { recursive: true, force: true }))
+    const entry = join(root, 'echo # & (args).cjs')
+    await writeFile(entry, 'process.stdout.write(JSON.stringify(process.argv.slice(2)))')
+    const paths = ['C:\\work space\\plugin # & (source)^', 'C:\\临时 目录\\pnpm-store', 'D:\\archive # & plugin.tgz']
+    // Reproduce the legacy forwarder's shell:true boundary with an argv echo
+    // child. No package installation or DSH application is started.
+    const { stdout } = await promisify(execFile)('"' + process.execPath + '"',
+      [entry, ...paths].map(path => developmentPathArgument(path, 'win32', true)),
+      { shell: true, windowsHide: true })
+    assert.deepEqual(JSON.parse(stdout), paths)
+  })
 
 test('reload observations require bounded metadata and never label inactive entries settled', () => {
   const observation = { sequence: 1, attempt: 0, warnings: 1, status: 'warning', active: 1, inactive: 0 }
