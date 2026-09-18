@@ -67,7 +67,8 @@ jobs:
           $runtime = Join-Path $env:RUNNER_TEMP "dsh-${{ matrix.dsh }}"
           $store = Join-Path $env:RUNNER_TEMP 'pnpm-store'
           New-Item -ItemType Directory -Force -Path $runtime | Out-Null
-          pnpm --dir $runtime --store-dir $store add --ignore-scripts --save-exact "@deepseek-ai/dsh@${{ matrix.dsh }}"
+          Copy-Item ".github/dsh-runtimes/${{ matrix.dsh }}/package.json", ".github/dsh-runtimes/${{ matrix.dsh }}/pnpm-lock.yaml" -Destination $runtime
+          pnpm --dir $runtime --store-dir $store install --frozen-lockfile --ignore-scripts
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "DSH_RUNTIME=$runtime" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Check integration against this DSH lane's declarations
@@ -117,9 +118,11 @@ jobs:
           $preview = Join-Path $env:RUNNER_TEMP 'dsh-preview'
           $store = Join-Path $env:RUNNER_TEMP 'pnpm-store'
           New-Item -ItemType Directory -Force -Path $release, $preview | Out-Null
-          pnpm --dir $release --store-dir $store add --ignore-scripts --save-exact '@deepseek-ai/dsh@0.1.5-rc.2'
+          Copy-Item '.github/dsh-runtimes/0.1.5-rc.2/package.json', '.github/dsh-runtimes/0.1.5-rc.2/pnpm-lock.yaml' -Destination $release
+          Copy-Item '.github/dsh-runtimes/0.1.6-alpha.1/package.json', '.github/dsh-runtimes/0.1.6-alpha.1/pnpm-lock.yaml' -Destination $preview
+          pnpm --dir $release --store-dir $store install --frozen-lockfile --ignore-scripts
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pnpm --dir $preview --store-dir $store add --ignore-scripts --save-exact '@deepseek-ai/dsh@0.1.6-alpha.1'
+          pnpm --dir $preview --store-dir $store install --frozen-lockfile --ignore-scripts
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "DSH_RELEASE=$release" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "DSH_PREVIEW=$preview" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8

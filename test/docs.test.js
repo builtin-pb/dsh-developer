@@ -23,6 +23,13 @@ test('keeps current installation guidance and typed examples aligned with the au
       assert.equal(lock.packages['node_modules/' + dependency].version, version)
     }
   }
+  for (const version of [DSH_COMPATIBILITY_TARGET, DSH_PREVIEW_TARGET]) {
+    const runtime = new URL('../.github/dsh-runtimes/' + version + '/', import.meta.url)
+    const manifest = JSON.parse(await readFile(new URL('package.json', runtime), 'utf8'))
+    assert.equal(manifest.dependencies['@deepseek-ai/dsh'], version, 'CI runtime must pin its reviewed launcher')
+    assert.equal(manifest.private, true)
+    await readFile(new URL('pnpm-lock.yaml', runtime), 'utf8')
+  }
 })
 
 test('keeps both human-facing READMEs strong, concise, linked, and package-visible', async () => {

@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "packageManager": "pnpm@11.7.0",
+  "dependencies": {
+    "@deepseek-ai/dsh": "0.1.5-rc.2"
+  }
+}
