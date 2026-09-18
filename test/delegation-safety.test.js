@@ -199,6 +199,64 @@ test('authority evidence applies to approval-disabled and maximum-sandbox top-le
   assert.match(formatAuthoritySafetyReport(maximumReport), /^PASS Authority safety/u)
 })
 
+test('formats unknown JSON reports and retains historical scope fallbacks', () => {
+  const legacy = JSON.parse(JSON.stringify({
+    ok: false,
+    applies: true,
+    agent: { depth: 2 },
+    tools: [{ status: 'fixed-scope' }, { status: 'escalation-advertised' }],
+    checks: [{ status: 'PASS' }, { status: 'FAIL', id: 'schema', message: 'Escalation is exposed.' }],
+    evidenceDigest: 'sha256:test',
+  }))
+  const details = '\nFAIL schema: Escalation is exposed.\nFixed-scope tools: 1/2\nEvidence: sha256:test'
+  assert.equal(formatDelegationSafetyReport(legacy), 'FAIL Delegation safety (delegated child depth 2)' + details)
+  assert.equal(formatAuthoritySafetyReport(legacy), 'FAIL Authority safety (fixed-authority agent)' + details)
+  assert.equal(formatAuthoritySafetyReport({ ...legacy, authority: { reasons: ['approval-disabled'] } }),
+    'FAIL Authority safety (approval-disabled)' + details)
+  assert.equal(formatAuthoritySafetyReport({ ...legacy, authority: { reasons: null } }),
+    formatAuthoritySafetyReport(legacy))
+  assert.equal(formatDelegationSafetyReport({ ...legacy, agent: { delegated: null, depth: 2 } }),
+    formatDelegationSafetyReport(legacy))
+
+  // Unused fields need not match today's full report schema.
+  const mutable = { ...legacy, applies: false, agent: {}, tools: null, authority: 'unused' }
+  assert.equal(formatAuthoritySafetyReport(mutable),
+    'FAIL Authority safety (mutable-authority agent)\nFAIL schema: Escalation is exposed.\nEvidence: sha256:test')
+  assert.equal(formatDelegationSafetyReport({ ...legacy, authority: 'unused' }),
+    formatDelegationSafetyReport(legacy))
+})
+
+test('rejects malformed consumed safety report fields without coercing them', () => {
+  const report = inspectDelegationSafety(agent(delegatedHeader()), [schema('bash', [])])
+  const invalid = [
+    null, [], {}, false,
+    { ...report, ok: 'false' },
+    { ...report, applies: 1 },
+    { ...report, agent: null },
+    { ...report, agent: [] },
+    { ...report, agent: { delegated: 'yes', depth: 1 } },
+    { ...report, agent: { delegated: true, depth: {} } },
+    { ...report, checks: null },
+    { ...report, checks: [null] },
+    { ...report, checks: [{ status: 1 }] },
+    { ...report, checks: [{ status: 'FAIL', id: {}, message: 'bad' }] },
+    { ...report, checks: [{ status: 'FAIL', id: 'bad', message: [] }] },
+    { ...report, tools: {} },
+    { ...report, tools: [null] },
+    { ...report, tools: [{ status: false }] },
+    { ...report, evidenceDigest: {} },
+  ]
+  for (const format of [formatAuthoritySafetyReport, formatDelegationSafetyReport]) {
+    for (const value of invalid) {
+      assert.throws(() => format(value), { name: 'TypeError', message: /^Invalid safety report/u })
+    }
+    for (const authority of [[], 'fixed', { reasons: 'fixed' }, { reasons: [{}] }]) {
+      assert.throws(() => format({ ...report, agent: { delegated: false }, authority }),
+        { name: 'TypeError', message: /^Invalid safety report authority/u })
+    }
+  }
+})
+
 test('authority evidence fails description-only escalation guidance', () => {
   const misleading = schema('pwsh', [])
   misleading.description = 'Retry by escalating the exact command.'
@@ -221,6 +279,44 @@ test('authority state prefers durable events and falls back to composed services
   assert.deepEqual(resolveAuthorityState(ctx, composed).reasons, [])
   composed.session.events.push({ type: 'approval/policy', data: { policy: 'never' } })
   assert.deepEqual(resolveAuthorityState(ctx, composed).reasons, ['approval-disabled'])
+})
+
+test('reads current upstream session snapshots before service defaults', () => {
+  const events = [
+    { type: 'sandbox/mode', data: { mode: 'danger-full-access' } },
+    { type: 'approval/policy', data: { policy: 'never' } },
+  ]
+  let snapshots = 0
+  const session = {
+    header: {},
+    snapshotEvents() {
+      assert.equal(this, session)
+      snapshots += 1
+      return Object.freeze([...events])
+    },
+  }
+  const current = { session }
+  const ctx = {
+    get(name) {
+      if (name === 'sandboxPolicy') return { resolve: () => ({ mode: 'workspace-write' }) }
+      if (name === 'approval') return { config: { policy: 'ask' } }
+    },
+  }
+  assert.equal(Object.hasOwn(session, 'events'), false)
+  const state = resolveAuthorityState(ctx, current)
+  assert.equal(snapshots, 1)
+  assert.equal(state.sandboxMode, 'danger-full-access')
+  assert.equal(state.approvalPolicy, 'never')
+  assert.deepEqual(state.reasons, ['approval-disabled', 'maximum-sandbox'])
+
+  events.push({ type: 'sandbox/mode', data: { mode: 'workspace-write' } })
+  events.push({ type: 'approval/policy', data: { policy: 'ask' } })
+  assert.equal(resolveAuthorityState(ctx, current).fixed, false)
+
+  events.length = 0
+  const fallback = resolveAuthorityState(ctx, current)
+  assert.equal(fallback.sandboxMode, 'workspace-write')
+  assert.equal(fallback.approvalPolicy, 'ask')
 })
 
 test('delegation evidence is stable after fixed-scope projection regardless of schema order', () => {

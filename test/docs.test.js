@@ -12,8 +12,8 @@ test('keeps current installation guidance and typed examples aligned with the au
     assert.ok(text.includes(DSH_COMPATIBILITY_TARGET), file + ' must identify the blocking runtime')
     assert.ok(text.includes(DSH_PREVIEW_TARGET), file + ' must identify the advisory runtime')
   }
-  for (const name of ['package-check', 'session-status']) {
-    const root = new URL('../examples/' + name + '/', import.meta.url)
+  for (const name of ['dsh-developer', 'package-check', 'session-status']) {
+    const root = new URL(name === 'dsh-developer' ? '../' : '../examples/' + name + '/', import.meta.url)
     const manifest = JSON.parse(await readFile(new URL('package.json', root), 'utf8'))
     const lock = JSON.parse(await readFile(new URL('package-lock.json', root), 'utf8'))
     const cohort = Object.entries(manifest.devDependencies).filter(([name]) => name.startsWith('@deepseek-ai/dsh-'))

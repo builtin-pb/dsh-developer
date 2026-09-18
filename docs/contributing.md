@@ -11,6 +11,20 @@ The default suite is keyless and deterministic. Process fixtures can also be ena
 
 Development CI also tests script arguments on pnpm 11.7.0, Yarn Classic 1.22.22 and Yarn 4.18.0. For the same local checks, enable `DSH_DEVELOPER_PNPM_TEST=1` with that pnpm on PATH and set `DSH_DEVELOPER_YARN_CLASSIC_ROOT` and `DSH_DEVELOPER_YARN_MODERN_ROOT` to disposable npm installation prefixes containing those exact packages. Then run `test:development` through the CLI.
 
+## Check upstream API compatibility
+
+`npm run validate` includes strict, no-emit TypeScript checking of the JavaScript modules that integrate with DSH. These modules use `@ts-check` and upstream type imports; TypeScript is a development dependency, and installation still runs JavaScript directly without a build step.
+
+Run just the compiler check with `npm run typecheck`. To check the same implementation against another installed DSH dependency graph:
+
+```sh
+npm run typecheck -- --runtime /path/to/dsh-installation
+```
+
+The directory must contain `node_modules/@deepseek-ai/dsh`. The checker uses that installation's declarations instead of the repository's pinned DSH development types, including the hot-reload provider declared by that CLI. CI runs it against both exact audit lanes and the moving `latest`, `next` and `alpha` installations, before their runtime checks. Release checks block CI; preview and alpha checks remain advisory.
+
+The checked scope is listed in `tsconfig.json`: plugin registration, native commands and tools, authority hooks, isolated Build context adapters, and disposable development probes. Add new DSH-facing modules there and mark them `@ts-check`. Derive service, event and callback contracts from upstream declarations; validate unknown inputs rather than casting away incompatibilities. Upstream declarations are checked too, so broken exported types cannot silently erase a boundary to `any`. Internal analysis engines are not yet fully type-checked. Static checking catches signature drift; runtime tests remain necessary for loading, cancellation, cleanup and behavior.
+
 ## Install the current checkout
 
 The README's `v0.1.3` Git tag is a published artifact, not this working tree. To exercise current changes from a checkout:

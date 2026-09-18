@@ -1,3 +1,4 @@
+// @ts-check
 import { readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -16,6 +17,7 @@ const cliPath = fileURLToPath(new URL('./bin/dsh-developer.js', import.meta.url)
 const uiPatchPath = fileURLToPath(new URL('./presets/playwright-mcp.cordis.yml', import.meta.url))
 const LOAD_WITNESS_FILENAME = '.dsh-developer-load-witness'
 
+/** @param {string} markdown @returns {{name: string, description: string, whenToUse: string, content: string}} */
 function parseSkill(markdown) {
   const match = /^---\r?\nname:\s*([a-z0-9-]+)\r?\ndescription:\s*"((?:[^"\\]|\\.)*)"\r?\nwhenToUse:\s*"((?:[^"\\]|\\.)*)"\r?\n---\r?\n([\s\S]+)$/u.exec(markdown)
   if (!match) throw new Error('dsh-developer: bundled SKILL.md has invalid frontmatter')
@@ -27,6 +29,7 @@ function parseSkill(markdown) {
   }
 }
 
+/** @param {{ resolveAppExit: () => import("@deepseek-ai/cordis").Context["appExit"] | undefined, tools: import("@deepseek-ai/dsh-tools").ToolRuntime }} dependencies */
 async function completeLoadProbe({ resolveAppExit, tools }) {
   const token = process.env.DSH_DEVELOPER_LOAD_PROBE
   if (token === undefined) return
@@ -44,6 +47,7 @@ async function completeLoadProbe({ resolveAppExit, tools }) {
   requestExit(0)
 }
 
+/** @param {import("@deepseek-ai/cordis").Context} ctx */
 export async function apply(ctx) {
   const markdown = await readFile(new URL('./skills/dsh-developer/SKILL.md', import.meta.url), 'utf8')
   const skill = parseSkill(markdown)
@@ -70,9 +74,10 @@ export async function apply(ctx) {
       return { DSH_DEVELOPER_BIN: cliPath, DSH_DEVELOPER_UI_PATCH: uiPatchPath, DSH_DEVELOPER_DSH: process.argv[1] }
     },
   })
+  // Constrain names before Cordis's general string lookup can return an untyped service.
   const authoritySources = {
-    sandboxPolicy: () => ctx.get?.('sandboxPolicy'),
-    approval: () => ctx.get?.('approval'),
+    sandboxPolicy: () => ctx.get?.(/** @satisfies {keyof import('@deepseek-ai/cordis').Context} */ ('sandboxPolicy')),
+    approval: () => ctx.get?.(/** @satisfies {keyof import('@deepseek-ai/cordis').Context} */ ('approval')),
   }
   registerAuthoritySafetyWithDependencies({
     authoritySources,
@@ -107,7 +112,7 @@ export async function apply(ctx) {
     injectProbeServices: (callback) => ctx.inject(['agentLoop', 'appExit'], callback),
   })
   await completeLoadProbe({
-    resolveAppExit: () => ctx.get?.('appExit'),
+    resolveAppExit: () => ctx.get?.(/** @satisfies {keyof import('@deepseek-ai/cordis').Context} */ ('appExit')),
     tools: ctx.tools,
   })
 }

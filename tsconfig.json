@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowJs": true,
+    "checkJs": false,
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": false,
+    "types": [
+      "node",
+      "@deepseek-ai/cordis-plugin-hmr"
+    ],
+    "noUncheckedSideEffectImports": true
+  },
+  "files": [
+    "scripts/dsh-context.ts",
+    "index.js",
+    "lib/native-commands.js",
+    "lib/native-tool.js",
+    "lib/native-tool-internal.js",
+    "lib/ui-cli-tool.js",
+    "lib/ui-policy.js",
+    "lib/delegation-safety.js",
+    "lib/delegation-probe.js",
+    "lib/development-probe.js",
+    "lib/development-startup.js",
+    "lib/development-server-probe.js",
+    "lib/development-watch-probe.js",
+    "lib/native-cell-context.js"
+  ]
+}

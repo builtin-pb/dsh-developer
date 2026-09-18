@@ -56,11 +56,12 @@
     "examples/session-status"
   ],
   "scripts": {
-    "check": "node --check index.js && node --check bin/dsh-developer.js && node --check lib/cell-admission.js && node --check lib/cell-admission-grant.js && node --check lib/cell-admission-internal.js && node --check lib/cell-stage-authority.js && node --check lib/cell-transaction-authority.js && node --check lib/cli-options.js && node --check lib/client-bundle-audit.js && node --check lib/cohort-range.js && node --check lib/compatibility.js && node --check lib/compatibility-internal.js && node --check lib/delegation-probe.js && node --check lib/delegation-safety.js && node --check lib/dependency-audit.js && node --check lib/dsh-installation.js && node --check lib/hook-bridge-doctor.js && node --check lib/hook-bridge-doctor-internal.js && node --check lib/isolated-cell.js && node --check lib/isolated-cell-internal.js && node --check lib/lab/wsl-bubblewrap.js && node --check lib/lab/crash-controller.js && node --check lib/lab/text-tar.js && node --check lib/native-cell-workflow.js && node --check lib/native-tool.js && node --check lib/native-tool-internal.js && node --check lib/profile-attestation.js && node --check lib/profile-attestation-internal.js && node --check lib/profile-preflight.js && node --check lib/profile-preflight-internal.js && node --check lib/recovery-actions.js && node --check lib/source-migration.js && node --check lib/source-migration-internal.js && node --check lib/source-migration-rules.js && node --check lib/ui-capabilities.js && node --check lib/ui-cli.js && node --check lib/ui-cli-internal.js && node --check lib/ui-configuration.js && node --check lib/ui-setup.js && node --check lib/ui-cli-tool.js && node --check lib/ui-policy.js && node --check lib/upstream-impact.js && node --check lib/upstream-impact-internal.js && node --check lib/web-route-audit.js && node --check lib/exclusive-rename.js && node --check lib/lab/apple-container.js && node --check lib/lab/apple/crash-controller.js && node --check lib/project.js && node --check lib/knowledge.js && node --check lib/development.js && node --check lib/development-launch.js && node --check lib/development-startup.js && node --check lib/development-probe.js && node --check lib/development-receipt.js && node --check lib/development-server-probe.js && node --check lib/development-watch-probe.js && node --check lib/development-browser.js && node --check lib/session.js",
+    "check": "node --check index.js && node --check bin/dsh-developer.js && node --check lib/cell-admission.js && node --check lib/cell-admission-grant.js && node --check lib/cell-admission-internal.js && node --check lib/cell-stage-authority.js && node --check lib/cell-transaction-authority.js && node --check lib/cli-options.js && node --check lib/client-bundle-audit.js && node --check lib/cohort-range.js && node --check lib/compatibility.js && node --check lib/compatibility-internal.js && node --check lib/delegation-probe.js && node --check lib/delegation-safety.js && node --check lib/dependency-audit.js && node --check lib/dsh-installation.js && node --check lib/hook-bridge-doctor.js && node --check lib/hook-bridge-doctor-internal.js && node --check lib/isolated-cell.js && node --check lib/isolated-cell-internal.js && node --check lib/lab/wsl-bubblewrap.js && node --check lib/lab/crash-controller.js && node --check lib/lab/text-tar.js && node --check lib/native-cell-context.js && node --check lib/native-cell-workflow.js && node --check lib/native-tool.js && node --check lib/native-tool-internal.js && node --check lib/profile-attestation.js && node --check lib/profile-attestation-internal.js && node --check lib/profile-preflight.js && node --check lib/profile-preflight-internal.js && node --check lib/recovery-actions.js && node --check lib/source-migration.js && node --check lib/source-migration-internal.js && node --check lib/source-migration-rules.js && node --check lib/ui-capabilities.js && node --check lib/ui-cli.js && node --check lib/ui-cli-internal.js && node --check lib/ui-configuration.js && node --check lib/ui-setup.js && node --check lib/ui-cli-tool.js && node --check lib/ui-policy.js && node --check lib/upstream-impact.js && node --check lib/upstream-impact-internal.js && node --check lib/web-route-audit.js && node --check lib/exclusive-rename.js && node --check lib/lab/apple-container.js && node --check lib/lab/apple/crash-controller.js && node --check lib/project.js && node --check lib/knowledge.js && node --check lib/development.js && node --check lib/development-launch.js && node --check lib/development-startup.js && node --check lib/development-probe.js && node --check lib/development-receipt.js && node --check lib/development-server-probe.js && node --check lib/development-watch-probe.js && node --check lib/development-browser.js && node --check lib/session.js",
     "test": "node test/run.js",
-    "validate": "npm run check && npm test",
+    "validate": "npm run check && npm run typecheck && npm test",
     "test:development": "node --test test/project.test.js test/knowledge.test.js test/development.test.js test/session.test.js",
-    "test:development:dsh": "node --test test/development.integration.test.js"
+    "test:development:dsh": "node --test test/development.integration.test.js",
+    "typecheck": "node scripts/typecheck.js"
   },
   "dsh": {
     "bundle": {
@@ -108,5 +109,27 @@
     "@babel/parser": "8.0.5",
     "@babel/traverse": "8.0.5",
     "semver": "7.8.5"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.2",
+    "@deepseek-ai/cordis-plugin-hmr": "1.0.17",
+    "@deepseek-ai/cordis-plugin-loader": "1.0.3",
+    "@deepseek-ai/dsh-agent": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-agent-loop": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-agent-presets": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-client-connection": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-cmdline": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-commands": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-host-webserver": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-permission-presets": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-sandbox-policy": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-shell-env": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-skill": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-tools": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-user-approval": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-workspace": "0.1.5-rc.2",
+    "@types/node": "22.18.0",
+    "commander": "15.0.0",
+    "typescript": "5.9.3"
   }
 }

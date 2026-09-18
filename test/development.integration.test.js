@@ -782,9 +782,19 @@ test('native Host hot reload disposes and reapplies edited source in the same We
         assert.equal((await records()).at(-1).version, 2, 'syntax failure retains the previous plugin')
         await writeFile(join(source, 'value.js'), 'export const version = 3\n')
         await until(async () => (await records()).at(-1)?.version === 3 && reloads.at(-1)?.status === 'settled')
+        const warningsBeforeActivationFailure = reloads.at(-1).warnings
         await writeFile(join(source, 'value.js'), 'export const version = 4\n')
-        await until(() => reloads.at(-1)?.status === 'failed')
-        assert(reloads.at(-1).inactive > 0)
+        await until(async () => {
+          const observation = reloads.at(-1)
+          if (observation?.status === 'failed' && observation.inactive > 0) return true
+          // Current DSH HMR rolls a failed activation back to the previous
+          // plugin. Prove restoration as well as the warning; a merely active
+          // composition does not prove the failed edit was rolled back.
+          const last = (await records()).at(-1)
+          return observation?.status === 'warning' && observation.inactive === 0
+            && observation.warnings > warningsBeforeActivationFailure
+            && last?.event === 'apply' && last.version === 3
+        })
         await writeFile(join(source, 'value.js'), 'export const version = 5\n')
         await until(async () => (await records()).at(-1)?.version === 5 && reloads.at(-1)?.status === 'settled')
         assert.equal(reloads.at(-1).inactive, 0)

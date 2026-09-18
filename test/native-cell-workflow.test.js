@@ -1770,6 +1770,22 @@ test('live workspace authority rejects missing, child, relative, and junction-ma
   }
 })
 
+test('live workspace authority rejects whitespace-only session header IDs', async () => {
+  const root = await mkdtemp(join(await realpath(tmpdir()), 'sample-dsh-cell-authority-'))
+  try {
+    for (const id of [' ', '\t\r\n', '\u00a0']) {
+      const owner = { ctx: {}, session: { header: { id, cwd: root, origin: 'user', delegationDepth: 0 } } }
+      await assert.rejects(
+        inspectLiveAgentWorkspace(owner, { isRootAgent: (candidate) => candidate === owner }),
+        { code: 'CELL_WORKSPACE_AUTHORITY_UNAVAILABLE' },
+        'Whitespace-only header.id must be rejected: ' + JSON.stringify(id),
+      )
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 // These roots are disposable fixtures, never operator recovery paths.
 async function removeRecoveryFixture(workflow) {
   const transaction = workflow.value.slot.record?.transaction

@@ -70,6 +70,11 @@ jobs:
           pnpm --dir $runtime --store-dir $store add --ignore-scripts --save-exact "@deepseek-ai/dsh@${{ matrix.dsh }}"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "DSH_RUNTIME=$runtime" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Check integration against this DSH lane's declarations
+        shell: pwsh
+        run: |
+          npm run typecheck -- --runtime $env:DSH_RUNTIME
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Record exact-lane capability evidence
         shell: pwsh
         run: |
@@ -224,5 +229,7 @@ jobs:
           $env:DSH_DEVELOPER_DSH = Join-Path $runtime "node_modules/.bin/$bin"
           $manifest = Get-Content -Raw (Join-Path $runtime 'node_modules/@deepseek-ai/dsh/package.json') | ConvertFrom-Json
           Write-Output "Registry channel ${{ matrix.dsh }} resolved to DSH $($manifest.version)"
+          npm run typecheck -- --runtime $runtime
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node bin/dsh-developer.js run --source . --script test:development:dsh --json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
