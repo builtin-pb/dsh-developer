@@ -29,6 +29,19 @@ const end = (kind = 'completed', turn = 1) => event('turn/end', { turn, reason: 
 const v3 = (...events) => [header, ...events.map((value, seq) => ({ ...value, seq }))]
 const jsonl = (events) => events.map((value) => JSON.stringify(value)).join('\n') + '\n'
 const codec = typeof zlib.zstdCompressSync === 'function' && typeof zlib.zstdDecompressSync === 'function'
+const eventLineBytes = 4 * 1024 * 1024
+
+function largeMessageLine(bytes) {
+  const message = event('assistant/message', { turn: 1, step: 1, message: { role: 'assistant', content: [
+    { type: 'text', text: 'HIDDEN_LARGE_MESSAGE' }, { type: 'reasoning', text: 'HIDDEN_LARGE_REASONING' },
+  ] } })
+  const padding = bytes - Buffer.byteLength(JSON.stringify(message))
+  // Exercise a byte bound, not a JavaScript character-count bound.
+  message.data.message.content[0].text += '界'.repeat(Math.floor(padding / 3)) + 'x'.repeat(padding % 3)
+  const line = JSON.stringify(message)
+  assert.equal(Buffer.byteLength(line), bytes)
+  return line
+}
 
 async function fixture(t) {
   const root = await fs.realpath(await fs.mkdtemp(join(tmpdir(), 'dsh-session-')))
@@ -783,10 +796,74 @@ test('redacts long valid arguments in linear time and scans secrets beyond the d
   assert.deepEqual(output, { calls: 3, secret: false, clipped: true, late: '[redacted: possible credential]' })
 })
 
+test('large ignored messages preserve tool failures, complete counts and turn/end without body export', async (t) => {
+  for (const compressed of [false, true]) await t.test(compressed ? 'concatenated frames' : 'plain JSONL', { skip: compressed && !codec }, async (t) => {
+    const f = await fixture(t)
+    // Only the observed event size is reproduced; all content is synthetic.
+    for (const size of [364212, eventLineBytes]) {
+      const bytes = Buffer.from(jsonl([header, call('a')]) + largeMessageLine(size) + '\n'
+        + jsonl([result('a', 'synthetic tool failure', true), end()]))
+      const content = compressed ? Buffer.concat([bytes.subarray(0, 64 * 1024), bytes.subarray(64 * 1024)]
+        .map(piece => zlib.zstdCompressSync(piece))) : bytes
+      const path = await f.write(content, compressed ? '.jsonl.zstd' : '.jsonl')
+      const report = await inspectSession(path)
+      assert.equal(report.ok, true)
+      assert.equal(report.limits.lineBytes, eventLineBytes)
+      assert.equal(report.usage.decodedBytes, bytes.length)
+      assert.equal(report.usage.events, 5)
+      assert.equal(report.usage.lines, 5)
+      assert.equal(report.usage.frames, compressed ? 2 : 0)
+      assert.equal(report.counts.ignoredEvents, 1)
+      assert.equal(report.counts.toolCalls, 1)
+      assert.equal(report.counts.toolResults, 1)
+      assert.equal(report.counts.failedTools, 1)
+      assert.equal(report.counts.turnEnds, 1)
+      assert.equal(report.calls[0].status, 'failed')
+      assert.equal(report.errors[0].summary, 'synthetic tool failure')
+      assert.deepEqual(report.completion, { state: 'completed', turn: 1, reason: 'completed', evidence: 'turn/end' })
+      assert.deepEqual(report.warnings, [])
+      assert.deepEqual(report.omissions, { calls: 0, errors: 0, processFailures: 0, outputBound: false })
+      for (const output of [JSON.stringify(report), formatSessionReport(report)]) {
+        assert(!output.includes('HIDDEN_LARGE_'))
+        assert(!output.includes('界'))
+        assert(Buffer.byteLength(output) <= report.limits.outputBytes)
+      }
+    }
+  })
+})
+
+test('large JSONL events over the byte cap or malformed within it fail even after turn/end', async (t) => {
+  for (const compressed of [false, true]) await t.test(compressed ? 'concatenated frames' : 'plain JSONL', { skip: compressed && !codec }, async (t) => {
+    const f = await fixture(t)
+    for (const [line, code] of [[largeMessageLine(eventLineBytes + 1), 'SESSION_LIMIT'],
+      [largeMessageLine(eventLineBytes).slice(0, -1), 'SESSION_JSON_INVALID']]) {
+      for (const ending of ['\n', '']) {
+        const bytes = Buffer.from(jsonl([header, call('a'), result('a', 'synthetic tool failure', true), end()]) + line + ending)
+        const content = compressed ? Buffer.concat([bytes.subarray(0, 64 * 1024), bytes.subarray(64 * 1024)]
+          .map(piece => zlib.zstdCompressSync(piece))) : bytes
+        await assert.rejects(inspectSession(await f.write(content, compressed ? '.jsonl.zstd' : '.jsonl')), error => {
+          assert.equal(error.code, code)
+          if (code === 'SESSION_LIMIT') assert.deepEqual(error.details, { bound: 'lineBytes', max: eventLineBytes })
+          else assert.deepEqual(error.details, { line: 5 })
+          assert(!JSON.stringify(error).includes('HIDDEN_LARGE_'))
+          assert(!error.message.includes('HIDDEN_LARGE_'))
+          return true
+        })
+      }
+    }
+  })
+})
+
 test('bounds compressed/plain source, decoded totals, per-frame expansion, lines and events', { skip: !codec }, async (t) => {
   const f = await fixture(t)
   const baseline = await inspectSession(await f.write([header]))
   const limits = baseline.limits
+  assert.deepEqual(limits, {
+    compressedBytes: 8 * 1024 * 1024, decodedBytes: 32 * 1024 * 1024,
+    frameBytes: 4 * 1024 * 1024, windowBytes: 8 * 1024 * 1024, frames: 4096, lineBytes: eventLineBytes,
+    lines: 50000, events: 25000, calls: 100, outputBytes: 64 * 1024,
+    valueNodes: 128, valueDepth: 6, valueChars: 4096, textChars: 1024, selectedCalls: 20,
+  })
   for (const [extension, bound] of [['.jsonl.zstd', 'compressedBytes'], ['.jsonl', 'decodedBytes']]) {
     const path = await f.write('', extension)
     await fs.truncate(path, limits[bound] + 1)
