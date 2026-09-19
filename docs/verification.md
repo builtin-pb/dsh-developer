@@ -21,6 +21,39 @@ usable examples, not a measured reliability improvement or error-free work.
 Packing instructions were also corrected after repeated DeepSeek runs encountered
 Doctor's rejection of an archive left inside the inspected source.
 
+A separate vague project-resumption request compared the original and revised
+guidance with the same starter, runtime and twelve-minute maximum per run. Each
+delivered archive passed 18 independently specified native checkpoint cases
+across 14 fresh processes: project switching, replacement, restart and retaining
+the previous handoff after a failed save. Both also retrieved known human context
+from real persisted sessions without a saved handoff.
+
+Blind review and a subsequent targeted native-history check exposed semantic
+errors in the generated plugins. The revised artifact could select a newer idle
+conversation instead of recently resumed work; the baseline excluded ordinary
+human forks and prioritized creation time. The two artifacts have useful but
+different strengths; one pair establishes no causal prompt advantage. The shared
+Build guidance was not tuned further on this task. Tool improvements address observed
+setup, source-navigation and helper-delegation friction.
+
+The integrated tooling changes passed 888 local tests with 45 optional
+integrations skipped, plus release and preview compatibility lifecycles.
+Project hints and recovery from an invalid knowledge source were also exercised
+through real Agents in both headless and Web compositions. A separately
+registered helper tool passed three cases in each lane/composition pair, with
+disposable profiles removed afterward. Helper attachment
+analysis retains its bounded signature rules and refuses transfers through
+opaque caller/helper modules. Independent review exposed an eager computed-name
+execution gap and wrapped assignments missing from binding analysis. Repairs
+track eager computed names and assignment targets before coverage decisions;
+implicit-coercion cases involving opaque code retain refusal.
+
+The follow-up also reproduced an [upstream fork-read defect](https://github.com/deepseek-ai/deepseek-harness/discussions/7122)
+in both 0.1.5-rc.2 and 0.1.6-alpha.2: `sessionQuery.readSession()` applies a
+creation-only invariant to a valid complete fork log. Native surface and
+restoration-based observation reads succeeded. The factory/SessionStore
+reproduction made no model calls and did not exercise the UI fork command.
+
 Source reads also stop at the observed file size plus one growth-detection byte;
 controlled growth, truncation, partial-read and cancellation checks passed.
 The shared guidance and scanner repair [passed all 18 CI jobs](https://github.com/builtin-pb/dsh-developer/actions/runs/35410630463),

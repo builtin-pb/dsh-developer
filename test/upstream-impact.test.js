@@ -4,10 +4,12 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
 import { scanOrdinaryTree } from '../lib/files.js'
+import { doctorPlugin } from '../lib/doctor.js'
 import { formatUpstreamImpactReport, inspectUpstreamImpact } from '../lib/upstream-impact.js'
 import {
   classifyHostInjectContract,
   comparePackageSurfaces,
+  describeHostAttachmentFailure,
   discoverUpstreamReferences,
   inspectUpstreamImpactInternal,
 } from '../lib/upstream-impact-internal.js'
@@ -232,6 +234,90 @@ test('separates deferred loader visibility from activation-reachable loader proo
   }
 })
 
+test('proves imported helper attachments without moving registrations into apply', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-developer-impact-context-forwarding-'))
+  try {
+    await sourceFixture(root)
+    await writeFile(join(root, 'index.js'), [
+      "import { register } from './register.js'",
+      "export const inject = ['tools', 'sessionQuery']",
+      'export function apply(ctx) { register(ctx) }',
+    ].join('\n'))
+    await writeFile(join(root, 'register.js'), [
+      'export function register(ctx) {',
+      "  const query = ctx.get('sessionQuery')",
+      "  ctx.tools.register({ name: 'brief', execute: () => query.list() })",
+      "  ctx.inject(['skills'], () => {})",
+      '}',
+    ].join('\n'))
+    const references = discoverUpstreamReferences(await scanOrdinaryTree(root))
+    assert.equal(classifyHostInjectContract(references).ok, true)
+    assert.deepEqual(references.services.map((value) => value.service), ['sessionQuery', 'skills', 'tools'])
+    assert.ok(references.services.find((value) => value.service === 'sessionQuery').evidence
+      .some((value) => value.path === 'register.js' && value.kind === 'service-lookup'))
+    assert.ok(references.services.find((value) => value.service === 'tools').evidence
+      .some((value) => value.path === 'register.js' && value.kind === 'context-property'))
+    const gate = (await doctorPlugin(root, { runtime: 'skip' })).checks
+      .find((value) => value.id === 'compatibility.upstream-attachments')
+    assert.equal(gate.status, 'PASS')
+
+    // Literal declarations cannot compensate for hidden context or activation uses.
+    for (const [body, category, checkId = 'compatibility.upstream-attachments'] of [
+      ['ctx.get(serviceName)', 'contextCoverage'],
+      ['ctx.inject(services, callback)', 'injectionValidity'],
+      ["ctx.inject(['@deepseek-ai/dsh-client-hidden'], callback)", 'injectionValidity', 'dsh.host-client-inject'],
+      ['const alias = ctx; alias.hidden.run()', 'contextCoverage'],
+      ['unknown(ctx)', 'contextCoverage'],
+      ['arguments[0].hidden.run()', 'contextCoverage'],
+      ['import(packageName)', 'activationCoverage'],
+    ]) {
+      await writeFile(join(root, 'register.js'), `export function register(ctx) { ${body} }\n`)
+      const result = discoverUpstreamReferences(await scanOrdinaryTree(root))
+      const contract = classifyHostInjectContract(result)
+      assert.equal(contract.ok, false, body)
+      assert.deepEqual(contract[category].paths, ['register.js'], body)
+      const refusal = (await doctorPlugin(root, { runtime: 'skip' })).checks
+        .find((value) => value.id === checkId)
+      assert.equal(refusal.status, 'FAIL', body)
+      assert.equal(refusal.blocking, true, body)
+    }
+
+    await writeFile(join(root, 'register.js'), 'export function register(context) { context.hidden.run() }\n')
+    const renamed = discoverUpstreamReferences(await scanOrdinaryTree(root))
+    assert.equal(classifyHostInjectContract(renamed).ok, false)
+    assert.deepEqual(renamed.coverage.incompleteContextReferences, ['index.js'])
+
+    const mutation = 'eval("register = context => context.inject([\'@deepseek-ai/dsh-client-hidden\'], () => {})")'
+    for (const key of [mutation, `{ [Symbol.toPrimitive]() { ${mutation} } }`]) {
+      await writeFile(join(root, 'register.js'), [
+        'export function register(ctx) { ctx.tools.register({}) }',
+        `const trigger = { [${key}]() {} }`,
+      ].join('\n'))
+      const eagerMutation = discoverUpstreamReferences(await scanOrdinaryTree(root))
+      assert.equal(classifyHostInjectContract(eagerMutation).ok, false)
+      assert.deepEqual(eagerMutation.coverage.incompleteContextReferences, ['index.js'])
+      if (key === mutation) assert.deepEqual(eagerMutation.coverage.incompleteActivationClosure, ['register.js'])
+      const blocked = (await doctorPlugin(root, { runtime: 'skip' })).checks
+        .find(value => value.id === 'compatibility.upstream-attachments')
+      assert.equal(blocked.status, 'FAIL')
+      assert.equal(blocked.blocking, true)
+    }
+    await writeFile(join(root, 'register.js'), [
+      'export function register(ctx) { ctx.tools.register({}) }',
+      "(register) = context => context.inject(['@deepseek-ai/dsh-client-hidden'], () => {})",
+    ].join('\n'))
+    const reassigned = discoverUpstreamReferences(await scanOrdinaryTree(root))
+    assert.equal(classifyHostInjectContract(reassigned).ok, false)
+    assert.deepEqual(reassigned.coverage.incompleteContextReferences, ['index.js'])
+    const reassignedGate = (await doctorPlugin(root, { runtime: 'skip' })).checks
+      .find(value => value.id === 'compatibility.upstream-attachments')
+    assert.equal(reassignedGate.status, 'FAIL')
+    assert.equal(reassignedGate.blocking, true)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('separates observed inject validity from context and activation coverage without admitting opaque uses', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-developer-impact-coverage-categories-'))
   try {
@@ -255,6 +341,18 @@ test('separates observed inject validity from context and activation coverage wi
         assert.equal(contract[category].complete, false, body)
         assert.deepEqual(contract[category].paths, ['index.js'], body)
         assert.deepEqual(contract.paths, ['index.js'], body)
+        const message = describeHostAttachmentFailure(contract)
+        if (!contract.contextCoverage.complete) {
+          assert.match(message, /context-coverage: index\.js/u, body)
+          assert.match(message, /register\(ctx\).*ctx as the sole argument/u, body)
+          assert.match(message, /export \{ register as apply \}/u, body)
+          assert.match(message, /Adding inject entries does not prove context coverage/u, body)
+        } else {
+          assert.doesNotMatch(message, /register\(ctx\)/u, body)
+        }
+        if (!contract.activationCoverage.complete) assert.match(message, /activation-coverage: index\.js/u, body)
+        if (invalid) assert.match(message, /injection-declaration: index\.js/u, body)
+        assert.match(message, /incomplete coverage does not establish invalid inject syntax/u, body)
       }
       if (!invalid) assert.deepEqual(contract.unparsedDeclarations, [], body)
       assert.ok(references.services.some((value) => value.service === 'skills'), body)
@@ -1261,6 +1359,10 @@ test('distinguishes browser package metadata from invalid Host Cordis injections
     assert.equal(contract.ok, false)
     assert.deepEqual(contract.unparsedDeclarations, [])
     assert.deepEqual(contract.invalidValues, [])
+    assert.equal(describeHostAttachmentFailure(contract),
+      'Upstream attachment proof is blocked (client-package-injection: index.js). '
+      + 'Host inject accepts service names; browser package identifiers belong in package.json dsh.client.inject. '
+      + 'Inspect the listed declarations or context/activation expressions; incomplete coverage does not establish invalid inject syntax.')
     assert.deepEqual(contract.clientPackageInjections, [{
       path: 'index.js',
       kind: 'inject',
@@ -1375,6 +1477,9 @@ test('maps a declared service to exact package owners and emits stable scoped im
     const failed = dynamic.checks.find((value) => value.id === 'source.inject-contract')
     assert.equal(failed.status, 'FAIL')
     assert.deepEqual(failed.evidence.paths, ['index.js'])
+    assert.equal(failed.message,
+      'Upstream attachment proof is blocked (injection-declaration: index.js). '
+      + 'Inspect the listed declarations or context/activation expressions; incomplete coverage does not establish invalid inject syntax.')
 
     await writeFile(join(source, 'index.js'), [
       "export const inject = ['skills']",
@@ -1405,6 +1510,9 @@ test('maps a declared service to exact package owners and emits stable scoped im
     assert.equal(coverageFailure.evidence.injectionValidity.ok, true)
     assert.deepEqual(coverageFailure.evidence.activationCoverage.paths, ['index.js'])
     assert.deepEqual(coverageFailure.evidence.unparsedDeclarations, [])
+    assert.equal(coverageFailure.message,
+      'Upstream attachment proof is blocked (activation-coverage: index.js). '
+      + 'Inspect the listed declarations or context/activation expressions; incomplete coverage does not establish invalid inject syntax.')
     assert.match(formatUpstreamImpactReport(coverageGap), /activation-coverage: index\.js/u)
 
     await sourceFixture(source, {

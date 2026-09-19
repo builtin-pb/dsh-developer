@@ -1564,6 +1564,262 @@ test('resolves exact package imports and self-references while rejecting opaque 
   assert.deepEqual(empty.incompletePaths, ['package.json'])
 })
 
+test('proves exact ctx forwarding to audited local and imported helper bindings', () => {
+  const helper = "export function register(ctx) { ctx.tools.register(ctx.get('sessionQuery')) }"
+  for (const [entry, extra] of [
+    ["import { register } from './helper.js'", []],
+    ["import { register as install } from './helper.js'", []],
+    ["import register from './default.js'", [['default.js', helper.replace('export function', 'export default function')]]],
+    ["import { register } from './bridge.js'", [['bridge.js', "export { register } from './helper.js'"]]],
+    [helper.replace('export ', ''), []],
+  ]) {
+    const callee = entry.includes('as install') ? 'install' : 'register'
+    const source = `${entry}\nexport function apply(ctx) { ${callee}(ctx) }`
+    const files = new Map([['index.js', source], ['helper.js', helper], ...extra])
+    const closure = inspectExecutableModuleClosure(files, { entryPaths: ['index.js'] })
+    assert.ok(closure.modules.every((value) => value.context.complete), entry)
+    assert.deepEqual(closure.activationIncompletePaths, [], entry)
+    assert.deepEqual(closure.resources.exhausted, [], entry)
+    assert.equal(Object.isFrozen(closure.modules[0].context), true)
+    // A single source cannot certify an imported helper, nor infer its routes.
+    assert.equal(inspectExecutableModuleMetadata(source).context.complete, false, entry)
+    assert.ok(inspectWebRouteAuth(files, { entryPath: 'index.js' })
+      .coverage.incompletePaths.includes('index.js'), entry)
+  }
+})
+
+test('does not certify opaque, displaced, shadowed or mutable context forwarding', () => {
+  const helper = 'export function register(ctx) { ctx.tools.register({}) }'
+  const ordinaryImport = "import { register } from './helper.js'"
+  const cases = [
+    ["import { register } from 'external-helper'", 'register(ctx)', helper],
+    ["import { missing as register } from './helper.js'", 'register(ctx)', helper],
+    ["import { register } from './missing.js'", 'register(ctx)', helper],
+    [ordinaryImport, 'register(ctx)', 'export function register(context) { context.hidden.run() }'],
+    [ordinaryImport, 'register(ctx)', 'export function register(config, ctx) { config.hidden.run() }'],
+    [ordinaryImport, 'register(ctx)', 'export function register({ tools }) { tools.register({}) }'],
+    [ordinaryImport, 'register(ctx)', 'export function register(...args) { args[0].hidden.run() }'],
+    [ordinaryImport, 'register(ctx)', 'export const register = {}'],
+    [ordinaryImport, 'register(ctx)', helper + '; register = other'],
+    ["import register from './helper.js'", 'register(ctx)', helper.replace('export function', 'export default function') + '; register = other'],
+    ["import register from './helper.js'", 'register(ctx)', 'export default function ctx(ctx) { ctx.tools.register({}) }; ctx = other'],
+    [ordinaryImport, 'register = other; register(ctx)', helper],
+    [ordinaryImport, 'register(ctx, ctx)', helper],
+    [ordinaryImport, 'register(null, ctx)', helper],
+    [ordinaryImport, 'register(...[ctx])', helper],
+    [ordinaryImport, 'register?.(ctx)', helper],
+    [ordinaryImport, 'register.call(null, ctx)', helper],
+    [ordinaryImport, 'const alias = ctx; register(alias)', helper],
+    [ordinaryImport, '{ const register = external; register(ctx) }', helper],
+    [ordinaryImport, 'function nested(ctx) { ctx.hidden.run() }; nested(ctx)', helper],
+    ["import * as helper from './helper.js'", 'helper.register(ctx)', helper],
+  ]
+  for (const [prefix, body, implementation] of cases) {
+    const source = `${prefix}\nexport function apply(ctx) { ${body} }`
+    const closure = inspectExecutableModuleClosure(new Map([
+      ['index.js', source], ['helper.js', implementation],
+    ]), { entryPaths: ['index.js'] })
+    assert.equal(closure.modules.find((value) => value.sourcePath === 'index.js').context.complete,
+      false, source + '\n' + implementation)
+  }
+})
+
+test('retains helper context failures across exact forwarding chains and cycles', () => {
+  const files = new Map([
+    ['index.js', "import { register } from './helper.js'; export function apply(ctx) { register(ctx) }"],
+    ['helper.js', "import { finish } from './finish.js'; export function register(ctx) { finish(ctx) }"],
+    ['finish.js', "import { register } from './helper.js'; export function finish(ctx) { ctx.tools.register({}); register(ctx) }"],
+  ])
+  const exact = inspectExecutableModuleClosure(files, { entryPaths: ['index.js'] })
+  assert.ok(exact.modules.every((value) => value.context.complete))
+  assert.deepEqual(exact.activationIncompletePaths, [])
+  for (const body of [
+    'ctx.get(serviceName)',
+    'ctx.inject(services, callback)',
+    'ctx[serviceName].run()',
+    'const alias = ctx; alias.hidden.run()',
+    'return ctx',
+    'arguments[0].hidden.run()',
+    'eval("ctx.hidden.run()")',
+    'ctx = other; ctx.hidden.run()',
+    'unknown(ctx)',
+  ]) {
+    files.set('finish.js', `export function finish(ctx) { ${body} }`)
+    const closure = inspectExecutableModuleClosure(files, { entryPaths: ['index.js'] })
+    assert.equal(closure.modules.find((value) => value.sourcePath === 'finish.js').context.complete, false, body)
+  }
+  files.set('finish.js', "export function finish(ctx) { ctx.tools.register({}); import(packageName) }")
+  assert.deepEqual(inspectExecutableModuleClosure(files, { entryPaths: ['index.js'] })
+    .activationIncompletePaths, ['finish.js'])
+})
+
+test('tracks wrapped assignment targets before proving helper identity', () => {
+  const replacement = 'context => context.hidden.run()'
+  const writes = [
+    `(register) = ${replacement}`,
+    `((register)) = ${replacement}`,
+    `(register) ||= ${replacement}`,
+    '(register) += other',
+    '(register)++',
+    '--(register)',
+    `[(register)] = [${replacement}]`,
+    `[(register) = ${replacement}] = []`,
+    `({ value: (register) } = { value: ${replacement} })`,
+    '({ ...register } = other)',
+    '[...(register)] = other',
+    'for ((register) of replacements) {}',
+    'for ((register) in replacements) {}',
+    'for ([(register)] of replacements) {}',
+    'for ({ value: (register) } of replacements) {}',
+  ]
+  for (const write of writes) {
+    for (const declaration of ['export function register', 'export default function register']) {
+      const files = new Map([
+        ['index.js', `${declaration.includes('default') ? "import register" : "import { register }"} from './helper.js'; export function apply(ctx) { register(ctx) }`],
+        ['helper.js', `${declaration}(ctx) { ctx.tools.register({}) }; ${write}`],
+      ])
+      const closure = inspectExecutableModuleClosure(files, { entryPaths: ['index.js'] })
+      assert.ok(closure.modules.every(module => module.parsed), write)
+      assert.equal(closure.modules.find(module => module.sourcePath === 'index.js').context.complete,
+        false, write)
+      assert.equal(closure.modules.find(module => module.sourcePath === 'helper.js')
+        .functions.find(fn => fn.candidate).callableStable, false, write)
+    }
+  }
+  for (const harmless of [
+    'void (register)',
+    '(register).label = "helper"',
+    'function unused(register) { (register) = other }',
+    'for (const register of []) {}',
+  ]) {
+    const closure = inspectExecutableModuleClosure(new Map([['index.js',
+      `function register(ctx) { ctx.tools.register({}) }; ${harmless}; export function apply(ctx) { register(ctx) }`,
+    ]]), { entryPaths: ['index.js'] })
+    assert.equal(closure.modules[0].context.complete, true, harmless)
+  }
+  for (const target of ['(register as unknown)', '(<unknown>register)', 'register!', '(register satisfies Function)']) {
+    const closure = inspectExecutableModuleClosure(new Map([['index.ts',
+      `function register(ctx) { ctx.tools.register({}) }; ${target} = other; export function apply(ctx) { register(ctx) }`,
+    ]]), { entryPaths: ['index.ts'] })
+    assert.equal(closure.modules[0].parsed, true, target)
+    assert.equal(closure.modules[0].context.complete, false, target)
+  }
+})
+
+test('uses wrapped writes for context mutation and exported activation bindings too', () => {
+  const context = inspectExecutableModuleMetadata(
+    'export function apply(ctx) { (ctx) = other; ctx.tools.register({}) }',
+  )
+  assert.equal(context.context.complete, false)
+  const closure = inspectExecutableModuleClosure(new Map([['index.js',
+    'function register(ctx) { ctx.tools.register({}) }; let activate = register; (activate) = other; export { activate as apply }',
+  ]]), { entryPaths: ['index.js'] })
+  assert.deepEqual(closure.activationIncompletePaths, ['index.js'])
+})
+
+test('keeps forwarded raw routes outside the bounded apply route proof', () => {
+  const files = new Map([
+    ['index.js', "import { register } from './helper.js'; export function apply(ctx) { register(ctx) }"],
+    ['helper.js', "export function register(ctx) { ctx.webServer.register({ path: '/hidden' }) }"],
+  ])
+  const routes = inspectWebRouteAuth(files, { entryPath: 'index.js' })
+  assert.deepEqual(routes.rawRoutes, [])
+  assert.deepEqual(routes.coverage.incompletePaths, ['index.js'])
+})
+
+test('attributes computed method names to creation, including calls and getters inside the key', () => {
+  const mutation = 'eval("register = context => context.hidden.run()")'
+  for (const trigger of [
+    `const object = { [${mutation}]() {} }`,
+    `const object = { get [${mutation}]() {} }`,
+    `class Example { [${mutation}]() {} }`,
+    `class Example { static [${mutation}]() {} }`,
+    `const object = { [(() => ${mutation})()]() {} }`,
+    `function mutate() { ${mutation} }; const object = { [mutate()]() {} }`,
+    `function mutate() { ${mutation} }; const object = { [mutate\`key\`]() {} }`,
+    `const value = { get key() { ${mutation} } }; const object = { [value.key]() {} }`,
+    'const object = { [import(packageName)]() {} }',
+  ]) {
+    const files = new Map([
+      ['index.js', "import { register } from './helper.js'; export function apply(ctx) { register(ctx) }"],
+      ['helper.js', `export function register(ctx) { ctx.tools.register({}) }; ${trigger}`],
+    ])
+    assert.deepEqual(inspectExecutableModuleClosure(files, { entryPaths: ['index.js'] })
+      .activationIncompletePaths, ['helper.js'], trigger)
+  }
+  for (const trigger of [
+    `const object = { [() => ${mutation}]() {} }`,
+    `const object = { unused() { ${mutation} } }`,
+    `function unused() { const object = { [${mutation}]() {} } }`,
+  ]) {
+    const files = new Map([['index.js', `export function apply(ctx) { ctx.tools.register({}) }; ${trigger}`]])
+    assert.deepEqual(inspectExecutableModuleClosure(files, { entryPaths: ['index.js'] })
+      .activationIncompletePaths, [], 'uninvoked body stays deferred: ' + trigger)
+  }
+
+  const routes = inspectWebRouteAuth(new Map([['index.js',
+    "export function apply(ctx) { const object = { [ctx.webServer.register({ path: '/computed' })]() {} } }",
+  ]]), { entryPath: 'index.js' })
+  assert.deepEqual(routes.rawRoutes.map(route => route.routePath), ['/computed'])
+  const argumentsUse = inspectExecutableModuleClosure(new Map([['index.js',
+    'export function apply(ctx) { const object = { [arguments[0].hidden.run()]() {} } }',
+  ]]), { entryPaths: ['index.js'] })
+  assert.equal(argumentsUse.modules[0].context.complete, false)
+})
+
+test('bounds forwarded export resolution without accepting uninspected destinations', () => {
+  const files = new Map([
+    ['index.js', "import { register } from './chain0.js'; export function apply(ctx) { register(ctx) }"],
+  ])
+  for (let index = 0; index <= EXECUTABLE_EXPORT_CHAIN_LIMIT; index += 1) {
+    files.set(`chain${index}.js`, index === EXECUTABLE_EXPORT_CHAIN_LIMIT
+      ? 'export function register(ctx) { ctx.tools.register({}) }'
+      : `export { register } from './chain${index + 1}.js'`)
+  }
+  const closure = inspectExecutableModuleClosure(files, { entryPaths: ['index.js'] })
+  assert.equal(closure.modules.find((value) => value.sourcePath === 'index.js').context.complete, false)
+  assert.deepEqual(closure.activationIncompletePaths, ['index.js'])
+})
+
+test('retains context refusal when opaque code can alter caller or helper identity', () => {
+  for (const owner of ['index.js', 'helper.js']) {
+    const binding = owner === 'index.js' ? 'apply' : 'register'
+    for (const opaque of [
+      `const trigger = { [{ [Symbol.toPrimitive]() { eval("${binding} = context => context.hidden.run()") } }]() {} }`,
+      'function deferred() { import(packageName) }',
+    ]) {
+      const files = new Map([
+        ['index.js', "import { register } from './helper.js'; export function apply(ctx) { register(ctx) }"],
+        ['helper.js', 'export function register(ctx) { ctx.tools.register({}) }'],
+      ])
+      files.set(owner, files.get(owner) + ';' + opaque)
+      const closure = inspectExecutableModuleClosure(files, { entryPaths: ['index.js'] })
+      assert.equal(closure.modules.find(module => module.sourcePath === owner).moduleClosureComplete, false)
+      assert.equal(closure.modules.find(module => module.sourcePath === 'index.js').context.complete, false)
+    }
+  }
+})
+
+test('charges retained context transfers to the shared edge budget and fails exhaustion closed', () => {
+  const count = EXECUTABLE_MODULE_EDGE_LIMIT / 2 + 1
+  const names = Array.from({ length: count }, (_, index) => `register${index}`)
+  const files = new Map([
+    ['index.js', [
+      `import { ${names.join(', ')} } from './helper.js'`,
+      'export function apply(ctx) {',
+      ...names.map((name) => `${name}(ctx)`),
+      '}',
+    ].join('\n')],
+    ['helper.js', 'export const unused = true'],
+  ])
+  const closure = inspectExecutableModuleClosure(files, { entryPaths: ['index.js'] })
+  assert.deepEqual(closure.resources.exhausted, ['edges'])
+  assert.equal(closure.resources.used.edges, EXECUTABLE_MODULE_EDGE_LIMIT)
+  assert.deepEqual(closure.activationIncompletePaths, ['index.js'])
+  assert.equal(closure.modules[0].parsed, false)
+  assert.equal(closure.modules[0].context.complete, false)
+})
+
 test('compacts Babel analysis into frozen plain metadata before graph resolution', () => {
   const metadata = inspectExecutableModuleMetadata([
     "import { helper } from './helper.js'",
@@ -1642,8 +1898,8 @@ test('completes activation across a graph with more than 4096 retained edge reco
   assert.deepEqual(closure.activationIncompletePaths, [])
   assert.deepEqual(closure.resources.exhausted, [])
   assert.equal(closure.resources.used.modules, moduleCount + 1)
-  // Each module contributes one import, one entry call and 525 distinct local calls.
-  assert.equal(closure.resources.used.edges, moduleCount * (callsPerModule + 2))
+  // Each module contributes an import, entry call, context transfer and 525 local calls.
+  assert.equal(closure.resources.used.edges, moduleCount * (callsPerModule + 3))
   assert.equal(closure.modules.length, files.size)
   for (const module of closure.modules.filter(value => value.sourcePath !== 'index.js')) {
     assert.equal(module.parsed, true)
