@@ -21,11 +21,9 @@ usable examples, not a measured reliability improvement or error-free work.
 Packing instructions were also corrected after repeated DeepSeek runs encountered
 Doctor's rejection of an archive left inside the inspected source.
 
-Full local validation passed 839 tests with 44 optional integrations skipped.
 Source reads also stop at the observed file size plus one growth-detection byte;
 controlled growth, truncation, partial-read and cancellation checks passed.
-Release headless/Web preflight, upstream impact and both exact compatibility
-lanes passed. [CI passed all 18 jobs](https://github.com/builtin-pb/dsh-developer/actions/runs/35408390810),
+The shared guidance and scanner repair [passed all 18 CI jobs](https://github.com/builtin-pb/dsh-developer/actions/runs/35410630463),
 including the Windows and macOS product matrices. An additional browser check
 of the experimental plugin was blocked by the browser client before the page
 loaded; it supplies no rendered-Web evidence.
@@ -42,14 +40,41 @@ authority. Repository text checks out as LF; fingerprints bind actual bytes.
 
 ## Current runtime baseline — checked 19 September, unreleased
 
-The blocking audit target is DSH **0.1.5-rc.2**; **0.1.6-alpha.1** is advisory.
+The blocking audit target is DSH **0.1.5-rc.2**; **0.1.6-alpha.2** is advisory.
 The registry check on 19 September resolved `latest` and `next` to 0.1.5-rc.2,
 and `alpha` to 0.1.6-alpha.2. CI resolves all three channels for
 ordinary native development, while product audits use explicit versions.
 Moving a registry tag does not automatically extend reviewed contracts.
 
-The following broader baseline observations were recorded on 16 September.
-On macOS ARM64/Node 24.19.0, both audit targets passed headless and Web
+
+The alpha.2 update retains the complete scripts-disabled, frozen dependency graph.
+Full local validation passed 872 tests with 45 optional integrations skipped.
+On macOS ARM64/Node 24.19.0, release and preview headless/Web preflights passed,
+as did preview ACP preflight, exact-runtime typechecking, upstream impact and
+both product compatibility lifecycles. Native approval, delegation, subagent
+registry and hook checks passed 88 cases. The product's two knowledge cases
+also passed through alpha.2's Web composition. The native development suite
+passed all 21 cases across its initial run and a four-case repeat after building
+the example omitted from the clean snapshot. These are native/Web backend
+observations, not a new rendered-browser or isolated-provider certification.
+
+The client corpus confirms the current frontend seed tables and service owners.
+Alpha.2 now loads PDF and terminal code through `require.async`; the audit
+explicitly refuses these unchecked chunks, whether their files are missing or
+present. Direct loader requests are checked using their actual bindings; aliases,
+computed loading and ambiguous registration factories cannot silently pass.
+The rc.2 PDF bundle still retains its guarded Node-import refusal. The audit
+executes no bundle code and does not infer safety from a chunk's existence.
+
+New alpha.2 Team inventory remains unreviewed. The subagent review covers
+registration and child metadata, not continuation, capacity, cancellation or
+provider isolation. Exact hook records bind the new manifests and launcher;
+unchanged bridge bodies retain their awaited `agent/created` behavior and
+unavailable transcript paths. Historical alpha.1 review records remain intact.
+
+## Earlier runtime observations — 16 September
+
+On macOS ARM64/Node 24.19.0, DSH 0.1.5-rc.2 and 0.1.6-alpha.1 passed headless and Web
 preflight, actual native knowledge-tool verification, compatibility lifecycle,
 delegation, and static attestation of fresh headless/Web profiles. The native
 approval and guard suite passed six cases across the two targets.

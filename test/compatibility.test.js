@@ -52,7 +52,7 @@ function dependencies(options = {}) {
   const lifecycleCalls = []
   const versions = {
     release: options.releaseVersion ?? '0.1.5-rc.2',
-    preview: options.previewVersion ?? '0.1.6-alpha.1',
+    preview: options.previewVersion ?? '0.1.6-alpha.2',
   }
   return {
     lifecycleCalls,
@@ -138,7 +138,7 @@ test('never executes arbitrary repository code', async () => {
 })
 
 test('blocks a mislabeled release lane before capability or plugin execution', async () => {
-  const fixture = dependencies({ releaseVersion: '0.1.6-alpha.1' })
+  const fixture = dependencies({ releaseVersion: '0.1.6-alpha.2' })
   const inspected = []
   const original = fixture.values.inspectDshCapabilities
   fixture.values.inspectDshCapabilities = async (...args) => {
@@ -163,7 +163,7 @@ test('fails when source bytes change during the matrix', async () => {
 
 test('compares capability reports without retaining mutable report objects', () => {
   const release = capabilityReport('release', '0.1.5-rc.2')
-  const preview = capabilityReport('preview', '0.1.6-alpha.1')
+  const preview = capabilityReport('preview', '0.1.6-alpha.2')
   const drift = compareCapabilityReports(release, preview)
   release.capabilities[0].packages[0].version = 'mutated'
   assert.equal(drift[0].from.packages[0].version, '0.1.5-rc.2')

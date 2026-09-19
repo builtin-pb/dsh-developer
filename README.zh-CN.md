@@ -48,6 +48,6 @@ dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.3' --ignore-s
 - [平台选择](docs/platforms.md)：Windows、Mac 与 Linux 的路线、要求和验证范围。
 - [参与贡献](docs/contributing.md)：从 `npm test` 开始，进一步验证与 DSH 的集成。
 
-当前 checkout 以 **DSH 0.1.5-rc.2** 为阻断检查通道，以 **0.1.6-alpha.1** 为提示通道。这两个精确运行时上的 headless/Web preflight、原生验证、产品兼容性、委派和批准检查已通过。原生开发面向 Windows、macOS 和 Linux；这些结果不证明所有宿主或隔离 provider。rc.2 的 Apple 隔离另已通过四项真实集成检查；每台宿主仍需独立的 provider 准入。范围见[实测结果](docs/verification.md)和[平台指南](docs/platforms.md)。
+当前 checkout 以 **DSH 0.1.5-rc.2** 为阻断检查通道，以 **0.1.6-alpha.2** 为提示通道。这两个精确运行时上的 headless/Web preflight、原生验证、产品兼容性、委派和批准检查已通过。原生开发面向 Windows、macOS 和 Linux；这些结果不证明所有宿主或隔离 provider。rc.2 的 Apple 隔离另已通过四项真实集成检查；每台宿主仍需独立的 provider 准入。范围见[实测结果](docs/verification.md)和[平台指南](docs/platforms.md)。
 
 由 [MetaFlow](https://github.com/builtin-pb/metaflow) 设计与实现。采用 [MIT 许可证](LICENSE)。

@@ -10,7 +10,7 @@ Keep examples small enough to understand and realistic enough to expose integrat
 
 ## Stay current as one product
 
-The blocking runtime is DSH `0.1.5-rc.2`; `0.1.6-alpha.1` is advisory. Keep native registry integration, public contracts, reviewed Client tables, examples, lockfiles, Creator exports, skill routes, documentation and CI synchronized. Inspect exact consuming package roots, include installed optional peers where required, and verify that proposed versions exist before changing pins. Never substitute current upstream documentation for a different installed version.
+The blocking runtime is DSH `0.1.5-rc.2`; `0.1.6-alpha.2` is advisory. Keep native registry integration, public contracts, reviewed Client tables, examples, lockfiles, Creator exports, skill routes, documentation and CI synchronized. Inspect exact consuming package roots, include installed optional peers where required, and verify that proposed versions exist before changing pins. Never substitute current upstream documentation for a different installed version.
 
 Exact audit jobs retain reviewed version pins. Native development CI installs `latest`, `next` and `alpha` and records the resolved package versions with each run. Use that moving coverage to detect changes early; require contract review and relevant runtime evidence before advancing the blocking baseline.
 

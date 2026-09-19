@@ -38,7 +38,7 @@ Restart DSH after Host code changes. Use a development profile for iteration; in
 
 ## Test against DSH
 
-Use exact DSH `0.1.5-rc.2` for blocking checks and `0.1.6-alpha.1` for advisory checks. Select the intended installed entry with `--dsh`; do not infer a runtime from a tag name. With the blocking DSH on PATH:
+Use exact DSH `0.1.5-rc.2` for blocking checks and `0.1.6-alpha.2` for advisory checks. Select the intended installed entry with `--dsh`; do not infer a runtime from a tag name. With the blocking DSH on PATH:
 
 ```sh
 node bin/dsh-developer.js doctor --source .
@@ -56,7 +56,7 @@ Isolated providers need separate local infrastructure and admission. The [Mac in
 
 Treat an upstream update as one maintenance change across runtime constants, native registry/schema integration, Client contract tables, examples and their lockfiles, Creator exports, skill routes, documentation and CI. A version-string replacement alone is not an upgrade. Use `knowledge` against the exact installation and actual consuming package roots, check published package versions and peer closure, then install with scripts disabled and run example builds/tests through `dsh-developer run`. Exercise the compiled and packed artifacts where their behavior is claimed.
 
-Exact audit jobs must use `0.1.5-rc.2` as blocking and `0.1.6-alpha.1` as advisory. Their manifests and complete pnpm lockfiles live in `.github/dsh-runtimes/<version>` and CI installs them with `--frozen-lockfile --ignore-scripts`. An exact launcher version alone is insufficient: its dependency ranges can select newer prerelease packages with incompatible exports. When advancing an audit target, retain the full tested graph in its own directory and review the resulting lockfile changes.
+Exact audit jobs must use `0.1.5-rc.2` as blocking and `0.1.6-alpha.2` as advisory. Their manifests and complete pnpm lockfiles live in `.github/dsh-runtimes/<version>` and CI installs them with `--frozen-lockfile --ignore-scripts`. An exact launcher version alone is insufficient: its dependency ranges can select newer prerelease packages with incompatible exports. When advancing an audit target, retain the full tested graph in its own directory and review the resulting lockfile changes.
 
 Native development CI installs npm `latest`, `next` and `alpha` on each run and records the resolved package versions with the results. That moving matrix detects fresh-install drift; it does not silently change the reviewed audit targets or admit an isolated provider.
 

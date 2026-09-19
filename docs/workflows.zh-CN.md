@@ -39,7 +39,7 @@
 | 一个已安装的 profile | `attest-profile` | 你实际测试过的静态字节的规范 receipt |
 | Codex 或 Claude Code hooks | `hook-doctor` | 任何 hook 命令运行前的静态兼容性 |
 
-`hook-doctor` 把配置绑定到受审字节，不导入、执行、展开或声称激活。它支持 `0.1.5-rc.2` 和 `0.1.6-alpha.1` 的精确受审字节，方言兼容性为部分支持。当前版的 `SessionStart` 异步脱离事件执行；alpha 等待 `agent/created`。两者均不提供 transcript 路径。历史字节契约仍保留；字节变化需要重新审查。
+`hook-doctor` 把配置绑定到受审字节，不导入、执行、展开或声称激活。它支持 `0.1.5-rc.2` 和 `0.1.6-alpha.2` 的精确受审字节，方言兼容性为部分支持。当前版的 `SessionStart` 异步脱离事件执行；alpha 等待 `agent/created`。两者均不提供 transcript 路径。历史字节契约仍保留；字节变化需要重新审查。
 
 不启动 profile、也不加载 package，即可证明一个现有物理 profile：
 
@@ -47,7 +47,7 @@
 node bin/dsh-developer.js attest-profile --profile C:\Users\you\.dsh\profiles\web --dsh D:\path\to\dsh.cmd --json
 ```
 
-receipt 把 DSH 可执行文件绑定到你测试过的精确静态 profile 字节。两次扫描会在不启动 package 的前提下捕获 link、越界、变化、未解析状态与凭据。当前 `0.1.5-rc.2` 阻断，`0.1.6-alpha.1` 仅提示。静态 receipt 不证明运行行为或 provider 隔离。
+receipt 把 DSH 可执行文件绑定到你测试过的精确静态 profile 字节。两次扫描会在不启动 package 的前提下捕获 link、越界、变化、未解析状态与凭据。当前 `0.1.5-rc.2` 阻断，`0.1.6-alpha.2` 仅提示。静态 receipt 不证明运行行为或 provider 隔离。
 
 在 DSH Web 中静态检查普通插件仓库：
 
@@ -55,9 +55,9 @@ receipt 把 DSH 可执行文件绑定到你测试过的精确静态 profile 字�
 /dsh-developer-doctor {"source":"C:/path/to/plugin","skipRuntime":true}
 ```
 
-随后按[开发指南](development.md)使用 `verify --profile <名称>` 验证目标运行时，用 `dev` 检查实际 Web 界面，并通过 `--patch` 验证文档中的配置。Doctor 默认运行时审计与 preflight 使用受审通道：`0.1.5-rc.2` 阻断，`0.1.6-alpha.1` 仅提示。其他精确版本使用静态 Doctor 和上述普通验证路线。本产品和 promotion bundle 保留精确运行时门禁；安装版本较新本身并不是普通插件的缺陷。
+随后按[开发指南](development.md)使用 `verify --profile <名称>` 验证目标运行时，用 `dev` 检查实际 Web 界面，并通过 `--patch` 验证文档中的配置。Doctor 默认运行时审计与 preflight 使用受审通道：`0.1.5-rc.2` 阻断，`0.1.6-alpha.2` 仅提示。其他精确版本使用静态 Doctor 和上述普通验证路线。本产品和 promotion bundle 保留精确运行时门禁；安装版本较新本身并不是普通插件的缺陷。
 
-Doctor 检查 package 与 bundle 契约、冷启动依赖被错标为 optional、Host/Client 注入混用、Client 服务冲突、上游 connection 服务之外的插件自建原始 Web 路由，以及无效的 Web 产物。通过 connection 注册并不等于已经证明认证有效：不同 DSH 版本的 API 和保护机制有所不同，必须验证实际部署的版本和配置。本产品和 promotion bundle 还会检查可复现性及获准的干净 profile 生命周期。检查保持目标仓库只读；静态结果不能证明运行行为。
+Doctor 检查 package 与 bundle 契约、冷启动依赖被错标为 optional、Host/Client 注入混用、Client 服务冲突、上游 connection 服务之外的插件自建原始 Web 路由，以及无效的 Web 产物。通过 connection 注册并不等于已经证明认证有效：不同 DSH 版本的 API 和保护机制有所不同，必须验证实际部署的版本和配置。本产品和 promotion bundle 还会检查可复现性及获准的干净 profile 生命周期。检查保持目标仓库只读；静态结果不能证明运行行为。 Client 审计支持单一入口和直接、字面量的 `require("module")` 调用。异步分块和间接 loader 引用会明确返回不支持：即使 DSH 能运行它们，审计器也尚未检查其实际执行的字节。
 
 把 Creator 中保存的导出直接变成可安装 bundle：
 
@@ -74,7 +74,7 @@ dsh --profile headless --dump-config
 
 ## DSH 升级，插件照常交付
 
-对于当前受审的 `0.1.5-rc.2` 与 `0.1.6-alpha.1` 通道，在升级修改前先运行影响分析：
+对于当前受审的 `0.1.5-rc.2` 与 `0.1.6-alpha.2` 通道，在升级修改前先运行影响分析：
 
 ```powershell
 node bin/dsh-developer.js impact --source C:\path\to\plugin --release-dsh D:\release\dsh.cmd --preview-dsh D:\preview\dsh.cmd
@@ -149,7 +149,7 @@ node bin/dsh-developer.js ui --session codex-task --action close --json
 
 只读分析不执行目标代码。受限运行时审计仅执行本产品和逐字节可复现的 promotion 输出；凭据不进入这些审计的子进程或证据。普通可信开发遵循上文的宿主执行策略。
 
-隔离 Build/Apply 要求当前运行的 DSH 属于受审通道（`0.1.5-rc.2` 或仅供提示的 `0.1.6-alpha.1`），并另行通过本机 provider 准入：Windows 使用 WSL2 + Bubblewrap，支持的 Mac 使用 Apple container。Provider 必须证明一次性、断网、无凭据、有界的执行，以及封存传输与清理。Headless/Web、兼容性、委派和批准检查通过，不等于 provider 已准入。独立的 rc.2 Apple 真实集成已通过 4/4 检查，覆盖原生准入、VM Build/Apply、promotion 及 sparse/churn 清理；这不证明 alpha 隔离或另一台宿主的准入。见 [Mac provider 配置](macos.md#enable-isolated-build-and-apply)。为 CLI 审计指定另一个 `--dsh` 不会切换当前 agent 的运行时。
+隔离 Build/Apply 要求当前运行的 DSH 属于受审通道（`0.1.5-rc.2` 或仅供提示的 `0.1.6-alpha.2`），并另行通过本机 provider 准入：Windows 使用 WSL2 + Bubblewrap，支持的 Mac 使用 Apple container。Provider 必须证明一次性、断网、无凭据、有界的执行，以及封存传输与清理。Headless/Web、兼容性、委派和批准检查通过，不等于 provider 已准入。独立的 rc.2 Apple 真实集成已通过 4/4 检查，覆盖原生准入、VM Build/Apply、promotion 及 sparse/churn 清理；这不证明 alpha 隔离或另一台宿主的准入。见 [Mac provider 配置](macos.md#enable-isolated-build-and-apply)。为 CLI 审计指定另一个 `--dsh` 不会切换当前 agent 的运行时。
 
 在顶层 DSH Agent 中，隔离 Build 原生且不接收路径。控制器从当前存活的根 Agent 推导源码，把命令和安全策略绑定到会过期的 digest，再由 DSH 发起可审计的一次性批准：
 
@@ -186,7 +186,7 @@ node bin/dsh-developer.js admit-cell --dsh D:\path\to\dsh.cmd --wsl-distro Ubunt
 ## 兼容性
 
 - 普通开发：所选精确运行时，包括 DSH 0.1.5-rc.2；见[实测结果](verification.md)。
-- 受审运行时审计通道：DSH 0.1.5-rc.2（阻断）及 0.1.6-alpha.1（仅供提示）。两个精确运行时的 headless/Web preflight、原生验证、产品兼容性、委派和批准检查均已通过。
+- 受审运行时审计通道：DSH 0.1.5-rc.2（阻断）及 0.1.6-alpha.2（仅供提示）。两个精确运行时的 headless/Web preflight、原生验证、产品兼容性、委派和批准检查均已通过。
 - 隔离 provider 需要独立的本机准入和执行证据；运行时审计通过不能替代它们。
 - Node.js：`^22.18.0 || >=24.11.0`
 - 原生开发：Windows、macOS 与 Linux。实测边界和独立的 Windows/macOS 隔离 Build 要求详见[平台支持](platforms.md)。

@@ -101,6 +101,6 @@ test('corrects fixed-authority schemas through exact release and preview DSH run
   const release = await probeLane(process.env.DSH_DEVELOPER_RELEASE_DSH, 'release')
   const preview = await probeLane(process.env.DSH_DEVELOPER_PREVIEW_DSH, 'preview')
   assert.equal(release.version, '0.1.5-rc.2')
-  assert.equal(preview.version, '0.1.6-alpha.1')
+  assert.equal(preview.version, '0.1.6-alpha.2')
   assert.deepEqual(release.witness.parentEscalationTools, preview.witness.parentEscalationTools)
 })

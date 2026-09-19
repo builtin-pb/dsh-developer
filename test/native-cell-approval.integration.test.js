@@ -9,7 +9,7 @@ import { createNativeToolDefinition } from '../lib/native-tool-internal.js'
 
 const lanes = [
   ['release', process.env.DSH_DEVELOPER_RELEASE_TOOLS_ROOT, '0.1.5-rc.2'],
-  ['preview', process.env.DSH_DEVELOPER_PREVIEW_TOOLS_ROOT, '0.1.6-alpha.1'],
+  ['preview', process.env.DSH_DEVELOPER_PREVIEW_TOOLS_ROOT, '0.1.6-alpha.2'],
 ]
 
 async function importFrom(requireFromLane, name) {

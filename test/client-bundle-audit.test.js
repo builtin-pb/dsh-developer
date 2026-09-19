@@ -182,6 +182,147 @@ test('rejects non-literal loader requests instead of guessing their boundary', (
   )
 })
 
+test('refuses unchecked async chunks whether missing, harmless, or unsafe', () => {
+  for (const chunk of [undefined, 'module.exports = {}', 'require("node:fs")']) {
+    const files = new Map([['lib/client.js', bundle('return require.async("./chunk.js")')]])
+    if (chunk !== undefined) files.set('lib/chunk.js', chunk)
+    assert.throws(() => inspectClientBundle(files, manifest()), error =>
+      error.code === 'CLIENT_BUNDLE_UNSUPPORTED_LOADER' && /this audit cannot verify/u.test(error.message))
+  }
+})
+
+test('recognizes async spellings, indirect references and executable expressions', () => {
+  for (const body of [
+    'return require["async"]("./chunk.js")',
+    'return require[`async`]("./chunk.js")',
+    'return require /* loader */ . /* method */ async("./chunk.js")',
+    'return require?.async?.("./chunk.js")',
+    'return require[method]("./chunk.js")',
+    'return r\\u0065quire["as\\u0079nc"]("./chunk.js")',
+    'return `${require.async("./chunk.js")}`',
+    'const load = require.async; return load("./chunk.js")',
+    'const { async: load } = require; return load("./chunk.js")',
+    'const loader = require; return loader.async("./chunk.js")',
+    'return useLoader(require)',
+    'return require',
+    'require = replacement; return require("react")',
+    'return require?.("react")',
+  ]) {
+    assert.throws(() => inspectClientBundle(new Map([['lib/client.js', bundle(body)]]), manifest()),
+      error => error.code === 'CLIENT_BUNDLE_UNSUPPORTED_LOADER', body)
+  }
+})
+
+test('distinguishes loader references from text, member methods and shadowed bindings', () => {
+  for (const body of [
+    'const text = "require.async(\\\"./chunk.js\\\")"; /* require.async("./chunk.js") */',
+    'const pattern = /require\\.async/; // require.async("./chunk.js")\n',
+    'object.require.async("./chunk.js"); other.async("./chunk.js")',
+    'function local(require) { return require.async("./chunk.js") }',
+    '{ const require = { async() {} }; require.async("./chunk.js") }',
+    'function local(require) { return require("node:fs") }',
+    'const local = (require) => require["async"]("./chunk.js")',
+    'try {} catch (require) { require.async("./chunk.js") }',
+  ]) {
+    const result = inspectClientBundle(new Map([['lib/client.js', bundle(body)]]), manifest())
+    assert.deepEqual(result.requests, [], body)
+  }
+})
+
+test('audits direct loader calls through comments, escapes and nested closures', () => {
+  const result = inspectClientBundle(new Map([['lib/client.js', bundle(
+    'const load = () => r\\u0065quire /* module */ ("react"); return load',
+  )]]), manifest())
+  assert.deepEqual(result.requests, ['react'])
+  assert.throws(() => inspectClientBundle(new Map([['lib/client.js', bundle(
+    'return r\\u0065quire /* module */ ("node:fs")',
+  )]]), manifest()), error => error.code === 'CLIENT_BUNDLE_UNSAFE_IMPORT')
+})
+
+test('does not certify an overwritten or computed registration factory', () => {
+  for (const extra of [
+    ', factory: (require) => require.async("./chunk.js")',
+    ', "factory": (require) => require.async("./chunk.js")',
+    ', [name]: replacement',
+    ', ...replacement',
+    ', id: "another-package"',
+  ]) {
+    const source = 'window.__ModuleLoader__.load({ id: "client-fixture", factory: require => ({})' + extra + ' })'
+    assert.throws(() => inspectClientBundle(new Map([['lib/client.js', source]]), manifest()),
+      error => error.code === 'CLIENT_BUNDLE_REGISTRATION_INVALID', extra)
+  }
+})
+
+test('requires a real registration call and its complete factory expression', () => {
+  const registration = bundle('return require("node:fs")').trim()
+  for (const source of [
+    'object.' + registration,
+    'object. /* member */ ' + registration,
+    'object?.' + registration,
+    'globalThis.' + registration,
+    'é' + registration,
+    'new ' + registration,
+    'const window = {}; ' + registration,
+    'window.__ModuleLoader__.load({ id: "client-fixture", factory: function(require) { return require("node:fs") }.bind(null) })',
+  ]) {
+    assert.throws(() => inspectClientBundle(new Map([['lib/client.js', source]]), manifest()),
+      error => error.code === 'CLIENT_BUNDLE_REGISTRATION_INVALID', source)
+  }
+  for (const source of [bundle('return require("react")').trim() + '.then(() => {})',
+    'window.__ModuleLoader__.load({ id: "client-fixture", factory() { return {} } })']) {
+    assert.equal(inspectClientBundle(new Map([['lib/client.js', source]]), manifest()).declared, true)
+  }
+})
+
+test('does not mistake a free require for the supplied DSH loader', () => {
+  for (const source of ['require("react"); ' + bundle(),
+    'window.__ModuleLoader__.load({ id: "client-fixture", factory() { return require("react") } })']) {
+    assert.throws(() => inspectClientBundle(new Map([['lib/client.js', source]]), manifest()),
+      error => error.code === 'CLIENT_BUNDLE_UNSUPPORTED_LOADER')
+  }
+})
+
+test('refuses implicit factory arguments as an alternative loader reference', () => {
+  for (const body of [
+    'const require = arguments[0]; return require("node:fs")',
+    'return arguments[0].async("./chunk.js")',
+    'return (() => arguments[0].async("./chunk.js"))()',
+    'var arguments; return arguments[0].async("./chunk.js")',
+    'return { [arguments[0].async("./chunk.js")]() {} }',
+    'return class { [arguments[0].async("./chunk.js")]() {} }',
+  ]) {
+    const source = 'window.__ModuleLoader__.load({ id: "client-fixture", factory() { ' + body + ' } })'
+    assert.throws(() => inspectClientBundle(new Map([['lib/client.js', source]]), manifest()),
+      error => error.code === 'CLIENT_BUNDLE_UNSUPPORTED_LOADER', body)
+  }
+  assert.throws(() => inspectClientBundle(new Map([['lib/client.js',
+    'window.__ModuleLoader__.load({ id: "client-fixture", factory: function arguments(require) { return arguments[0].async("./chunk.js") } })',
+  ]]), manifest()), error => error.code === 'CLIENT_BUNDLE_UNSUPPORTED_LOADER')
+  const source = methodBundle('function local() { return arguments[0] }; '
+    + '(() => { var arguments = [1]; return arguments[0] })(); '
+    + '{ const arguments = { async() {} }; arguments.async("local"); } return require("react")')
+  assert.deepEqual(inspectClientBundle(new Map([['lib/client.js', source]]), manifest()).requests, ['react'])
+})
+
+test('allows harmless parameter redeclaration but refuses actual loader assignments', () => {
+  for (const body of ['var require; return require("react")', 'for (var require; false;) {} return require("react")']) {
+    assert.deepEqual(inspectClientBundle(new Map([['lib/client.js', methodBundle(body)]]), manifest()).requests, ['react'])
+  }
+  for (const body of ['var require = other; return require("react")',
+    'for (var require of []) {}', 'for (var require in {}) {}']) {
+    assert.throws(() => inspectClientBundle(new Map([['lib/client.js', methodBundle(body)]]), manifest()),
+      error => error.code === 'CLIENT_BUNDLE_UNSUPPORTED_LOADER', body)
+  }
+})
+
+test('returns an explicit analysis refusal for valid deeply nested expressions', () => {
+  for (const expression of [Array(20_000).fill('0').join('+'), 'object' + '.property'.repeat(20_000)]) {
+    const source = bundle('const data = ' + expression + '; return require("react")')
+    assert.throws(() => inspectClientBundle(new Map([['lib/client.js', source]]), manifest()),
+      error => error.code === 'CLIENT_BUNDLE_ANALYSIS_LIMIT')
+  }
+})
+
 test('does not confuse ordinary member methods with the loader require function', () => {
   const source = [
     'window.__ModuleLoader__.load({ id: "client-fixture", factory: (require) => {',

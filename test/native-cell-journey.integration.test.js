@@ -6,7 +6,7 @@ import test from 'node:test'
 const enabled = process.env.DSH_DEVELOPER_NATIVE_CELL_JOURNEY_TEST === '1'
 const lanes = [
   ['release', process.env.DSH_DEVELOPER_RELEASE_TOOLS_ROOT, process.env.DSH_DEVELOPER_RELEASE_DSH, '0.1.5-rc.2'],
-  ['preview', process.env.DSH_DEVELOPER_PREVIEW_TOOLS_ROOT, process.env.DSH_DEVELOPER_PREVIEW_DSH, '0.1.6-alpha.1'],
+  ['preview', process.env.DSH_DEVELOPER_PREVIEW_TOOLS_ROOT, process.env.DSH_DEVELOPER_PREVIEW_DSH, '0.1.6-alpha.2'],
 ]
 
 function runFreshProcess(lane, toolsRoot, dshPath, version) {

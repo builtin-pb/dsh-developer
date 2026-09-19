@@ -113,13 +113,57 @@ function commandHooks(command = 'echo inspected-only') {
   return [{ hooks: [{ type: 'command', command, timeout: 5 }] }]
 }
 
+test('alpha.2 binds new launcher and manifest bytes without replacing alpha.1 implementation evidence', () => {
+  const before = REVIEWED_HOOK_BRIDGE_LANES.alpha
+  const after = REVIEWED_HOOK_BRIDGE_LANES.alpha2
+  assert.notEqual(after.dsh.manifest, before.dsh.manifest)
+  assert.notEqual(after.dsh.entry, before.dsh.entry)
+  assert.deepEqual(after.eventSemantics, before.eventSemantics)
+  for (const dialect of ['codex', 'claude-code']) {
+    assert.notEqual(after.bridges[dialect].manifest, before.bridges[dialect].manifest)
+    assert.equal(after.bridges[dialect].entry, before.bridges[dialect].entry)
+    assert.equal(after.bridges[dialect].invariant, null)
+  }
+  assert.notEqual(after.protocol.manifest, before.protocol.manifest)
+  assert.equal(after.protocol.entry, before.protocol.entry)
+  assert.equal(after.protocol.invariant, before.protocol.invariant)
+})
+
+test('exact alpha.2 installation matches both static hook review records without activation', {
+  skip: process.env.DSH_DEVELOPER_PREVIEW_DSH === undefined,
+}, async t => {
+  const root = await mkdtemp(join(await realpath(tmpdir()), 'dsh-alpha2-hook-evidence-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const source = join(root, 'hooks.json')
+  await putJson(source, { hooks: { SessionStart: commandHooks(), PreToolUse: commandHooks() } })
+  for (const dialect of ['codex', 'claude-code']) {
+    const report = await inspectHookBridge(source, {
+      dialect,
+      dshPath: process.env.DSH_DEVELOPER_PREVIEW_DSH,
+      sourceRoot: root,
+    })
+    assert.equal(report.ok, true, JSON.stringify(report))
+    assert.equal(report.lane.id, 'alpha2')
+    assert.equal(report.lane.dshVersion, '0.1.6-alpha.2')
+    assert.equal(report.lane.status, 'reviewed-partial')
+    assert.equal(report.lane.activation, 'not-inspected')
+    assert.equal(report.lane.bridge.version, '0.1.6-alpha.2')
+    assert.equal(report.lane.protocol.version, '0.1.6-alpha.2')
+    const start = report.config.events.find(event => event.event === 'SessionStart')
+    assert.equal(start.delivery, 'awaited-agent-created')
+    assert.ok(start.limitations.includes('transcript-path-unavailable'))
+    assert.ok(!start.limitations.includes('detached'))
+  }
+})
+
 test('keeps historical contracts and distinguishes current and alpha lifecycle semantics', async (t) => {
   assert.equal(REVIEWED_HOOK_BRIDGE_LANES.release.version, '0.1.1-rc.2')
   assert.equal(REVIEWED_HOOK_BRIDGE_LANES.preview.version, '0.1.2-alpha.3')
   assert.equal(REVIEWED_HOOK_BRIDGE_LANES.current.version, '0.1.5-rc.2')
   assert.equal(REVIEWED_HOOK_BRIDGE_LANES.alpha.version, '0.1.6-alpha.1')
+  assert.equal(REVIEWED_HOOK_BRIDGE_LANES.alpha2.version, '0.1.6-alpha.2')
   for (const dialect of ['codex', 'claude-code']) {
-    for (const modern of [undefined, 'current', 'alpha']) {
+    for (const modern of [undefined, 'current', 'alpha', 'alpha2']) {
       await t.test(`${dialect} ${modern ?? 'historical'}`, async () => {
         const lane = await makeLane(t, { dialect, modern })
         const names = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop']
@@ -133,9 +177,10 @@ test('keeps historical contracts and distinguishes current and alpha lifecycle s
         assert.equal(report.config.totals.effectiveRunnable, names.length)
         assert.match(report.lane.protocol.invariantDigest, /^sha256:/u)
         const start = report.config.events.find((event) => event.event === 'SessionStart')
-        assert.equal(start.delivery, modern === 'alpha' ? 'awaited-agent-created' : modern ? 'detached-session-start' : undefined)
-        assert.equal(start.limitations.includes('detached'), modern !== 'alpha')
-        assert.equal(start.limitations.includes('may-miss-first-request'), dialect === 'codex' && modern !== 'alpha')
+        const awaited = modern === 'alpha' || modern === 'alpha2'
+        assert.equal(start.delivery, awaited ? 'awaited-agent-created' : modern ? 'detached-session-start' : undefined)
+        assert.equal(start.limitations.includes('detached'), !awaited)
+        assert.equal(start.limitations.includes('may-miss-first-request'), dialect === 'codex' && !awaited)
         assert.equal(start.limitations.includes('json-context-only'), dialect === 'claude-code')
         for (const event of report.config.events) {
           assert.equal(event.limitations.includes('transcript-path-unavailable'), modern !== undefined)
@@ -156,7 +201,7 @@ test('keeps historical contracts and distinguishes current and alpha lifecycle s
 })
 
 test('modern lanes retain whole-config regex rejection and dialect-specific async parsing', async (t) => {
-  for (const modern of ['current', 'alpha']) {
+  for (const modern of ['current', 'alpha', 'alpha2']) {
     for (const dialect of ['codex', 'claude-code']) {
       await t.test(`${modern} ${dialect}`, async () => {
         const lane = await makeLane(t, { dialect, modern })
@@ -190,19 +235,21 @@ test('modern contracts fail closed on changed DSH, bridge, protocol, and invaria
     ['node_modules/@deepseek-ai/dsh-hook-protocol/lib/index.js', 'HOOK_PROTOCOL_UNREVIEWED'],
     ['node_modules/@deepseek-ai/dsh-hook-protocol/lib/invariant.js', 'HOOK_PROTOCOL_UNREVIEWED'],
   ]
-  for (const [path, expected] of cases) {
-    await t.test(path, async () => {
-      const lane = await makeLane(t, { modern: 'current' })
-      const target = join(lane.dshRoot, path)
-      const original = await readFile(target, 'utf8').catch(() => '')
-      await put(target, original + '\n')
-      const report = await lane.inspect(undefined, { source: join(lane.root, 'not-read.json') })
-      assert.equal(report.ok, false)
-      assert.equal(report.source.status, 'not-read')
-      assert.equal(report.checks[0].evidence.code, expected)
-    })
+  for (const modern of ['current', 'alpha', 'alpha2']) {
+    for (const [path, expected] of cases) {
+      await t.test(modern + ' ' + path, async () => {
+        const lane = await makeLane(t, { modern })
+        const target = join(lane.dshRoot, path)
+        const original = await readFile(target, 'utf8').catch(() => '')
+        await put(target, original + '\n')
+        const report = await lane.inspect(undefined, { source: join(lane.root, 'not-read.json') })
+        assert.equal(report.ok, false)
+        assert.equal(report.source.status, 'not-read')
+        assert.equal(report.checks[0].evidence.code, expected)
+      })
+    }
   }
-  for (const modern of [undefined, 'alpha']) {
+  for (const modern of [undefined, 'alpha', 'alpha2']) {
     await t.test(`required invariant missing: ${modern ?? 'historical'}`, async () => {
       const lane = await makeLane(t, { modern })
       const packageName = modern ? 'dsh-hook-protocol' : 'dsh-hooks-codex'

@@ -37,7 +37,7 @@ test('reports the M5 raw Web route as an authentication-boundary review without 
   assert.deepEqual(result.connectionRoutes, [])
   assert.equal(result.repositoryCodeExecuted, false)
   assert.equal(result.lanes.release.target, '0.1.5-rc.2')
-  assert.equal(result.lanes.preview.target, '0.1.6-alpha.1')
+  assert.equal(result.lanes.preview.target, '0.1.6-alpha.2')
   assert.equal(result.coverage.absenceIsLocal, true)
 })
 

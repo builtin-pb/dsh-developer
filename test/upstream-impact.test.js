@@ -1293,8 +1293,8 @@ test('maps a declared service to exact package owners and emits stable scoped im
   try {
     await mkdir(source)
     await sourceFixture(source, {
-      peerDependencies: { '@deepseek-ai/dsh-skill': '^0.1.5-rc.2 || ^0.1.6-alpha.1' },
-      devDependencies: { '@deepseek-ai/dsh-skill': '^0.1.5-rc.2 || ^0.1.6-alpha.1' },
+      peerDependencies: { '@deepseek-ai/dsh-skill': '^0.1.5-rc.2 || ^0.1.6-alpha.2' },
+      devDependencies: { '@deepseek-ai/dsh-skill': '^0.1.5-rc.2 || ^0.1.6-alpha.2' },
     })
     const releaseDsh = await installedPackage(
       join(root, 'release-dsh'),
@@ -1305,7 +1305,7 @@ test('maps a declared service to exact package owners and emits stable scoped im
     const previewDsh = await installedPackage(
       join(root, 'preview-dsh'),
       '@deepseek-ai/dsh',
-      '0.1.6-alpha.1',
+      '0.1.6-alpha.2',
       'export interface Dsh {}\n',
     )
     const releaseSkill = await installedPackage(
@@ -1317,7 +1317,7 @@ test('maps a declared service to exact package owners and emits stable scoped im
     const previewSkill = await installedPackage(
       join(root, 'preview-skill'),
       '@deepseek-ai/dsh-skill',
-      '0.1.6-alpha.1',
+      '0.1.6-alpha.2',
       "declare module '@deepseek-ai/cordis' { interface Context { skills: { register(value: unknown): void } } }\n",
     )
     const inventories = {
@@ -1325,7 +1325,7 @@ test('maps a declared service to exact package owners and emits stable scoped im
         ['@deepseek-ai/dsh', releaseDsh],
         ['@deepseek-ai/dsh-skill', releaseSkill],
       ]),
-      '0.1.6-alpha.1': new Map([
+      '0.1.6-alpha.2': new Map([
         ['@deepseek-ai/dsh', previewDsh],
         ['@deepseek-ai/dsh-skill', previewSkill],
       ]),

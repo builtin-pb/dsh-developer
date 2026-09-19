@@ -1,7 +1,7 @@
 # Develop on macOS
 
 Use Node.js `^22.18.0 || >=24.11.0`, pnpm 11.7.0 and DSH 0.1.5-rc.2 for
-ordinary development and blocking runtime checks; DSH 0.1.6-alpha.1 is the
+ordinary development and blocking runtime checks; DSH 0.1.6-alpha.2 is the
 advisory lane. Isolated Build/Apply additionally requires Apple-provider setup
 and successful local admission against the running agent. Real rc.2 Apple
 integration passed 4/4 checks; this does not establish alpha isolation.
@@ -63,7 +63,7 @@ npm install --prefix "$HOME/.local/share/dsh-reviewed" --ignore-scripts @deepsee
 "$HOME/.local/share/dsh-reviewed/node_modules/.bin/dsh" web
 ```
 
-Stop an existing Web server before launching this one. The blocking version is exactly 0.1.5-rc.2; selecting `--dsh` for a CLI check does not change the runtime of an already running agent. The advisory 0.1.6-alpha.1 runtime lane does not by itself establish provider admission.
+Stop an existing Web server before launching this one. The blocking version is exactly 0.1.5-rc.2; selecting `--dsh` for a CLI check does not change the runtime of an already running agent. The advisory 0.1.6-alpha.2 runtime lane does not by itself establish provider admission.
 
 Install the signed [Apple container 1.4.1 release](https://github.com/apple/container/releases/tag/1.4.1) using its official installer. It requires Apple silicon and macOS 26 or later. Then start the service and pull the reviewed image:
 

@@ -113,7 +113,14 @@ test('matches exact installed lane platform tables and ownership; retains bounde
         assert.equal(inspectClientServiceOwnership('ctx.provide(' + JSON.stringify(service) + ', {})', 'unrelated-plugin').coreServiceCollisions.length, 1)
       }
       assert.deepEqual(ownership.coreServiceCollisions, [], value.name)
-      if (value.name === '@deepseek-ai/dsh-client-ui-sidebar-documentpreview') {
+      if (value.version === '0.1.6-alpha.2'
+          && ['@deepseek-ai/dsh-client-ui-sidebar-documentpreview', '@deepseek-ai/dsh-client-ui-sidebar-terminal'].includes(value.name)) {
+        // These entries now delegate to secondary chunks. Their presence in
+        // upstream does not make our entry-only audit a proof of those bytes.
+        assert.throws(() => inspectClientBundle(new Map([[relative, source]]), value),
+          error => error.code === 'CLIENT_BUNDLE_UNSUPPORTED_LOADER')
+        t.diagnostic(value.name + '@' + value.version + ': async chunks are not audited; ownership only verified')
+      } else if (value.name === '@deepseek-ai/dsh-client-ui-sidebar-documentpreview') {
         // The shipped PDF implementation retains a Node-only guarded branch.
         // This corpus observation is an explicit refusal, never audit success:
         // no reachability proof or Node-import exemption is added to the product.

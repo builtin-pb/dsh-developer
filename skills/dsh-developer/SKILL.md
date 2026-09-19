@@ -59,7 +59,7 @@ DeepSeek runs untrusted source only in the admitted host provider (WSL2/Bubblewr
 
 Run relevant behavior tests and project checks; fully validate this product after integration. Ordinary plugins use static Doctor (`skipRuntime: true`, CLI `--skip-runtime`) plus `verify` on the target profile. Product/promoted bundles use `compatibility` and release gates; upstream uses its own checks. Repair failures and rerun that gate and all downstream gates affected by the change. Preserve valid evidence for unchanged code; never weaken safety to obtain a pass.
 
-Runtime lanes: 0.1.5-rc.2 blocking, 0.1.6-alpha.1 advisory; providers need separate admission. Keep runtimes, examples, contracts and CI aligned. Historical migration and exact hook pins stay bounded. Other targets use exact-source development.
+Runtime lanes: 0.1.5-rc.2 blocking, 0.1.6-alpha.2 advisory; providers need separate admission. Keep runtimes, examples, contracts and CI aligned. Historical migration and exact hook pins stay bounded. Other targets use exact-source development.
 
 ## Finish
 

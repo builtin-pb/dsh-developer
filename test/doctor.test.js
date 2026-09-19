@@ -856,7 +856,7 @@ test('reviews raw plugin-owned Web routes without blocking intentional public in
     assert.equal(rawCheck.evidence.rawRoutes[0].routePath, '/ping')
     assert.equal(rawCheck.evidence.repositoryCodeExecuted, false)
     assert.equal(rawCheck.evidence.lanes.release.target, '0.1.5-rc.2')
-    assert.equal(rawCheck.evidence.lanes.preview.target, '0.1.6-alpha.1')
+    assert.equal(rawCheck.evidence.lanes.preview.target, '0.1.6-alpha.2')
     assert.match(rawCheck.message, /not claiming every raw route is unsafe/u)
     assert.match(rawCheck.recovery, /intentionally public/u)
     assert.match(rawCheck.recovery, /upstream connection service/u)
