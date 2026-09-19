@@ -6,4 +6,4 @@ Start with completion, failed or pending calls, and explicit omissions. Follow t
 
 The report excludes conversation messages and reasoning, redacts likely credentials, and bounds arguments and results. It does not guarantee that arbitrary application data is suitable for publication. Missing `turn/end`, unsupported events and ambiguous call identities remain explicit. Corrupt, changing or oversized inputs fail inspection; retry a stable export or use DSH's own tooling instead of treating partial output as a complete diagnosis.
 
-Use the diagnosis to choose the smallest meaningful repair and rerun affected behavior. Preserve the original failure and separate assisted repair from autonomous discovery.
+For Inspect, return the supported diagnosis. For Build, use it as evidence for the repair and verification decisions in the main skill. Preserve the original failure and separate assisted repair from autonomous discovery.

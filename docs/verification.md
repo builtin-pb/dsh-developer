@@ -2,6 +2,32 @@
 
 These are local and CI observations from 10–19 September 2026. Dated sections distinguish the released version from subsequent checkout work. They describe what was exercised, not a claim that dsh-developer already completes every development task reliably. The [development guide](development.md) explains how to use the capabilities; the [strategy](development-strategy.md) retains the broader goal and unfinished milestones.
 
+## Shared development guidance — 19 September, unreleased
+
+Native DeepSeek (`deepseek-flash`, high reasoning, DSH 0.1.5-rc.2) and fresh
+GPT agents developed a native TypeScript plugin from a dependency-upgrade
+complaint. Previous and revised guidance each produced DeepSeek archives that
+passed 24 independent native cases; GPT using the revised guidance also passed
+those cases. Fresh DeepSeek sessions extended both implementations, passing 31
+cases including the original interfaces. GPT used a different host/tool
+environment, so these are workflow observations, not a model ranking.
+
+Independent review found setup assumptions in both DeepSeek handoffs. The skill
+now checks the recipient's starting state and keeps intent, implementation and
+proof decisions in the main instruction file: two earlier repair runs had
+skipped the development reference. The final prompt trial produced standalone
+setup instructions and passed 25 native archive cases. The trials establish
+usable examples, not a measured reliability improvement or error-free work.
+Packing instructions were also corrected after both models encountered
+Doctor's rejection of an archive left inside the inspected source.
+
+Full local validation passed 836 tests with 44 optional integrations skipped.
+Release headless/Web preflight, upstream impact and both exact compatibility
+lanes passed. [CI passed all 18 jobs](https://github.com/builtin-pb/dsh-developer/actions/runs/35408390810),
+including the Windows and macOS product matrices. An additional browser check
+of the experimental plugin was blocked by the browser client before the page
+loaded; it supplies no rendered-Web evidence.
+
 ## Source audit budgets — 19 September, unreleased
 
 Source audits use a fixed larger budget only for the running product's own
@@ -12,14 +38,15 @@ limit. The self-audit still scans CI locks and all other source contents with
 the same credential and freshness checks. Budget selection grants no execution
 authority. Repository text checks out as LF; fingerprints bind actual bytes.
 
-## Current runtime baseline — 16 September, unreleased
+## Current runtime baseline — checked 19 September, unreleased
 
 The blocking audit target is DSH **0.1.5-rc.2**; **0.1.6-alpha.1** is advisory.
-The registry check on 16 September resolved `latest` to 0.1.5-rc.1, `next` to
-0.1.5-rc.2 and `alpha` to 0.1.6-alpha.1. CI resolves all three channels for
+The registry check on 19 September resolved `latest` and `next` to 0.1.5-rc.2,
+and `alpha` to 0.1.6-alpha.2. CI resolves all three channels for
 ordinary native development, while product audits use explicit versions.
 Moving a registry tag does not automatically extend reviewed contracts.
 
+The following broader baseline observations were recorded on 16 September.
 On macOS ARM64/Node 24.19.0, both audit targets passed headless and Web
 preflight, actual native knowledge-tool verification, compatibility lifecycle,
 delegation, and static attestation of fresh headless/Web profiles. The native

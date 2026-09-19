@@ -62,7 +62,7 @@ Native development CI installs npm `latest`, `next` and `alpha` on each run and 
 
 Refresh front-door claims when contracts change. Keep English and Chinese entry points aligned, identify the tested revision/runtime/host, and distinguish source, published tag, native registry, rendered browser and isolated-provider results. Update only affected historical claims: the `0.1.1-rc.2` → `0.1.2-alpha.3` migration ledger remains a bounded historical contract. Hook Bridge Doctor pins exact current, alpha and historical bytes independently; advancing either contract requires its own evidence.
 
-Run documentation and skill-route checks after edits. Every routed skill set must fit within 7,850 UTF-8 bytes with CRLF line endings, including linked references; keep detail in the relevant reference without expanding unrelated routes.
+Run documentation and skill-route checks after edits. The main skill owns the shared DeepSeek/GPT intent, implementation and proof decisions so repairs retain them when loading diagnostic support. Native mechanics stay in references. Each support route allows 11,350 UTF-8 bytes including transitive references; tested Build combinations (development with diagnostics, browser or provider support) allow 13,850 bytes. Checks cover both LF and CRLF representations. These are repository maintenance budgets, not token counts or DSH context limits. Moving the Build method into the main skill increases other routes' reading cost but reduces the complete development set. Keep one authoritative home per concern; do not raise budgets merely to retain redundant instructions.
 
 ## Change a boundary carefully
 

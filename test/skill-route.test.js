@@ -6,8 +6,11 @@ import { fileURLToPath } from 'node:url'
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const skillRoot = path.join(repositoryRoot, 'skills', 'dsh-developer')
-const ACTIVE_SET_CHARACTER_LIMIT = 8_000
-const ACTIVE_SET_CHARACTER_MARGIN = 150
+// Core Build decisions are always available, including during diagnostics.
+// Budget both individual support routes and the combinations Build actually uses.
+const ACTIVE_SET_BYTE_LIMIT = 11_500
+const BUILD_COMBINATION_BYTE_LIMIT = 14_000
+const ACTIVE_SET_BYTE_MARGIN = 150
 
 function withNewlines(content, newline) {
   return content.replace(/\r\n?|\n/gu, '\n').replace(/\n/gu, newline)
@@ -44,18 +47,22 @@ test('keeps every LF and CRLF routed skill set below the repository budget with 
     'cell-apply': ['references/cell-apply.md', 'references/safety.md'],
     authority: ['references/authority-safety.md', 'references/safety.md'],
     ui: ['references/agent-native-ui.md', 'references/safety.md'],
+    'build-diagnostics': ['references/development.md', 'references/session-diagnostics.md'],
+    'build-ui': ['references/development.md', 'references/agent-native-ui.md', 'references/safety.md'],
+    'build-provider': ['references/development.md', 'references/isolated-cell.md', 'references/safety.md'],
   }
 
   for (const [name, references] of Object.entries(routes)) {
     await t.test(name, async () => {
       const contents = await routedInstructionSet(references)
       for (const [representation, newline] of [['LF', '\n'], ['CRLF', '\r\n']]) {
-        const characters = [...contents.values()]
-          .reduce((total, content) => total + withNewlines(content, newline).length, 0)
+        const bytes = [...contents.values()]
+          .reduce((total, content) => total + Buffer.byteLength(withNewlines(content, newline)), 0)
+        const limit = name.startsWith('build-') ? BUILD_COMBINATION_BYTE_LIMIT : ACTIVE_SET_BYTE_LIMIT
         assert.ok(
-          characters <= ACTIVE_SET_CHARACTER_LIMIT - ACTIVE_SET_CHARACTER_MARGIN,
-          `${name} ${representation} route uses ${characters} characters across ${[...contents.keys()].join(', ')}; `
-            + `limit is ${ACTIVE_SET_CHARACTER_LIMIT} with ${ACTIVE_SET_CHARACTER_MARGIN} reserved`,
+          bytes <= limit - ACTIVE_SET_BYTE_MARGIN,
+          `${name} ${representation} route uses ${bytes} bytes across ${[...contents.keys()].join(', ')}; `
+            + `limit is ${limit} with ${ACTIVE_SET_BYTE_MARGIN} reserved`,
         )
       }
     })

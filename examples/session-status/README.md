@@ -105,14 +105,16 @@ Connection recovery remains DSH's responsibility. Labels are English only.
 ## Packaging and verification limits
 
 The built `lib` files are included so installation needs no build script. To
-produce a local archive from the example directory:
+produce a local archive from the example directory, create an output directory
+outside this repository and replace `/path/to/artifacts` below with it:
 
 ```sh
 npm pack --dry-run
-npm pack
+npm pack --pack-destination /path/to/artifacts
 ```
 
-`prepack` rebuilds the entries. The package allowlist includes the compiled
+Keep the archive outside the inspected source; Doctor rejects a `.tgz` left in
+the source tree. `prepack` rebuilds the entries. The package allowlist includes the compiled
 entries, source, build configuration, tests, native patch, README, and MIT
 license. It excludes development dependencies and cache contents. Nothing in
 this workflow publishes to a registry.

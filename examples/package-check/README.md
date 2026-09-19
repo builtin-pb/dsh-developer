@@ -25,14 +25,19 @@ supplied. Package-manager protocols such as `workspace:*` are not semver ranges.
 
 ## Develop and test
 
-From the repository root, using Node 22.18+ within 22.x, or 24.11+:
+Use Node 22.18+ within 22.x, or 24.11+, and start at the repository root.
+Create an output directory outside this repository and replace
+`/path/to/artifacts` below with that directory:
 
 ```sh
 npm --prefix examples/package-check ci --ignore-scripts
 node bin/dsh-developer.js run --source examples/package-check --script test
 cd examples/package-check
-npm pack
+npm pack --pack-destination /path/to/artifacts
 ```
+
+Keep archives outside the inspected source: Doctor rejects a `.tgz` left in
+the source tree. Verify the archive itself with `verify --source <archive>`.
 
 `src/check.ts` contains validation and semver behavior. `src/index.ts` registers
 one tool with DSH's `tools` service and renders its structured output as JSON.
@@ -66,7 +71,7 @@ this README, and the license. It excludes source, tests, caches, and local paths
 After `npm pack`, install the resulting tarball into the intended DSH profile:
 
 ```sh
-dsh plugin --profile headless add ./dsh-package-check-0.1.0.tgz --ignore-scripts
+dsh plugin --profile headless add /path/to/artifacts/dsh-package-check-0.1.0.tgz --ignore-scripts
 ```
 
 Restart that profile to load the plugin. `cordis.patch.yml` resolves the package's
@@ -79,7 +84,7 @@ archive, run from the repository root after building and packing:
 ```sh
 node bin/dsh-developer.js doctor --source examples/package-check --dsh /path/to/dsh --skip-runtime
 node bin/dsh-developer.js verify --source examples/package-check --cases examples/package-check/tool-cases.json --dsh /path/to/dsh --online
-node bin/dsh-developer.js verify --source examples/package-check/dsh-package-check-0.1.0.tgz --cases examples/package-check/tool-cases.json --dsh /path/to/dsh --online
+node bin/dsh-developer.js verify --source /path/to/artifacts/dsh-package-check-0.1.0.tgz --cases examples/package-check/tool-cases.json --dsh /path/to/dsh --online
 ```
 
 Select the executable for DSH `0.1.5-rc.2`. Verification installs into a disposable

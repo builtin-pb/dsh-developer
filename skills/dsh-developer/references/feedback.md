@@ -1,6 +1,6 @@
 # Close the loop with the user
 
-Review the completed development task, including failed attempts and workarounds, not just the last passing command. Distinguish friction in dsh-developer from the target plugin, DSH, the environment or your own mistakes. State uncertainty when the cause is unclear. Repair authorized problems before reporting; a repaired product defect can still deserve a report. Do not invent friction or praise, and do not treat passing tests as proof that the whole experience was smooth.
+State uncertainty when the cause of friction is unclear. A repaired product defect can still deserve a report. Do not invent friction or praise, and do not treat passing tests as proof that the whole experience was smooth.
 
 Keep the user's requested outcome first. Add a short observation about consequential friction or a smooth run with a concrete basis, such as source and archive verification succeeding without a workaround. Do this at task completion or a genuine blocker, not after every tool call.
 

@@ -2,6 +2,8 @@
 
 Start with the existing workspace. dsh-developer can inspect ordinary projects with dependencies, locate DSH declarations at an exact installation or source checkout, run project scripts, verify native tools in a disposable profile, and own a temporary Web server.
 
+You can begin with a rough idea. The development skill uses the request and project context to propose useful behavior, checks whether existing facilities already meet the need, and asks only about choices that materially affect the result. Its shared DeepSeek/GPT guidance makes implementation decisions concrete: follow native ownership and lifetimes, trust established internal contracts, distinguish failed or incomplete evidence from success, and check realistic cases where plausible implementations disagree. Routine fixes need no design ceremony. This guidance supports judgment; passing checks does not guarantee an error-free project.
+
 The development skill closes a task by reviewing the result against your intent and the whole run, including retries and workarounds. It briefly reports meaningful friction or what went smoothly. For an actionable dsh-developer problem, it asks whether to file an issue. After you agree, it prepares, sanitizes and submits the report without another approval round.
 
 Inside a DSH agent's shell, run the installed CLI with `node "$DSH_DEVELOPER_BIN" <operation>` on POSIX or `node "$env:DSH_DEVELOPER_BIN" <operation>` in PowerShell. Profile installation does not create a global CLI command. The examples below use `node bin/dsh-developer.js` from this repository's checkout. In DSH, the native `dsh_developer` tool exposes read-only `project`, `knowledge` and `session` operations; execution uses the host’s normal shell and approval policy.
@@ -32,7 +34,7 @@ For a TypeScript project, `knowledge` reports the selected package's installed D
 
 ## Build and invoke a real plugin
 
-The [TypeScript package-check example](../examples/package-check/README.md) includes a maintained runtime dependency, real DSH type imports, unit and registration tests, and eight native tool cases.
+The [TypeScript package-check example](../examples/package-check/README.md) includes a maintained runtime dependency, real DSH type imports, unit and registration tests, and eight native tool cases. When packing, use `npm pack --pack-destination <output-directory>` with an existing directory outside the inspected source. Doctor rejects archives left in the source tree; `verify --source <archive.tgz>` exercises the packaged artifact.
 
 ```sh
 npm --prefix examples/package-check ci --ignore-scripts
