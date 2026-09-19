@@ -171,6 +171,12 @@ export async function apply(ctx, config) {
     const descendant = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'inherit' })
     await writeFile(config.descendantMarker, JSON.stringify({ pid: descendant.pid }))
     setTimeout(() => process.exit(23), config.exitAfterMs)
+    if (config.exitRequestPath) void (async () => {
+      while (!await readFile(config.exitRequestPath).catch(() => undefined)) {
+        await new Promise(resolve => setTimeout(resolve, 25))
+      }
+      process.exit(23)
+    })()
   }
 }
 `)
@@ -869,9 +875,12 @@ test('revokes the browser handoff on DSH exit while descendants retain its log p
   try {
     const { archive } = await createOverlayFixture(temporary)
     const marker = join(temporary, 'descendant.json')
+    const exitRequestPath = join(temporary, 'exit-request')
     const patchPath = join(temporary, 'exit.patch.yml')
-    await writeFile(patchPath, '- id: overlay-fixture\n  config:\n    exitAfterMs: 1500\n    descendantMarker: '
-      + JSON.stringify(marker) + '\n')
+    // Exit only after the parent has observed readiness and attached its
+    // watcher. A fixed 1.5-second startup timer raced slower Windows runners.
+    await writeFile(patchPath, '- id: overlay-fixture\n  config:\n    exitAfterMs: 30000\n    descendantMarker: '
+      + JSON.stringify(marker) + '\n    exitRequestPath: ' + JSON.stringify(exitRequestPath) + '\n')
     await assert.rejects(runDevelopmentServer(archive, { dshPath, patchPath, online: true, signal: controller.signal,
       onReady: async report => {
         ready = report
@@ -880,6 +889,7 @@ test('revokes the browser handoff on DSH exit while descendants retain its log p
         let stopped
         const ownerStopped = new Promise(resolve => { stopped = resolve })
         detach = await target.watchOwner(stopped)
+        await writeFile(exitRequestPath, 'exit')
         let timer
         try {
           await Promise.race([ownerStopped, new Promise((_resolve, reject) => {
@@ -892,7 +902,9 @@ test('revokes the browser handoff on DSH exit while descendants retain its log p
     assert.ok(ready, 'the server must have reached Web readiness before exiting')
     await assert.rejects(stat(ready.home), { code: 'ENOENT' })
     assert.throws(() => process.kill(ready.pid, 0), { code: 'ESRCH' })
-    assert.throws(() => process.kill(descendant, 0), { code: 'ESRCH' })
+    // Windows cannot promise descendant cleanup after the leader exits. The
+    // handoff must still be revoked; this fixture owns final child cleanup.
+    if (process.platform !== 'win32') assert.throws(() => process.kill(descendant, 0), { code: 'ESRCH' })
   } finally {
     controller.abort(); detach?.()
     if (descendant) { try { process.kill(descendant, 'SIGKILL') } catch {} }
