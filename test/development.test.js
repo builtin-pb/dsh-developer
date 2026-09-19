@@ -266,6 +266,45 @@ test('specific error assertions require explicit error cases and bounded nonblan
   }
 })
 
+test('verification refuses numbers that would change during case transport', () => {
+  for (const literal of ['1e400', '-1e400', '-0']) {
+    for (const payload of [literal, `{"nested":[{"value":${literal}}]}`]) {
+      const expected = JSON.parse(`[{"tool":"value","arguments":{},"expected":${payload}}]`)
+      assert.throws(() => validateToolCases(expected), {
+        code: 'DEVELOPMENT_CASES_INVALID',
+        message: /Case #1: expected must not contain non-finite numbers or negative zero/u,
+      })
+      const args = JSON.parse(`[{"tool":"value","arguments":{"value":${payload}},"expected":null}]`)
+      assert.throws(() => validateToolCases(args), {
+        code: 'DEVELOPMENT_CASES_INVALID',
+        message: /Case #1: arguments must not contain non-finite numbers or negative zero/u,
+      })
+    }
+  }
+  const cases = [{ tool: 'value', arguments: { numeric: [0, -1, Number.MAX_VALUE, Number.MIN_VALUE],
+    text: ['-0', '1e400'], empty: null }, expected: { values: [0, -1.5, true, false, null, '1e400'] } }]
+  assert.equal(validateToolCases(cases), cases)
+  assert.deepEqual(JSON.parse(JSON.stringify(cases)), cases)
+})
+
+test('invalid numeric case data is rejected before plugin or runtime preparation', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-case-number-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const casesPath = join(root, 'cases.json')
+  for (const literal of ['1e400', '-0']) {
+    for (const field of ['arguments', 'expected']) {
+      const candidate = field === 'expected'
+        ? `{"tool":"value","arguments":{},"expected":${literal}}`
+        : `{"tool":"value","arguments":{"nested":[${literal}]},"expected":null}`
+      await writeFile(casesPath, `[{"tool":"value","arguments":{},"expected":null},${candidate}]`)
+      await assert.rejects(verifyDevelopmentPlugin(join(root, 'absent-plugin'), {
+        casesPath, dshPath: join(root, 'absent-dsh'),
+      }), error => error.code === 'DEVELOPMENT_CASES_INVALID'
+        && error.message.startsWith(`Case #2: ${field} must not contain non-finite numbers or negative zero`))
+    }
+  }
+})
+
 test('verification explains independent assertion failures without changing their verdict', () => {
   const result = { isError: false, value: { status: null }, content: [{ type: 'text', text: 'ready' }] }
   const base = { name: 'status assertion', tool: 'status', arguments: {}, expected: null, resultPath: '/status' }
