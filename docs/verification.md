@@ -33,16 +33,18 @@ errors in the generated plugins. The revised artifact could select a newer idle
 conversation instead of recently resumed work; the baseline excluded ordinary
 human forks and prioritized creation time. The two artifacts have useful but
 different strengths; one pair establishes no causal prompt advantage. The shared
-Build guidance was not tuned further on this task. Tool improvements address observed
-setup, source-navigation and helper-delegation friction.
+Build guidance was not tuned further on this task. Tool improvements address
+observed setup, source-navigation and helper-delegation friction.
 
 The integrated tooling changes passed 888 local tests with 45 optional
-integrations skipped, plus release and preview compatibility lifecycles.
+integrations skipped, plus release and preview compatibility lifecycles. The
+[tooling commit passed all 18 CI jobs](https://github.com/builtin-pb/dsh-developer/actions/runs/35415266436),
+including native development on Windows, macOS and Ubuntu.
 Project hints and recovery from an invalid knowledge source were also exercised
 through real Agents in both headless and Web compositions. A separately
 registered helper tool passed three cases in each lane/composition pair, with
-disposable profiles removed afterward. Helper attachment
-analysis retains its bounded signature rules and refuses transfers through
+disposable profiles removed afterward. Helper attachment analysis retains its
+bounded signature rules and refuses transfers through
 opaque caller/helper modules. Independent review exposed an eager computed-name
 execution gap and wrapped assignments missing from binding analysis. Repairs
 track eager computed names and assignment targets before coverage decisions;

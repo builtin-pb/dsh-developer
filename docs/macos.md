@@ -125,7 +125,7 @@ npm pack --dry-run
 Doctor exercises a disposable profile to prove installation, registration,
 discovery and uninstall for this product. Current headless/Web preflight and
 native verification, product compatibility, delegation and approval checks
-passed on rc.2 and alpha.1. Release failures block; preview behavior remains
+passed on rc.2 and alpha.2. Release failures block; preview behavior remains
 advisory. See [verification](verification.md) for revision-specific local and CI results.
 
 ## Develop DSH itself

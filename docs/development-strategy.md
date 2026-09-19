@@ -18,7 +18,7 @@ Keep historical contracts explicit. The migration ledger covers only `0.1.1-rc.2
 
 ## Match claims to evidence
 
-Current headless/Web preflight and native verification, product compatibility, delegation and approval checks passed on rc.2 and alpha.1. These checks cover the exercised contracts, not every plugin, host, browser behavior or model. Client registry tests and static bundle checks complement rendered browser verification; they cannot replace it.
+Current headless/Web preflight and native verification, product compatibility, delegation and approval checks passed on rc.2 and alpha.2. These checks cover the exercised contracts, not every plugin, host, browser behavior or model. Client registry tests and static bundle checks complement rendered browser verification; they cannot replace it.
 
 Ordinary trusted development follows the host's execution policy. Disposable profiles separate configuration and do not provide a sandbox. Untrusted execution requires an admitted provider with explicit credential, network, filesystem, process, transfer and cleanup boundaries. Real Apple integration on rc.2 passed 4/4 checks covering native admission, VM Build/Apply, promotion, and sparse/churn cleanup. That observation requires the [documented Mac provider](macos.md#enable-isolated-build-and-apply) and does not establish alpha isolation or admission on another host.
 
