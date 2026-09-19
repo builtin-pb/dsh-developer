@@ -1,6 +1,16 @@
 # Development verification
 
-These are local and CI observations from 10–16 September 2026. Dated sections distinguish the released version from subsequent checkout work. They describe what was exercised, not a claim that dsh-developer already completes every development task reliably. The [development guide](development.md) explains how to use the capabilities; the [strategy](development-strategy.md) retains the broader goal and unfinished milestones.
+These are local and CI observations from 10–19 September 2026. Dated sections distinguish the released version from subsequent checkout work. They describe what was exercised, not a claim that dsh-developer already completes every development task reliably. The [development guide](development.md) explains how to use the capabilities; the [strategy](development-strategy.md) retains the broader goal and unfinished milestones.
+
+## Source audit budgets — 19 September, unreleased
+
+Source audits use a fixed larger budget only for the running product's own
+canonical root: 16 MiB total, 1 MiB per file, 1,024 files and 4,096 entries.
+Ordinary sources and strict transfer snapshots retain their 4 MiB total,
+512 KiB per file, 256-file and 1,024-entry limits; all paths retain the 240-byte
+limit. The self-audit still scans CI locks and all other source contents with
+the same credential and freshness checks. Budget selection grants no execution
+authority. Repository text checks out as LF; fingerprints bind actual bytes.
 
 ## Current runtime baseline — 16 September, unreleased
 
