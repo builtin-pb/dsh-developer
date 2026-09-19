@@ -698,6 +698,21 @@ test('CLI and native knowledge preserve a source-file selection inside the Agent
   assert(native.report.evidence.some(item => item.path === source))
   await assert.rejects(definition.execute({ operation: 'knowledge', source: f.upstream },
     { ...invocation, agent: { session: { header: { cwd: pkg } } } }), { code: 'KNOWLEDGE_UPSTREAM_INVALID' })
+
+  const installed = await f.installedPackage('@deepseek-ai/dsh-navigation')
+  await write(join(installed, 'lib/types/index.d.ts'), 'export declare function installedNavigation(): void;\n')
+  await assert.rejects(definition.execute({ operation: 'knowledge', source: installed }, invocation), error => {
+    assert.equal(error.code, 'KNOWLEDGE_UPSTREAM_INVALID')
+    assert.equal(error.details.reason, 'outside-workspace')
+    assert.match(error.message, /omit source \(CLI --upstream\).*packageName \(CLI --package\)/u)
+    assert(!error.message.includes(installed), 'the recovery does not echo untrusted selections')
+    return true
+  })
+  const recovered = await definition.execute({ operation: 'knowledge', packageName: '@deepseek-ai/dsh-navigation' }, invocation)
+  assert.equal(recovered.report.upstream, null)
+  assert(recovered.report.installed.packages.some(item => item.root === installed))
+  assert(recovered.report.evidence.some(item => item.excerpt.includes('installedNavigation')))
+  await assert.rejects(access(f.marker), { code: 'ENOENT' })
 })
 
 test('confines custom repository directories and verifies source package identity', async t => {

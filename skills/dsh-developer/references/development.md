@@ -2,9 +2,9 @@
 
 ## Locate the implementation
 
-Use `project`; resolve toolchain conflicts. Examples: `examples/package-check` (tools), `examples/session-status` (Client slots).
+Use `project`; resolve toolchain conflicts. Resolve `../../../examples/` from this reference file: `package-check` (tools), `session-status` (Client slots).
 
-Use `knowledge` for the topic and exact runtime. `source` (CLI `--upstream`) selects a checkout, package or file inside the Agent workspace. Follow excerpts to declarations, producers, consumers and tests; resolve omissions and version mismatches. Pin DSH peers from its map. Follow imports with `packageName` and `consumerRoot` set to the originating physical package root (CLI `--package`, `--consumer-root`); nested versions can differ. The map covers peers, not every import.
+Use `knowledge` for the topic and exact runtime. For installed packages, omit `source` and select `packageName` (CLI `--package`). `source` (CLI `--upstream`) selects a DSH checkout or its package/file inside the Agent workspace. Follow excerpts to declarations, producers, consumers and tests; resolve omissions and version mismatches. Pin DSH peers from its map. Follow imports with `packageName` and `consumerRoot` set to the originating physical package root (CLI `--consumer-root`); nested versions can differ. The map covers peers, not every import.
 
 ## Exercise and deliver
 

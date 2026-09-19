@@ -658,10 +658,13 @@ test('dsh-developer reads its running DSH declarations through the native tool',
     await writeFile(nativeCases, JSON.stringify([
       { tool: 'dsh_developer', arguments: { operation: 'knowledge', topic: 'tool' },
         resultPath: '/report/installed/version', expected: report.installed.version },
+      { tool: 'dsh_developer', arguments: { operation: 'knowledge', source: '.' },
+        isError: true, errorContains: 'omit source (CLI --upstream)' },
       { tool: 'dsh_developer', arguments: { operation: 'knowledge', topic: 'core', packageName: '@deepseek-ai/dsh-session' },
         resultPath: '/report/development/dependencies/@deepseek-ai~1dsh-session', expected: sessionVersion },
     ]))
-    const result = await verifyDevelopmentPlugin(fileURLToPath(new URL('../', import.meta.url)), { casesPath: nativeCases, dshPath })
+    const result = await verifyDevelopmentPlugin(fileURLToPath(new URL('../', import.meta.url)),
+      { casesPath: nativeCases, dshPath, workspacePath: temporary })
     assert.equal(result.ok, true, JSON.stringify(result.diagnostic ?? result.cases.map(item => ({ tool: item.tool, passed: item.passed }))))
   } finally { await rm(temporary, { recursive: true, force: true }) }
 })
