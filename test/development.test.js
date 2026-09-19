@@ -151,11 +151,12 @@ test('consumes only bounded tokened startup error receipts and stops the owned p
       if (!process.argv.includes('plugin') && !process.argv.includes('--dump-config')) {
         setInterval(() => {}, 1000);
         const fs = require('node:fs');
+        // The valid receipt lets the parent terminate us immediately.
+        fs.writeFileSync(${JSON.stringify(marker)}, JSON.stringify({ pid: process.pid, home: process.env.DSH_HOME }));
         fs.writeFileSync(process.env.DSH_DEVELOPER_SERVER_RESULT, JSON.stringify({
           kind: 'dsh-development-server-private', version: 1, token: process.env.DSH_DEVELOPER_SERVER_TOKEN,
           ...${JSON.stringify(fields)}
         }));
-        fs.writeFileSync(${JSON.stringify(marker)}, JSON.stringify({ pid: process.pid, home: process.env.DSH_HOME }));
       }
     `)
     let settled = false
