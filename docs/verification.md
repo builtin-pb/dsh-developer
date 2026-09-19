@@ -18,10 +18,12 @@ proof decisions in the main instruction file: two earlier repair runs had
 skipped the development reference. The final prompt trial produced standalone
 setup instructions and passed 25 native archive cases. The trials establish
 usable examples, not a measured reliability improvement or error-free work.
-Packing instructions were also corrected after both models encountered
+Packing instructions were also corrected after repeated DeepSeek runs encountered
 Doctor's rejection of an archive left inside the inspected source.
 
-Full local validation passed 836 tests with 44 optional integrations skipped.
+Full local validation passed 839 tests with 44 optional integrations skipped.
+Source reads also stop at the observed file size plus one growth-detection byte;
+controlled growth, truncation, partial-read and cancellation checks passed.
 Release headless/Web preflight, upstream impact and both exact compatibility
 lanes passed. [CI passed all 18 jobs](https://github.com/builtin-pb/dsh-developer/actions/runs/35408390810),
 including the Windows and macOS product matrices. An additional browser check

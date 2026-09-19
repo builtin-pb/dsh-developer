@@ -226,6 +226,118 @@ async function scannerChild(fixture, body, args = {}) {
   return result.stdout.trim()
 }
 
+for (const kind of ['ordinary', 'self']) {
+  test(kind + ' scans bound actual reads when a file grows after its size check', async (t) => {
+    const fixture = await productFixture(t)
+    for (const cancel of [false, true]) await scannerChild(fixture, `
+      const target = join(root, 'growing.txt')
+      await fs.promises.writeFile(target, 'ok')
+      const open = fs.promises.open
+      let grew = false
+      let consumed = 0
+      let closed = 0
+      let largestBuffer = 0
+      let largestRequest = 0
+      const controller = new AbortController()
+      fs.promises.open = async (...arguments_) => {
+        const handle = await open(...arguments_)
+        if (arguments_[0] !== target) return handle
+        const stat = handle.stat.bind(handle)
+        const read = handle.read.bind(handle)
+        const readFile = handle.readFile.bind(handle)
+        const close = handle.close.bind(handle)
+        handle.stat = async () => {
+          const before = await stat()
+          if (!grew) {
+            grew = true
+            fs.writeFileSync(target, Buffer.alloc(2 * 1024 * 1024, 0x20))
+          }
+          return before
+        }
+        handle.read = async (...arguments_) => {
+          largestBuffer = Math.max(largestBuffer, arguments_[0].buffer.byteLength)
+          largestRequest = Math.max(largestRequest, arguments_[2])
+          const result = await read(...arguments_)
+          consumed += result.bytesRead
+          if (args.cancel) controller.abort()
+          return result
+        }
+        handle.readFile = async (...arguments_) => {
+          const result = await readFile(...arguments_)
+          consumed += result.length
+          if (args.cancel) controller.abort()
+          return result
+        }
+        handle.close = async () => { closed += 1; return close() }
+        return handle
+      }
+      syncBuiltinESMExports()
+      const scan = args.kind === 'ordinary' ? scanOrdinaryTree : scanSourceAuditTree
+      await assert.rejects(scan(root, { signal: controller.signal }), { code: args.cancel ? 'CANCELLED' : 'MUTABLE_TREE' })
+      assert.equal(grew, true)
+      assert.ok(consumed <= 3, 'read work must stay within the observed two bytes plus one growth sentinel')
+      assert.ok(largestRequest <= 3)
+      assert.ok(largestBuffer <= (args.kind === 'ordinary' ? 524_289 : 1_048_577))
+      assert.equal(closed, 1)
+    `, { kind, cancel })
+  })
+}
+
+test('bounded source reads handle short reads, truncation, failure and cancellation without leaking handles', async (t) => {
+  const fixture = await productFixture(t)
+  await scannerChild(fixture, `
+    const target = join(root, 'short-reads.txt')
+    const open = fs.promises.open
+    let mode = 'short'
+    let closed = 0
+    let consumed = 0
+    let truncate = false
+    const controller = new AbortController()
+    fs.promises.open = async (...arguments_) => {
+      const handle = await open(...arguments_)
+      if (arguments_[0] !== target) return handle
+      const stat = handle.stat.bind(handle)
+      const read = handle.read.bind(handle)
+      const close = handle.close.bind(handle)
+      handle.stat = async () => {
+        const before = await stat()
+        if (mode === 'truncate' && !truncate) {
+          truncate = true
+          fs.writeFileSync(target, '')
+        }
+        return before
+      }
+      handle.read = async (buffer, offset, length, position) => {
+        if (mode === 'failure') throw Object.assign(new Error('Injected read failure'), { code: 'EIO' })
+        const result = await read(buffer, offset, Math.min(length, 1), position)
+        consumed += result.bytesRead
+        if (mode === 'cancel') controller.abort()
+        return result
+      }
+      handle.close = async () => { closed += 1; return close() }
+      return handle
+    }
+    syncBuiltinESMExports()
+    await fs.promises.writeFile(target, 'three')
+    const tree = await scanSourceAuditTree(root)
+    assert.equal(tree.entries.find(entry => entry.path === 'short-reads.txt').content, 'three')
+    assert.equal(consumed, 10, 'both complete passes retain all bytes after short reads')
+    assert.equal(closed, 2)
+    mode = 'truncate'
+    await assert.rejects(scanSourceAuditTree(root), { code: 'MUTABLE_TREE' })
+    assert.equal(closed, 3)
+    await fs.promises.writeFile(target, 'three')
+    mode = 'failure'
+    await assert.rejects(scanSourceAuditTree(root), { code: 'EIO' })
+    assert.equal(closed, 4)
+    mode = 'cancel'
+    consumed = 0
+    await assert.rejects(scanSourceAuditTree(root, { signal: controller.signal }), { code: 'CANCELLED' })
+    assert.equal(consumed, 1)
+    assert.equal(closed, 5)
+  `)
+})
+
 test('strict numerical source, Creator and transport ceilings cannot drift with the self budget', () => {
   assert.equal(LIMITS.creatorBytes, 262_144)
   assert.equal(LIMITS.treeBytes, 4_194_304)
