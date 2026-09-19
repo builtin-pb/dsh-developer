@@ -27,7 +27,7 @@ The checked scope is listed in `tsconfig.json`: plugin registration, native comm
 
 ## Install the current checkout
 
-The README's `v0.1.3` Git tag is a published artifact, not this working tree. To exercise current changes from a checkout:
+The README's `v0.1.4` Git tag is a published artifact, not this working tree. To exercise current changes from a checkout:
 
 ```sh
 npm ci --ignore-scripts

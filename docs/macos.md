@@ -12,7 +12,7 @@ Install Apple Command Line Tools (`xcode-select --install`) for the system Pytho
 
 ```sh
 npm install --global pnpm@11.7.0 @deepseek-ai/dsh@0.1.5-rc.2
-dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.3' --ignore-scripts
+dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.4' --ignore-scripts
 dsh web
 ```
 

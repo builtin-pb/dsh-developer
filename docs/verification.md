@@ -1,8 +1,20 @@
 # Development verification
 
-These are local and CI observations from 10–19 September 2026. Dated sections distinguish the released version from subsequent checkout work. They describe what was exercised, not a claim that dsh-developer already completes every development task reliably. The [development guide](development.md) explains how to use the capabilities; the [strategy](development-strategy.md) retains the broader goal and unfinished milestones.
+These are local and CI observations from 10–19 September 2026. Dated sections preserve the runtime and scope of each observation; v0.1.4 includes the changes recorded through 19 September. They describe what was exercised, not a claim that dsh-developer already completes every development task reliably. The [development guide](development.md) explains how to use the capabilities; the [strategy](development-strategy.md) retains the broader goal and unfinished milestones.
 
-## Shared development guidance — 19 September, unreleased
+## v0.1.4 release checks — 19 September
+
+Validation through `dsh-developer run` passed 890 tests; 45 optional integration
+checks were skipped. Both exact runtime compatibility lanes passed. The packed
+archive passed three native cases in each headless/Web composition on DSH
+0.1.5-rc.2 and 0.1.6-alpha.2: recipient package identity, installed-runtime
+knowledge and static Doctor. Disposable profiles were removed; browser opening
+was disabled. These checks used macOS ARM64 and Node 24.19.0.
+
+The [release record](https://github.com/builtin-pb/dsh-developer/releases/tag/v0.1.4)
+contains the archive, checksum, final CI and public-installation results.
+
+## Shared development guidance — 19 September, v0.1.4
 
 Native DeepSeek (`deepseek-flash`, high reasoning, DSH 0.1.5-rc.2) and fresh
 GPT agents developed a native TypeScript plugin from a dependency-upgrade
@@ -63,7 +75,7 @@ including the Windows and macOS product matrices. An additional browser check
 of the experimental plugin was blocked by the browser client before the page
 loaded; it supplies no rendered-Web evidence.
 
-## Source audit budgets — 19 September, unreleased
+## Source audit budgets — 19 September, v0.1.4
 
 Source audits use a fixed larger budget only for the running product's own
 canonical root: 16 MiB total, 1 MiB per file, 1,024 files and 4,096 entries.
@@ -73,7 +85,7 @@ limit. The self-audit still scans CI locks and all other source contents with
 the same credential and freshness checks. Budget selection grants no execution
 authority. Repository text checks out as LF; fingerprints bind actual bytes.
 
-## Current runtime baseline — checked 19 September, unreleased
+## Current runtime baseline — checked 19 September, v0.1.4
 
 The blocking audit target is DSH **0.1.5-rc.2**; **0.1.6-alpha.2** is advisory.
 The registry check on 19 September resolved `latest` and `next` to 0.1.5-rc.2,
@@ -151,7 +163,7 @@ passed all 18 jobs, including all nine native development jobs. The sections
 below retain dated observations; their older runtime versions are historical
 evidence, not current installation recommendations.
 
-## Web workspace selection — 16 September, unreleased
+## Web workspace selection — 16 September
 
 `dev --workspace` previews source packages and packed archives against a separate
 sample project. On macOS ARM64/Node 24.19.0, native tests passed with DSH
@@ -162,7 +174,7 @@ registered workspace and the observed file all selected the sample project;
 its file survived profile cleanup unchanged. These are Web backend checks,
 not rendered browser observations or model turns.
 
-## Development diagnostics — 16 September, unreleased
+## Development diagnostics — 16 September
 
 Case-file diagnostics identify the one-based case number, schema field and
 correction without echoing argument values or unknown property names. Human
@@ -176,7 +188,7 @@ passed 737 tests, with 31 optional tests skipped; the native suite passed all
 21 tests, with three focused native startup/protection checks repeated after
 the final withholding change.
 
-## Authoring exercise and protected verification — 16 September, unreleased
+## Authoring exercise and protected verification — 16 September
 
 A fresh actor built a small README-command retrieval plugin through `project`,
 `knowledge`, `run`, static Doctor and packed native verification. Independent
@@ -203,7 +215,7 @@ expecting invalid arguments. Full validation passed 720 tests with 31 optional
 tests skipped, and the current-runtime native suite passed all 20 tests on
 macOS ARM64/Node 24.19.0.
 
-## Native Host hot reload — 16 September, unreleased
+## Native Host hot reload — 16 September
 
 The opt-in `dev --watch` route uses DSH's existing Cordis HMR service. Native
 tests on macOS ARM64/Node 24.19.0 passed with DSH 0.1.1-rc.2, 0.1.5-rc.2 and
@@ -240,7 +252,7 @@ disposal and metadata-only notifications. Full validation through
 current-runtime native integration tests passed. These are Host lifecycle
 observations, not browser hot-reload or model-development evidence.
 
-## Agent verification and failure diagnostics — 16 September, unreleased
+## Agent verification and failure diagnostics — 16 September
 
 Native verification now identifies named cases and distinct assertion failures,
 and retains completed results when a later invocation is interrupted. Real DSH
@@ -273,7 +285,7 @@ A fresh Chrome Computer Use attempt was blocked by Chrome before the local app
 loaded. The test tab was closed and the disposable server removed; this batch
 adds no rendered-Web acceptance claim.
 
-## Package-aware source navigation — 16 September, unreleased
+## Package-aware source navigation — 16 September
 
 The v0.1.1 CLI rejected a source-file selection inside the current DSH checkout's
 `ui-layout` package. The revised lookup retains both the selected package and

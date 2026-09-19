@@ -21,10 +21,10 @@ Already have a plugin? Start there. You don't need to regenerate it or adopt a n
 
 ## Install
 
-Install the published `v0.1.3` tag into DSH Web:
+Install the published `v0.1.4` tag into DSH Web:
 
 ```sh
-dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.3' --ignore-scripts
+dsh plugin --profile web add 'github:builtin-pb/dsh-developer#v0.1.4' --ignore-scripts
 ```
 
 Open or restart DSH Web (`dsh web`). For development from source, use a [checkout installation](docs/contributing.md). [Need DSH first?](docs/install.md) · [Using Codex?](docs/workflows.md#use-it-from-codex)
@@ -48,6 +48,6 @@ The agent picks up the workflow from your request. Describe the goal, answer any
 - [Choose a platform](docs/platforms.md) — Windows, Mac and Linux routes, requirements and tested boundaries.
 - [Contribute](docs/contributing.md) — start with `npm test`, then check your changes against DSH.
 
-The current checkout targets **DSH 0.1.5-rc.2** for blocking checks and **0.1.6-alpha.2** for advisory checks. Headless/Web preflight and native verification, product compatibility, delegation and approval checks passed on these exact runtimes. Native development targets Windows, macOS and Linux; these results do not establish every host or isolated provider. Apple isolation on rc.2 also passed four real integration checks; each host still requires provider admission. See [observed results](docs/verification.md) and the [platform guide](docs/platforms.md).
+Version **0.1.4** targets **DSH 0.1.5-rc.2** for blocking checks and **0.1.6-alpha.2** for advisory checks. Headless/Web preflight and native verification, product compatibility, delegation and approval checks passed on these exact runtimes. Native development targets Windows, macOS and Linux; these results do not establish every host or isolated provider. Apple isolation on rc.2 also passed four real integration checks; each host still requires provider admission. See [observed results](docs/verification.md) and the [platform guide](docs/platforms.md).
 
 Designed and implemented with [MetaFlow](https://github.com/builtin-pb/metaflow). [MIT licensed](LICENSE).
